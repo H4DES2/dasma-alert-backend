@@ -1,13 +1,19 @@
 <?php
-session_start();
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../php/config.php';
 require_once '../php/auth.php';
 
-if (!isset($auth) || !($auth instanceof Auth)) { $auth = new Auth($conn); }
+if (!isset($auth) || !($auth instanceof Auth)) { 
+    $auth = new Auth($conn); 
+}
 
 if (isset($_POST['logout']) || isset($_GET['logout'])) {
     $auth->logout();
-    session_destroy();
+    if (session_status() === PHP_SESSION_ACTIVE) {
+        session_destroy();
+    }
     header('Location: ../php/login.php');
     exit();
 }
