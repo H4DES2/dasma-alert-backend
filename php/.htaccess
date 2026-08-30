@@ -1,0 +1,11 @@
+# PATCH VULN-007: Block direct access to .env files
+<Files ".env">
+    Order allow,deny
+    Deny from all
+</Files>
+
+# Block access to PHP config/auth files directly (optional hardening)
+<FilesMatch "^(config|auth|AdminManager|ClientManager|EmailService)\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>

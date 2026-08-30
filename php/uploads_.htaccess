@@ -1,0 +1,8 @@
+# PATCH VULN-002 + VULN-012: Place this file as /uploads/.htaccess
+# Prevents execution of any script inside the uploads directory
+Options -ExecCGI
+AddHandler cgi-script .php .php3 .php4 .php5 .phtml .pl .py .jsp .asp .sh .cgi
+<FilesMatch "\.(php|php3|php4|php5|phtml|pl|py|jsp|asp|sh|cgi)$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
