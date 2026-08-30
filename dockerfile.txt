@@ -1,18 +1,11 @@
 FROM php:8.2-apache
 
-# Install MySQL and GD extensions
 RUN docker-php-ext-install mysqli pdo pdo_mysql
-
-# Enable Apache rewrite module
 RUN a2enmod rewrite
 
-# Copy application files
 COPY . /var/www/html/
 
-# Set proper permissions for uploads directory
-RUN mkdir -p /var/www/html/uploads/evidence \
-             /var/www/html/uploads/announcements \
-             /var/www/html/uploads/profile \
+RUN mkdir -p /var/www/html/uploads \
     && chown -R www-data:www-data /var/www/html/uploads \
     && chmod -R 775 /var/www/html/uploads
 
