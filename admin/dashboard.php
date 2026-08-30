@@ -12,7 +12,7 @@ if (!isset($auth) || !($auth instanceof Auth)) {
 if (isset($_POST['logout']) || isset($_GET['logout'])) {
     $auth->logout();
     if (session_status() === PHP_SESSION_ACTIVE) {
-        session_destroy();
+        @session_destroy();
     }
     header('Location: ../php/login.php');
     exit();
