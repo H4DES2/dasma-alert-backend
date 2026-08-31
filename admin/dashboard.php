@@ -496,9 +496,29 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
     </main>
+<?php
+// Query active dashboard data directly before rendering HTML
+$kpi_active_res = $conn->query("SELECT COUNT(*) AS total FROM incidents WHERE status NOT IN ('Resolved', 'Spam', 'False Alarm')");
+$kpi_active = $kpi_active_res ? (int)$kpi_active_res->fetch_assoc()['total'] : 0;
+
+$kpi_evac_res = $conn->query("SELECT SUM(current_occupants) AS total FROM evacuation_centers WHERE status = 'Active'");
+$kpi_evac = $kpi_evac_res ? (int)$kpi_evac_res->fetch_assoc()['total'] : 0;
+
+$kpi_dep_res = $conn->query("SELECT COUNT(*) AS total FROM responder_teams WHERE status = 'Deployed'");
+$kpi_dep = $kpi_dep_res ? (int)$kpi_dep_res->fetch_assoc()['total'] : 0;
+
+$initial_payload = [
+    'kpi' => [
+        'active'   => $kpi_active,
+        'deployed' => $kpi_dep,
+        'evacuees' => $kpi_evac
+    ]
+];
+?>
+
 <script>
     window.soundEnabled = <?= ($sound_saved === 1) ? 'true' : 'false' ?>;
-    window.initialDashboardData = <?= json_encode($initial_dashboard_data ?? null) ?>;
+    window.initialDashboardData = <?= json_encode($initial_payload) ?>;
 </script>
 <script src="../js/admin/dashboard.js?v=<?= filemtime('../js/admin/dashboard.js') ?>"></script>
 </body>

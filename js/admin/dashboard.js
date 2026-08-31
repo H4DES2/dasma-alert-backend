@@ -156,56 +156,66 @@
         }); 
     }
     
-    document.addEventListener('DOMContentLoaded', function() { 
-        const mapContainer = document.getElementById('dasma-map');
-        if (mapContainer) {
-            const osmStreet = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19, attribution: 'OpenStreetMap'
-            });
+   document.addEventListener('DOMContentLoaded', function() { 
+    const mapContainer = document.getElementById('dasma-map');
+    if (mapContainer) {
+        const osmStreet = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19, attribution: 'OpenStreetMap'
+        });
 
-            const darkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-                maxZoom: 19, attribution: 'CartoDB'
-            });
+        const darkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19, attribution: 'CartoDB'
+        });
 
-            const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                maxZoom: 18, attribution: 'Esri Satellite'
-            });
+        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+            maxZoom: 18, attribution: 'Esri Satellite'
+        });
 
-            // Expanded bounds to include Paliparan on the East and Salawag on the North
-            const dasmaBounds = L.latLngBounds(
-                [14.2500, 120.8900], // SouthWest corner of Dasmariñas
-                [14.3900, 121.0200]  // NorthEast corner of Dasmariñas
-            );
+        const dasmaBounds = L.latLngBounds(
+            [14.2500, 120.8900],
+            [14.3900, 121.0200]
+        );
 
-            map = L.map('dasma-map', { 
-                center: [14.3294, 120.9368], 
-                zoom: 13,             // Relaxed zoom to fit the wider bounds
-                minZoom: 13,          // Allows seeing all of Dasmariñas, but blocks zooming out to Cavite
-                maxBounds: dasmaBounds,
-                maxBoundsViscosity: 1.0, // Solid invisible wall at the borders
-                layers: [osmStreet]
-            });
-            incidentLayer = L.layerGroup().addTo(map); 
-            evacLayer = L.layerGroup().addTo(map); 
+        map = L.map('dasma-map', { 
+            center: [14.3294, 120.9368], 
+            zoom: 13,
+            minZoom: 13,
+            maxBounds: dasmaBounds,
+            maxBoundsViscosity: 1.0,
+            layers: [osmStreet]
+        });
+        incidentLayer = L.layerGroup().addTo(map); 
+        evacLayer = L.layerGroup().addTo(map); 
 
-            const baseMaps = {
-                "Street Map": osmStreet,
-                "Dark Mode": darkMatter,
-                "Satellite": esriSatellite
-            };
+        const baseMaps = {
+            "Street Map": osmStreet,
+            "Dark Mode": darkMatter,
+            "Satellite": esriSatellite
+        };
 
-            const overlayMaps = {
-                "Active Incidents": incidentLayer,
-                "Evacuation Centers": evacLayer
-            };
+        const overlayMaps = {
+            "Active Incidents": incidentLayer,
+            "Evacuation Centers": evacLayer
+        };
 
-            L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
-        }
+        L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
+    }
+    
+    // 🚀 Instant bootstrap render (Removes skeleton wait time)
+    if (window.initialDashboardData && window.initialDashboardData.kpi) {
+        const kpiAct = document.getElementById('kpi-active');
+        const kpiDep = document.getElementById('kpi-deployed');
+        const kpiEvac = document.getElementById('kpi-evacuees');
         
-        fetchWeather();
-        syncDashboard(); 
-        setInterval(syncDashboard, 5000); 
-    });
+        if (kpiAct) kpiAct.innerText = window.initialDashboardData.kpi.active;
+        if (kpiDep) kpiDep.innerText = window.initialDashboardData.kpi.deployed;
+        if (kpiEvac) kpiEvac.innerText = window.initialDashboardData.kpi.evacuees;
+    }
+    
+    fetchWeather();
+    syncDashboard(); 
+    setInterval(syncDashboard, 5000); 
+});
     
     let hasAlertedHeat = sessionStorage.getItem('heat_alerted');
 
