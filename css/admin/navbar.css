@@ -5,7 +5,7 @@
     left: clamp(8px, 2.5vw, 25px); 
     right: clamp(8px, 2.5vw, 25px); 
     height: clamp(56px, 8vh, 75px); 
-    z-index: 9000; /* 👈 Set to 9000 so it sits above all regular page elements */
+    z-index: 9000; 
     display: flex; 
     align-items: center; 
     justify-content: space-between; 
@@ -17,6 +17,7 @@
     border: 1px solid rgba(255, 255, 255, 0.8);
     transition: all 0.3s ease;
 }
+
 .navbar-brand { 
     display: flex; 
     align-items: center; 
@@ -73,7 +74,7 @@
     list-style-type: none; 
     display: flex; 
     align-items: center; 
-    justify-content: center;
+    justify-content: center; 
     z-index: 2; 
     flex: 1;
     min-width: 0;
@@ -215,6 +216,45 @@
 .dropdown-item:hover { background: #f8f9fa; color: #b10000; }
 .dropdown-item.logout-btn { color: #d32f2f; margin-top: 4px; border-top: 1px solid #f1f4f8; }
 
+/* 🚀 NAVBAR POPUP MODALS & OVERLAYS */
+.custom-modal-overlay { 
+    display: none; 
+    position: fixed; 
+    z-index: 99999; 
+    left: 0; top: 0; 
+    width: 100vw; 
+    height: 100dvh; 
+    background-color: rgba(15, 23, 42, 0.6); 
+    backdrop-filter: blur(8px); 
+    align-items: center; 
+    justify-content: center; 
+    padding: 15px;
+}
+
+.custom-modal-box { 
+    background-color: #ffffff; 
+    padding: clamp(20px, 4vw, 40px); 
+    border-radius: 24px; 
+    width: 100%; 
+    max-width: 450px; 
+    text-align: center; 
+    box-shadow: 0 30px 70px rgba(0,0,0,0.3); 
+    border: 1px solid rgba(255, 255, 255, 0.2); 
+}
+
+.nav-input-field { 
+    width: 100%; 
+    padding: 12px 14px; 
+    margin-bottom: 15px; 
+    border-radius: 12px; 
+    border: 1px solid #e2e8f0; 
+    background: #f8f9fa; 
+    font-family: inherit; 
+    font-weight: 700; 
+    outline: none; 
+    color: #333;
+}
+
 /* Dark Mode Overrides */
 html.global-dark-mode .custom-gooey-navbar { background-color: #161b22; border-color: #30363d; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5); }
 html.global-dark-mode .navbar-brand h2 { color: #f0f6fc; }
@@ -232,6 +272,12 @@ html.global-dark-mode .dropdown-menu { background: #161b22; border-color: #30363
 html.global-dark-mode .dropdown-item { color: #c9d1d9; }
 html.global-dark-mode .dropdown-item:hover { background: #21262d; color: #ff6b6b; }
 html.global-dark-mode .dropdown-item.logout-btn { border-top-color: #30363d; }
+
+html.global-dark-mode .custom-modal-box { background-color: #161b22; box-shadow: 0 30px 70px rgba(0,0,0,0.6); border-color: #30363d; }
+html.global-dark-mode .nav-input-field { background: #0d1117; border-color: #30363d; color: #f0f6fc; }
+html.global-dark-mode #modalTitle, 
+html.global-dark-mode #modalMessage { color: #f0f6fc; }
+html.global-dark-mode #customConfirmModal button:first-child { background: #21262d !important; color: #c9d1d9 !important; }
 
 /* 🚀 SCREEN-BASED HIDING & COMPRESSION */
 @media (max-width: 900px) {

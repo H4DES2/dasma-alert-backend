@@ -376,7 +376,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                     
                     <label style="display:block; margin-bottom:8px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.75rem; letter-spacing:0.04em;">Available Response Teams</label>
                     <div id="available_teams_list" class="team-list-container">
-                        <!-- Filled dynamically with Skeletons or Units -->
+                        <!-- Filled dynamically -->
                     </div>
                     <button class="btn-sm" style="background:var(--color-success); width:100%; padding:14px; font-size:0.95rem;" onclick="submitDispatch()">Deploy Selected Teams</button>
                 </div>
@@ -459,6 +459,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                 <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
             </div>
         </div>
+
         <!-- MODAL 5: Mobile Incident Details -->
         <div id="mobileIncidentModal" class="modal">
             <div class="modal-content" style="max-width: 90%; padding: 24px;">
@@ -496,15 +497,16 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
     </main>
+
 <?php
-// Query active dashboard data directly before rendering HTML
+// Query active dashboard data directly before rendering HTML (using response_teams table)
 $kpi_active_res = $conn->query("SELECT COUNT(*) AS total FROM incidents WHERE status NOT IN ('Resolved', 'Spam', 'False Alarm')");
 $kpi_active = $kpi_active_res ? (int)$kpi_active_res->fetch_assoc()['total'] : 0;
 
 $kpi_evac_res = $conn->query("SELECT SUM(current_occupants) AS total FROM evacuation_centers WHERE status = 'Active'");
 $kpi_evac = $kpi_evac_res ? (int)$kpi_evac_res->fetch_assoc()['total'] : 0;
 
-$kpi_dep_res = $conn->query("SELECT COUNT(*) AS total FROM responder_teams WHERE status = 'Deployed'");
+$kpi_dep_res = $conn->query("SELECT COUNT(*) AS total FROM response_teams WHERE status IN ('deployed', 'on-scene')");
 $kpi_dep = $kpi_dep_res ? (int)$kpi_dep_res->fetch_assoc()['total'] : 0;
 
 $initial_payload = [
