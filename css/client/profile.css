@@ -1,0 +1,75 @@
+        .dashboard-container { display: flex; min-height: 100vh; background: #cfd8dc; transition: 0.3s; }
+        .main-content { flex: 1; margin-top: 80px; padding: 40px; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; }
+        
+        .profile-card { background: #e0e5ec; padding: 40px; border-radius: 25px; box-shadow: 12px 12px 20px rgba(163, 177, 198, 0.9), -12px -12px 20px rgba(255, 255, 255, 0.7), inset 2px 2px 5px rgba(255, 255, 255, 0.4); width: 100%; max-width: 900px; transition: 0.3s; border: none; }
+        
+        .profile-header { text-align: center; margin-bottom: 30px; }
+        .current-photo-large { width: 120px; height: 120px; border-radius: 50%; margin: 0 auto 15px; overflow: hidden; background: #e0e5ec; display: flex; align-items: center; justify-content: center; border: 4px solid #b10000; box-shadow: 6px 6px 12px rgba(163, 177, 198, 0.8), -6px -6px 12px rgba(255, 255, 255, 0.6); }
+        .current-photo-large img { width: 100%; height: 100%; object-fit: cover; }
+        .current-photo-large i { font-size: 80px; color: #888; }
+        .change-photo-text { color: #b10000; font-size: 0.85rem; cursor: pointer; text-decoration: none; font-weight: 800; transition: 0.2s; display: inline-block; padding: 8px 16px; border-radius: 12px; background: #e0e5ec; box-shadow: 4px 4px 8px rgba(163, 177, 198, 0.6), -4px -4px 8px rgba(255, 255, 255, 0.5); }
+        .change-photo-text:hover { transform: scale(0.95); box-shadow: inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5); }
+
+        .profile-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; transition: 0.3s; }
+        .grid-cell { padding: 15px 20px; border-radius: 15px; background: #e0e5ec; box-shadow: inset 4px 4px 8px rgba(163, 177, 198, 0.6), inset -4px -4px 8px rgba(255, 255, 255, 0.5); transition: 0.3s; }
+        .grid-cell.full-width { grid-column: span 2; }
+        .grid-cell label { display: block; font-size: 0.7rem; color: #b10000; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 800; margin-bottom: 8px; }
+        .grid-cell input, .grid-cell select { background: transparent; border: none; color: #333; width: 100%; font-size: 1rem; outline: none; padding: 5px 0; font-weight: 600; }
+        .grid-cell select { cursor: pointer; }
+
+        .pwd-wrapper { position: relative; display: flex; align-items: center; }
+        .pwd-wrapper input { width: 100%; padding-right: 30px; }
+        .toggle-password { position: absolute; right: 0; cursor: pointer; color: #888; font-size: 1.2rem; transition: 0.2s; }
+
+        .btn-save { background: #b10000; color: white; border: none; padding: 12px 30px; border-radius: 12px; cursor: pointer; font-weight: 800; font-size: 0.95rem; display: inline-flex; align-items: center; gap: 8px; transition: 0.3s; box-shadow: 6px 6px 12px rgba(163, 177, 198, 0.8), -6px -6px 12px rgba(255, 255, 255, 0.6); }
+        .btn-save:hover { transform: translateY(2px); box-shadow: 3px 3px 6px rgba(163, 177, 198, 0.8), -3px -3px 6px rgba(255, 255, 255, 0.6); }
+        .section-title { color: #555; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 1px; margin: 30px 0 15px 0; font-weight: 900; }
+        
+        .btn-font { background: #e0e5ec; color: #333; border: none; padding: 8px 18px; border-radius: 10px; cursor: pointer; font-weight: 800; transition: 0.2s; box-shadow: 4px 4px 8px rgba(163, 177, 198, 0.6), -4px -4px 8px rgba(255, 255, 255, 0.5); }
+        .btn-font:hover { transform: scale(0.95); box-shadow: inset 3px 3px 6px rgba(163, 177, 198, 0.6), inset -3px -3px 6px rgba(255, 255, 255, 0.5); }
+
+        html.global-dark-mode body, html.global-dark-mode .dashboard-container { background: #1a1d21 !important; }
+        html.global-dark-mode .profile-card { background: #2b3035 !important; box-shadow: 15px 15px 35px rgba(0,0,0,0.6), -10px -10px 20px rgba(50,55,60,0.2), inset 2px 2px 5px rgba(255,255,255,0.05); }
+        html.global-dark-mode .current-photo-large { border-color: #770000; background: #1a1d21; box-shadow: none; }
+        html.global-dark-mode .change-photo-text { background: #2b3035; color: #f4f6f9; box-shadow: 4px 4px 8px rgba(0,0,0,0.5), -4px -4px 8px rgba(50,55,60,0.2); }
+        html.global-dark-mode .grid-cell { background: #2b3035; box-shadow: inset 4px 4px 10px rgba(0,0,0,0.5), inset -4px -4px 10px rgba(50,55,60,0.2); }
+        html.global-dark-mode .grid-cell label { color: #ff5252; }
+        html.global-dark-mode .grid-cell input, html.global-dark-mode .grid-cell select { color: #f4f6f9; }
+        html.global-dark-mode .grid-cell select option { background: #2b3035; color: #f4f6f9; }
+        html.global-dark-mode .section-title { color: #b0bec5; }
+        html.global-dark-mode .btn-save { background: #770000; color: #fff; box-shadow: 6px 6px 12px rgba(0,0,0,0.5), -6px -6px 12px rgba(50,55,60,0.2); }
+        html.global-dark-mode .btn-font { background: #2b3035; color: white; box-shadow: 4px 4px 8px rgba(0,0,0,0.5), -4px -4px 8px rgba(50,55,60,0.2); }
+
+        .alert-box { padding: 15px 20px; border-radius: 12px; margin-bottom: 25px; font-weight: 700; font-size: 0.95rem; display: none; text-align: left; width: 100%; box-sizing: border-box; transition: opacity 0.5s ease; box-shadow: inset 3px 3px 6px rgba(0,0,0,0.1); }
+        .alert-success { background-color: #e8f5e9; color: #1b5e20; border: 1px solid #c8e6c9; }
+        .alert-error { background-color: #ffebee; color: #c62828; border: 1px solid #ffcdd2; }
+        
+        html.global-dark-mode .alert-success { background: rgba(46, 125, 50, 0.2); color: #81c784; border: none; }
+        html.global-dark-mode .alert-error { background: rgba(198, 40, 40, 0.2); color: #e57373; border: none; }
+        /* 🚀 MOBILE RESPONSIVE OVERRIDES */
+        @media (max-width: 768px) {
+            .main-content { 
+                padding: 15px !important; 
+                margin-top: 100px !important; 
+            }
+            .profile-card { 
+                padding: 25px 20px; 
+            }
+            .profile-grid { 
+                grid-template-columns: 1fr; /* Stacks the 2 columns into 1 */
+                gap: 15px; 
+            }
+            .grid-cell.full-width { 
+                grid-column: 1; /* Resets the full-width span for mobile */
+            }
+            .btn-save { 
+                width: 100%; 
+                justify-content: center; 
+            }
+            .pwd-wrapper input {
+                font-size: 0.9rem; /* Prevents input zooming on iOS Safari */
+            }
+            .section-title {
+                text-align: center;
+            }
+        }

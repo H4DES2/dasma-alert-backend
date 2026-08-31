@@ -1,3 +1,4 @@
+Set-Content -Path ".\Dockerfile" -Value @"
 FROM php:8.2-apache
 
 RUN docker-php-ext-install mysqli pdo pdo_mysql
@@ -11,3 +12,4 @@ RUN mkdir -p /var/www/html/uploads \
 
 EXPOSE 80
 CMD ["apache2-foreground"]
+"@
