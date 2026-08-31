@@ -115,8 +115,8 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="../css/admin/navbar.css">
-    <link rel="stylesheet" href="../css/admin/dashboard.css">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="../css/admin/dashboard.css?v=<?= time() ?>">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
@@ -375,9 +375,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                     <p id="dispatch_incident_name" style="font-weight:800; font-size:1.1rem; margin-bottom:18px; color:var(--color-critical);"></p>
                     
                     <label style="display:block; margin-bottom:8px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.75rem; letter-spacing:0.04em;">Available Response Teams</label>
-                    <div id="available_teams_list" class="team-list-container">
-                        <!-- Filled dynamically -->
-                    </div>
+                    <div id="available_teams_list" class="team-list-container"></div>
                     <button class="btn-sm" style="background:var(--color-success); width:100%; padding:14px; font-size:0.95rem;" onclick="submitDispatch()">Deploy Selected Teams</button>
                 </div>
             </div>
@@ -499,15 +497,23 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     </main>
 
 <?php
-// Query active dashboard data directly before rendering HTML (using response_teams table)
-$kpi_active_res = $conn->query("SELECT COUNT(*) AS total FROM incidents WHERE status NOT IN ('Resolved', 'Spam', 'False Alarm')");
-$kpi_active = $kpi_active_res ? (int)$kpi_active_res->fetch_assoc()['total'] : 0;
+// Safe initial dashboard KPI query payload with error fallback
+$kpi_active = 0;
+$kpi_evac = 0;
+$kpi_dep = 0;
 
-$kpi_evac_res = $conn->query("SELECT SUM(current_occupants) AS total FROM evacuation_centers WHERE status = 'Active'");
-$kpi_evac = $kpi_evac_res ? (int)$kpi_evac_res->fetch_assoc()['total'] : 0;
+try {
+    $kpi_active_res = $conn->query("SELECT COUNT(*) AS total FROM incidents WHERE status NOT IN ('Resolved', 'Spam', 'False Alarm', 'archived')");
+    $kpi_active = $kpi_active_res ? (int)$kpi_active_res->fetch_assoc()['total'] : 0;
 
-$kpi_dep_res = $conn->query("SELECT COUNT(*) AS total FROM response_teams WHERE status IN ('deployed', 'on-scene')");
-$kpi_dep = $kpi_dep_res ? (int)$kpi_dep_res->fetch_assoc()['total'] : 0;
+    $kpi_evac_res = $conn->query("SELECT SUM(current_occupants) AS total FROM evacuation_centers WHERE status = 'Active'");
+    $kpi_evac = $kpi_evac_res ? (int)$kpi_evac_res->fetch_assoc()['total'] : 0;
+
+    $kpi_dep_res = $conn->query("SELECT COUNT(*) AS total FROM response_teams WHERE status IN ('deployed', 'on-scene')");
+    $kpi_dep = $kpi_dep_res ? (int)$kpi_dep_res->fetch_assoc()['total'] : 0;
+} catch (Exception $e) {
+    // Keep defaults on query exception
+}
 
 $initial_payload = [
     'kpi' => [
@@ -522,6 +528,6 @@ $initial_payload = [
     window.soundEnabled = <?= ($sound_saved === 1) ? 'true' : 'false' ?>;
     window.initialDashboardData = <?= json_encode($initial_payload) ?>;
 </script>
-<script src="../js/admin/dashboard.js?v=<?= filemtime('../js/admin/dashboard.js') ?>"></script>
+<script src="../js/admin/dashboard.js?v=<?= time() ?>"></script>
 </body>
 </html>
