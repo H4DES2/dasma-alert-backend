@@ -13,7 +13,7 @@ if (!$auth->isSuperAdmin() && !$auth->isAdmin()) {
 $role    = $_SESSION['role'];
 $user_id = (int)$_SESSION['user_id'];
 
-// PATCH VULN-A08: Use prepared statement for user barangay lookup
+// Use prepared statement for user barangay lookup
 $u_stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
 $u_stmt->bind_param("i", $user_id);
 $u_stmt->execute();
@@ -28,7 +28,8 @@ if ($b_res) {
         $barangays[] = $row['name'];
     }
 }
-// PATCH VULN-A08: All KPI queries use prepared statements — no string interpolation
+
+// KPI queries with prepared statements
 if ($role === 'admin' && !empty($my_brgy)) {
     $like_brgy = '%' . $my_brgy . '%';
 
@@ -52,7 +53,6 @@ if ($role === 'admin' && !empty($my_brgy)) {
     $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
     $teams_result = $s->get_result(); $s->close();
 } else {
-    // Superadmin — no filter, no user input in query
     $total_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams")->fetch_assoc()['count'] ?? 0);
     $avail_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status = 'available'")->fetch_assoc()['count'] ?? 0);
     $dep_teams    = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('deployed','on-scene')")->fetch_assoc()['count'] ?? 0);
@@ -71,7 +71,6 @@ if ($teams_result && $teams_result->num_rows > 0) {
         if ($t['status'] === 'maintenance')                              $maint_list[] = $t;
     }
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -87,8 +86,8 @@ if ($teams_result && $teams_result->num_rows > 0) {
     <?php include 'navbar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 35px;">
-            <h1 style="color: #333; margin: 0; font-weight: 900; letter-spacing: -1px; font-size: 2.2rem;">
+        <header style="margin-bottom: 24px;">
+            <h1 style="margin: 0; font-weight: 900; letter-spacing: -1px; font-size: clamp(1.4rem, 4vw, 2.2rem);">
                 <?php echo ($role === 'admin') ? "Sector Resource Tracking - $my_brgy" : "City Resource Tracking"; ?>
             </h1>
         </header>
@@ -96,9 +95,10 @@ if ($teams_result && $teams_result->num_rows > 0) {
         <div class="kpi-grid">
             <div class="kpi-card blue">
                 <div class="kpi-header-row">
-                    <i class='bx bxs-truck' style="font-size:3.5rem; color:#1976d2;"></i>
+                    <div class="kpi-icon-wrapper"><i class='bx bxs-truck' style="color:#1976d2;"></i></div>
                     <div class="kpi-card-content">
-                        <h3><?php echo $total_teams; ?></h3><p>Total Units</p>
+                        <h3><?php echo $total_teams; ?></h3>
+                        <p>Total Units</p>
                     </div>
                 </div>
                 <div class="kpi-details-container">
@@ -114,9 +114,10 @@ if ($teams_result && $teams_result->num_rows > 0) {
 
             <div class="kpi-card green">
                 <div class="kpi-header-row">
-                    <i class='bx bxs-check-shield' style="font-size:3.5rem; color:#388e3c;"></i>
+                    <div class="kpi-icon-wrapper"><i class='bx bxs-check-shield' style="color:#388e3c;"></i></div>
                     <div class="kpi-card-content">
-                        <h3><?php echo $avail_teams; ?></h3><p>Available</p>
+                        <h3><?php echo $avail_teams; ?></h3>
+                        <p>Available</p>
                     </div>
                 </div>
                 <div class="kpi-details-container">
@@ -129,9 +130,10 @@ if ($teams_result && $teams_result->num_rows > 0) {
 
             <div class="kpi-card red">
                 <div class="kpi-header-row">
-                    <i class='bx bxs-alarm-exclamation' style="font-size:3.5rem; color:#d32f2f;"></i>
+                    <div class="kpi-icon-wrapper"><i class='bx bxs-alarm-exclamation' style="color:#d32f2f;"></i></div>
                     <div class="kpi-card-content">
-                        <h3><?php echo $dep_teams; ?></h3><p>Deployed</p>
+                        <h3><?php echo $dep_teams; ?></h3>
+                        <p>Deployed</p>
                     </div>
                 </div>
                 <div class="kpi-details-container">
@@ -144,9 +146,10 @@ if ($teams_result && $teams_result->num_rows > 0) {
 
             <div class="kpi-card gray">
                 <div class="kpi-header-row">
-                    <i class='bx bxs-wrench' style="font-size: 3.5rem; color: #777;"></i>
+                    <div class="kpi-icon-wrapper"><i class='bx bxs-wrench' style="color:#777;"></i></div>
                     <div class="kpi-card-content">
-                        <h3><?php echo $maint_teams; ?></h3><p>In Maintenance</p>
+                        <h3><?php echo $maint_teams; ?></h3>
+                        <p>In Maintenance</p>
                     </div>
                 </div>
                 <div class="kpi-details-container">
@@ -160,7 +163,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
 
         <div class="table-container">
             <div class="header-flex">
-                <h2 style="margin: 0;">Response Unit Directory</h2>
+                <h2 style="margin: 0; font-size: clamp(1.1rem, 3.2vw, 1.4rem);">Response Unit Directory</h2>
                 <?php if($role === 'superadmin'): ?>
                 <button class="btn-add btn-sm" onclick="openAddUnitModal()"><i class='bx bx-plus-circle'></i> Register New Unit</button>
                 <?php endif; ?>
@@ -212,10 +215,10 @@ if ($teams_result && $teams_result->num_rows > 0) {
                 <span class="close-modal" onclick="closeModal('addUnitModal')">&times;</span>
             </div>
             <div class="modal-body">
-                <label style="font-weight: 800; color: #555; display: block; margin-bottom: 8px;">Unit Name:</label>
+                <label style="font-weight: 800; display: block; margin-bottom: 8px;">Unit Name:</label>
                 <input type="text" id="new_team_name" class="modal-input" placeholder="e.g. Medic 1">
                 
-                <label style="font-weight: 800; color: #555; display: block; margin-bottom: 8px;">Unit Type:</label>
+                <label style="font-weight: 800; display: block; margin-bottom: 8px;">Unit Type:</label>
                 <select id="new_team_type" class="modal-select">
                     <option value="Medic">Medic</option>
                     <option value="Fire">Fire</option>
@@ -223,7 +226,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
                     <option value="Police">Police</option>
                 </select>
 
-                <label style="font-weight: 800; color: #555; display: block; margin-bottom: 8px;">Assigned Sector:</label>
+                <label style="font-weight: 800; display: block; margin-bottom: 8px;">Assigned Sector:</label>
                 <select id="new_team_brgy" class="modal-select">
                     <option value="">🌍 City-Wide (Unassigned)</option>
                     <?php foreach($barangays as $b): ?>
@@ -253,12 +256,12 @@ if ($teams_result && $teams_result->num_rows > 0) {
     </div>
 
     <!-- Universal Confirmation Modal -->
-    <div id="universalModal" class="modal" style="z-index: 10000;">
-        <div class="modal-content" style="text-align: center; width: 380px; padding: 45px;">
-            <i id="uniModalIcon" class='bx bxs-help-circle' style="font-size: 5rem; margin-bottom: 20px;"></i>
-            <h3 id="uniModalTitle" style="margin-bottom: 15px; font-size: 1.6rem;">Confirm</h3>
-            <p id="uniModalText" style="margin-bottom: 30px; color: #666; font-weight: 700; line-height: 1.5;"></p>
-            <div style="display: flex; gap: 15px;" id="uniModalButtons"></div>
+    <div id="universalModal" class="modal">
+        <div class="modal-content" style="text-align: center; width: 380px; padding: 35px;">
+            <i id="uniModalIcon" class='bx bxs-help-circle' style="font-size: 4.5rem; margin-bottom: 16px;"></i>
+            <h3 id="uniModalTitle" style="margin-bottom: 12px; font-size: 1.4rem;">Confirm</h3>
+            <p id="uniModalText" style="margin-bottom: 24px; color: var(--text-secondary); font-weight: 700; line-height: 1.5;"></p>
+            <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
 <script src="../js/admin/resource_tracking.js?v=<?= filemtime('../js/admin/resource_tracking.js') ?>"></script>

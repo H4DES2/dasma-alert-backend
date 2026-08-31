@@ -86,7 +86,7 @@ $role_sections = [
         <header class="header-flex">
             <div>
                 <h1>User Management</h1>
-                <p style="color: #666; margin-top: 5px; font-weight: 700;">Control system access levels and account status grouped by role.</p>
+                <p style="color: var(--text-secondary); margin-top: 5px; font-weight: 700; font-size: clamp(0.8rem, 2vw, 0.95rem);">Control system access levels and account status grouped by role.</p>
             </div>
             
             <div class="search-wrapper">
@@ -157,39 +157,41 @@ $role_sections = [
                                         </span>
                                     </td>
 
-                                    <td style="display: flex; gap: 10px; justify-content: center; align-items: center;">
-                                        <?php if ((int)$row['id'] === (int)$_SESSION['user_id']): ?>
-                                            <span style="color: #8e24aa; font-size: 0.8rem; font-weight: 700;"><i class='bx bxs-user-check'></i> Your Account</span>
-                                        <?php elseif ($row['status'] === 'pending'): ?>
-                                            <button onclick="event.stopPropagation(); toggleUserStatus(<?php echo $row['id']; ?>, 'pending')" class="btn-status" style="background: #2e7d32;">
-                                                <i class='bx bx-check'></i> Approve
-                                            </button>
-                                            <button onclick="event.stopPropagation(); rejectUser(<?php echo $row['id']; ?>)" class="btn-status" style="background: #c62828;">
-                                                <i class='bx bx-x'></i> Reject
-                                            </button>
-                                        <?php else: ?>
-                                            <button onclick="event.stopPropagation(); toggleUserStatus(<?php echo $row['id']; ?>, '<?php echo $row['status']; ?>')" 
-                                                    class="btn-status"
-                                                    style="background: <?php echo $row['status'] === 'Active' ? '#d32f2f' : '#388e3c'; ?>;">
-                                                <?php echo $row['status'] === 'Active' ? "<i class='bx bx-user-x'></i> Suspend" : "<i class='bx bx-user-check'></i> Activate"; ?>
-                                            </button>
+                                    <td class="action-cell">
+                                        <div class="action-btn-group">
+                                            <?php if ((int)$row['id'] === (int)$_SESSION['user_id']): ?>
+                                                <span style="color: #8e24aa; font-size: 0.8rem; font-weight: 700;"><i class='bx bxs-user-check'></i> Your Account</span>
+                                            <?php elseif ($row['status'] === 'pending'): ?>
+                                                <button onclick="event.stopPropagation(); toggleUserStatus(<?php echo $row['id']; ?>, 'pending')" class="btn-status" style="background: #2e7d32;">
+                                                    <i class='bx bx-check'></i> Approve
+                                                </button>
+                                                <button onclick="event.stopPropagation(); rejectUser(<?php echo $row['id']; ?>)" class="btn-status" style="background: #c62828;">
+                                                    <i class='bx bx-x'></i> Reject
+                                                </button>
+                                            <?php else: ?>
+                                                <button onclick="event.stopPropagation(); toggleUserStatus(<?php echo $row['id']; ?>, '<?php echo $row['status']; ?>')" 
+                                                        class="btn-status"
+                                                        style="background: <?php echo $row['status'] === 'Active' ? '#d32f2f' : '#388e3c'; ?>;">
+                                                    <?php echo $row['status'] === 'Active' ? "<i class='bx bx-user-x'></i> Suspend" : "<i class='bx bx-user-check'></i> Activate"; ?>
+                                                </button>
 
-                                            <select onclick="event.stopPropagation()" onchange="if(this.value) handleRoleChange(<?php echo $row['id']; ?>, this.value, '<?php echo htmlspecialchars($row['username']); ?>')" class="role-selector">
-                                                <option value="" disabled selected>Change Role...</option>
-                                                <?php 
-                                                $currentRole = strtolower(trim($row['role'])); 
-                                                if ($currentRole === 'superadmin') {
-                                                    echo '<option value="admin">Demote to Admin</option><option value="responder">Demote to Responder</option><option value="user">Demote to Citizen</option>';
-                                                } elseif ($currentRole === 'admin') {
-                                                    echo '<option value="user">Demote to Citizen</option><option value="responder">Change to Responder</option><option value="superadmin">Promote to Superadmin</option>';
-                                                } elseif ($currentRole === 'responder') {
-                                                    echo '<option value="user">Demote to Citizen</option><option value="admin">Promote to Admin</option><option value="superadmin">Promote to Superadmin</option>';
-                                                } else {
-                                                    echo '<option value="responder">Promote to Responder</option><option value="admin">Promote to Admin</option><option value="superadmin">Promote to Superadmin</option>';
-                                                }
-                                                ?>
-                                            </select>
-                                        <?php endif; ?>
+                                                <select onclick="event.stopPropagation()" onchange="if(this.value) handleRoleChange(<?php echo $row['id']; ?>, this.value, '<?php echo htmlspecialchars($row['username']); ?>')" class="role-selector">
+                                                    <option value="" disabled selected>Change Role...</option>
+                                                    <?php 
+                                                    $currentRole = strtolower(trim($row['role'])); 
+                                                    if ($currentRole === 'superadmin') {
+                                                        echo '<option value="admin">Demote to Admin</option><option value="responder">Demote to Responder</option><option value="user">Demote to Citizen</option>';
+                                                    } elseif ($currentRole === 'admin') {
+                                                        echo '<option value="user">Demote to Citizen</option><option value="responder">Change to Responder</option><option value="superadmin">Promote to Superadmin</option>';
+                                                    } elseif ($currentRole === 'responder') {
+                                                        echo '<option value="user">Demote to Citizen</option><option value="admin">Promote to Admin</option><option value="superadmin">Promote to Superadmin</option>';
+                                                    } else {
+                                                        echo '<option value="responder">Promote to Responder</option><option value="admin">Promote to Admin</option><option value="superadmin">Promote to Superadmin</option>';
+                                                    }
+                                                    ?>
+                                                </select>
+                                            <?php endif; ?>
+                                        </div>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -206,10 +208,10 @@ $role_sections = [
     <!-- MODAL: Universal Confirmation -->
     <div id="universalModal" class="modal">
         <div class="modal-content">
-            <i id="uniModalIcon" class='bx' style="font-size: 5rem; margin-bottom: 20px;"></i>
-            <h3 id="uniModalTitle" style="margin-bottom: 15px; font-size: 1.6rem; font-weight: 900;">Confirm</h3>
-            <p id="uniModalText" style="margin-bottom: 35px; color: #666; font-weight: 700; line-height: 1.5;"></p>
-            <div style="display: flex; gap: 15px;" id="uniModalButtons"></div>
+            <i id="uniModalIcon" class='bx' style="font-size: 4.5rem; margin-bottom: 16px;"></i>
+            <h3 id="uniModalTitle" style="margin-bottom: 12px; font-size: 1.4rem; font-weight: 900;">Confirm</h3>
+            <p id="uniModalText" style="margin-bottom: 24px; color: var(--text-secondary); font-weight: 700; line-height: 1.5; font-size: 0.9rem;"></p>
+            <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
 
