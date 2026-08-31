@@ -1,7 +1,7 @@
 <?php
-// ==========================================
-// --- SECURE SESSION CONFIGURATION ---
-// ==========================================
+if (!ob_start("ob_gzhandler")) {
+    ob_start();
+}
 if (session_status() === PHP_SESSION_NONE) {
     ini_set('session.cookie_httponly', '1');
     ini_set('session.use_only_cookies', '1');

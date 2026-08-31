@@ -498,6 +498,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     </main>
 <script>
     window.soundEnabled = <?= ($sound_saved === 1) ? 'true' : 'false' ?>;
+    window.initialDashboardData = <?= json_encode($initial_dashboard_data ?? null) ?>;
 </script>
 <script src="../js/admin/dashboard.js?v=<?= filemtime('../js/admin/dashboard.js') ?>"></script>
 </body>
