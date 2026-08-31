@@ -43,6 +43,7 @@ if (!empty($raw_photo)) {
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
 
+<!-- Inline theme applier to prevent flash of unstyled theme on initial load -->
 <script>
     (function() {
         const theme    = <?= $js_theme ?>;
@@ -56,7 +57,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     })();
 </script>
 
-<link rel="stylesheet" href="../css/admin/navbar.css">
+<link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
 
 <nav class="custom-gooey-navbar">
     <div class="navbar-brand">
@@ -70,17 +71,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
                 <div class="left"></div>
                 <div class="right"></div>
             </div>
-            <li class="<?php echo $current_page == 'dashboard.php' ? 'active' : ''; ?>">
+            <li class="<?= $current_page == 'dashboard.php' ? 'active' : '' ?>">
                 <a href="dashboard.php" style="position: relative;">
                     <i class='bx bxs-map-alt'></i> <span>DASHBOARD</span>
                     <span id="nav-incident-badge" style="display:none; position:absolute; top:12px; right:8px; background:#d32f2f; color:white; font-size:0.6rem; padding:3px 6px; border-radius:50%; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">0</span>
                 </a>
             </li>
-            <li class="<?php echo $current_page == 'resource_tracking.php' ? 'active' : ''; ?>"><a href="resource_tracking.php"><i class='bx bxs-truck'></i> <span>RESOURCE TRACKING</span></a></li>
-            <li class="<?php echo $current_page == 'evacuation_centers.php' ? 'active' : ''; ?>"><a href="evacuation_centers.php"><i class='bx bxs-home-heart'></i> <span>EVACUATION CENTERS</span></a></li>
-            <li class="<?php echo $current_page == 'analytics.php' ? 'active' : ''; ?>"><a href="analytics.php"><i class='bx bxs-report'></i> <span>ANALYTICS & REPORTS</span></a></li>
+            <li class="<?= $current_page == 'resource_tracking.php' ? 'active' : '' ?>"><a href="resource_tracking.php"><i class='bx bxs-truck'></i> <span>RESOURCE TRACKING</span></a></li>
+            <li class="<?= $current_page == 'evacuation_centers.php' ? 'active' : '' ?>"><a href="evacuation_centers.php"><i class='bx bxs-home-heart'></i> <span>EVACUATION CENTERS</span></a></li>
+            <li class="<?= $current_page == 'analytics.php' ? 'active' : '' ?>"><a href="analytics.php"><i class='bx bxs-report'></i> <span>ANALYTICS & REPORTS</span></a></li>
             <?php if ($s_role === 'superadmin'): ?>
-            <li class="<?php echo $current_page == 'user_management.php' ? 'active' : ''; ?>"><a href="user_management.php"><i class='bx bxs-group'></i> <span>USER MANAGEMENT</span></a></li>
+            <li class="<?= $current_page == 'user_management.php' ? 'active' : '' ?>"><a href="user_management.php"><i class='bx bxs-group'></i> <span>USER MANAGEMENT</span></a></li>
             <?php endif; ?>
         </ul>
     </div>
@@ -92,7 +93,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         <div class="profile-dropdown" id="profileDropdown">
             <div class="profile-toggle" onclick="toggleDropdown(event)">
-                <img src="<?php echo $profile_photo; ?>?v=<?php echo time(); ?>" alt="Profile">
+                <img src="<?= $profile_photo ?>?v=<?= time() ?>" alt="Profile">
             </div>
             <div class="dropdown-menu">
                 <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
@@ -134,83 +135,4 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 </div>
 
-<script>
-function toggleDropdown(event) { 
-    event.stopPropagation(); 
-    document.getElementById('profileDropdown').classList.toggle('active');
-}
-
-window.addEventListener('click', (e) => { 
-    const prof = document.getElementById('profileDropdown');
-    if (prof && !prof.contains(e.target)) prof.classList.remove('active'); 
-});
-
-function updateBlob(activeElement, animate = false) {
-    const selector = document.querySelector('.hori-selector');
-    if (!activeElement || !selector) return;
-    if (!animate) selector.style.transition = 'none';
-    else selector.style.transition = 'all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
-    selector.style.left = activeElement.offsetLeft + "px";
-    selector.style.width = activeElement.offsetWidth + "px";
-    selector.style.height = activeElement.offsetHeight + "px";
-    selector.style.top = activeElement.offsetTop + "px";
-}
-
-document.querySelectorAll('#navbarSupportedContent li').forEach(li => {
-    li.addEventListener('click', function(e) {
-        const url = this.querySelector('a').getAttribute('href');
-        e.preventDefault();
-        document.querySelectorAll('#navbarSupportedContent li').forEach(el => el.classList.remove('active'));
-        this.classList.add('active');
-        updateBlob(this, true);
-        setTimeout(() => { window.location.href = url; }, 400);
-    });
-});
-
-window.addEventListener('load', () => updateBlob(document.querySelector('#navbarSupportedContent li.active'), false));
-window.addEventListener('resize', () => { updateBlob(document.querySelector('#navbarSupportedContent li.active'), false); });
-
-let pendingAction = null;
-function showCustomModal(type) {
-    const modal = document.getElementById('customConfirmModal');
-    const confirmBtn = document.getElementById('modalConfirmBtn');
-    document.getElementById('profileDropdown').classList.remove('active');
-
-    if (type === 'backup') {
-        document.getElementById('modalTitle').innerText = "BACKUP DATABASE";
-        document.getElementById('modalMessage').innerText = "STARTING DOWNLOAD NOW?";
-        document.getElementById('modalIcon').className = "bx bxs-data";
-        document.getElementById('modalIcon').style.color = "#1976d2";
-        confirmBtn.style.background = "#1976d2";
-        pendingAction = () => window.location.href = 'backup_db.php';
-    } else {
-        document.getElementById('modalTitle').innerText = "LOGOUT";
-        document.getElementById('modalMessage').innerText = "END CURRENT SESSION?";
-        document.getElementById('modalIcon').className = "bx bx-log-out-circle";
-        document.getElementById('modalIcon').style.color = "#d32f2f";
-        confirmBtn.style.background = "#d32f2f";
-        pendingAction = () => {
-            const f = document.createElement('form'); f.method='POST'; f.action='dashboard.php';
-            const i = document.createElement('input'); i.type='hidden'; i.name='logout'; i.value='1';
-            f.appendChild(i); document.body.appendChild(f); f.submit();
-        };
-    }
-    modal.style.display = 'flex';
-    confirmBtn.onclick = function() { if(pendingAction) pendingAction(); closeCustomModal(); };
-}
-
-function closeCustomModal() { document.getElementById('customConfirmModal').style.display = 'none'; }
-
-<?php if ($s_role === 'superadmin'): ?>
-function openGlobalBroadcastModal() { document.getElementById('globalBroadcastModal').style.display = 'flex'; }
-function closeGlobalBroadcastModal() { document.getElementById('globalBroadcastModal').style.display = 'none'; }
-function submitGlobalBroadcast() {
-    let fd = new FormData();
-    fd.append('action', 'send_broadcast');
-    fd.append('title', document.getElementById('globalBroadcastTitle').value);
-    fd.append('message', document.getElementById('globalBroadcastMessage').value);
-    fd.append('severity', document.getElementById('globalBroadcastSeverity').value);
-    fetch('admin_actions.php', { method: 'POST', body: fd }).then(() => location.reload());
-}
-<?php endif; ?>
-</script>
+<script src="../js/admin/navbar.js?v=<?= filemtime('../js/admin/navbar.js') ?>" defer></script>
