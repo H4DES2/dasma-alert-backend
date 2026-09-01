@@ -1,8 +1,9 @@
 <?php
+require_once '../php/config.php';
+
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-require_once '../php/config.php';
 require_once '../php/auth.php';
 
 if (!isset($auth) || !($auth instanceof Auth)) { 
@@ -23,8 +24,9 @@ if (!$auth->isSuperAdmin() && !$auth->isAdmin()) {
     exit();
 }
 
-$role    = $_SESSION['role'];
-$user_id = (int)$_SESSION['user_id'];
+$role    = $_SESSION['role'] ?? '';
+$user_id = (int)($_SESSION['user_id'] ?? 0);
+session_write_close();
 
 $barangays = [];
 if ($role === 'superadmin') {
