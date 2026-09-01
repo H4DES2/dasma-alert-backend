@@ -28,15 +28,7 @@ $role    = $_SESSION['role'] ?? '';
 $user_id = (int)($_SESSION['user_id'] ?? 0);
 session_write_close();
 
-$barangays = [];
-if ($role === 'superadmin') {
-    $b_res = $conn->query("SELECT name FROM barangays WHERE status = 'active' ORDER BY name ASC");
-    if ($b_res) {
-        $barangays = array_column($b_res->fetch_all(MYSQLI_ASSOC), 'name');
-    }
-}
-
-// Fetch user sector and sound preferences
+// 1. Fetch user data
 $u_stmt = $conn->prepare("
     SELECT u.barangay, IFNULL(p.sound_alert, 0) as sound_alert 
     FROM users u 
@@ -51,21 +43,42 @@ $u_stmt->close();
 $my_brgy     = $u_data['barangay'] ?? '';
 $sound_saved = (int)($u_data['sound_alert'] ?? 0);
 
-$active_broadcast = ($res = $conn->query("SELECT * FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1")) ? $res->fetch_assoc() : null;
-$show_banner      = ($role !== 'superadmin' && $active_broadcast && $active_broadcast['id'] != ($_COOKIE['dismissed_broadcast_id'] ?? 0));
-
-$announcements = [];
-try {
-    $ann_res = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC");
-    if ($ann_res) {
-        while ($row = $ann_res->fetch_assoc()) {
-            $announcements[] = $row;
+// 2. Fetch barangays only if superadmin
+$barangays = [];
+if ($role === 'superadmin') {
+    $b_res = $conn->query("SELECT name FROM barangays WHERE status = 'active' ORDER BY name ASC");
+    if ($b_res) {
+        while ($row = $b_res->fetch_assoc()) {
+            $barangays[] = $row['name'];
         }
     }
-} catch (Exception $e) {}
+}
 
+// 3. Announcements (Limit to 10 latest)
+$announcements = [];
+$ann_res = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 10");
+if ($ann_res) {
+    while ($row = $ann_res->fetch_assoc()) {
+        $announcements[] = $row;
+    }
+}
+
+// 4. Single broadcast check
+$active_broadcast = ($res = $conn->query("SELECT id, title, message, severity FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1")) ? $res->fetch_assoc() : null;
+$show_banner      = ($role !== 'superadmin' && $active_broadcast && $active_broadcast['id'] != ($_COOKIE['dismissed_broadcast_id'] ?? 0));
 function getReadableLocation($lat, $lng, $fallbackText) {
-    return (!empty($fallbackText) && $fallbackText !== "Locating...") ? $fallbackText : "Lat: $lat, Lng: $lng";
+    if ($fallbackText !== "Locating..." && $fallbackText !== "Unknown Area" && !strpos($fallbackText, "+")) {
+        return $fallbackText;
+    }
+    $url     = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$lat}&lon={$lng}&zoom=14";
+    $options = ['http' => ['method' => "GET", 'header' => "User-Agent: DasmaAlertApp/1.0\r\n"]];
+    $context = stream_context_create($options);
+    $response = @file_get_contents($url, false, $context);
+    if ($response) {
+        $data = json_decode($response, true);
+        return $data['display_name'] ?? $fallbackText;
+    }
+    return $fallbackText;
 }
 ?>
 <!DOCTYPE html>
