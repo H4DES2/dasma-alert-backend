@@ -43,14 +43,11 @@ $u_stmt->close();
 $my_brgy     = $u_data['barangay'] ?? '';
 $sound_saved = (int)($u_data['sound_alert'] ?? 0);
 
-// 2. Fetch barangays only if superadmin
 $barangays = [];
 if ($role === 'superadmin') {
     $b_res = $conn->query("SELECT name FROM barangays WHERE status = 'active' ORDER BY name ASC");
     if ($b_res) {
-        while ($row = $b_res->fetch_assoc()) {
-            $barangays[] = $row['name'];
-        }
+        $barangays = array_column($b_res->fetch_all(MYSQLI_ASSOC), 'name');
     }
 }
 
@@ -62,8 +59,6 @@ if ($ann_res) {
         $announcements[] = $row;
     }
 }
-
-// 4. Single broadcast check
 $active_broadcast = ($res = $conn->query("SELECT id, title, message, severity FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1")) ? $res->fetch_assoc() : null;
 $show_banner      = ($role !== 'superadmin' && $active_broadcast && $active_broadcast['id'] != ($_COOKIE['dismissed_broadcast_id'] ?? 0));
 function getReadableLocation($lat, $lng, $fallbackText) {

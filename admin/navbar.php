@@ -19,8 +19,8 @@ $ALLOWED_THEMES = ['light', 'dark'];
 $ALLOWED_FONTS  = ['12px', '14px', '16px', '18px', '20px', '22px', '24px'];
 
 // Normalize case and strip whitespace; default to 'dark'
-$raw_theme  = strtolower(trim($s_prefs['theme'] ?? 'dark'));
-$raw_font   = trim($s_prefs['font_size'] ?? '16px');
+$raw_theme  = strtolower(trim($user_data['theme'] ?? 'dark'));
+$raw_font   = trim($user_data['font_size'] ?? '16px');
 
 $db_theme   = in_array($raw_theme, $ALLOWED_THEMES) ? $raw_theme : 'dark';
 $db_font    = in_array($raw_font,  $ALLOWED_FONTS)  ? $raw_font  : '16px';
@@ -28,9 +28,11 @@ $db_font    = in_array($raw_font,  $ALLOWED_FONTS)  ? $raw_font  : '16px';
 $js_theme   = json_encode($db_theme);
 $js_font    = json_encode($db_font);
 
-// Path resolver for avatar
-$raw_photo     = $s_prefs['profile_photo'] ?? '';
-$profile_photo = '../assets/default.png';
+// Safe fallback avatar using inline SVG data URI to avoid 404 requests
+$default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+
+$raw_photo     = $user_data['profile_photo'] ?? '';
+$profile_photo = $default_avatar;
 
 if (!empty($raw_photo)) {
     if (file_exists(__DIR__ . '/../' . $raw_photo)) {
@@ -49,7 +51,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
         const dbTheme  = <?= $js_theme ?>;
         const fontSize = <?= $js_font ?>;
         
-        // Sync with localStorage
         localStorage.setItem('dasma_theme', dbTheme);
 
         if (dbTheme === 'dark') {
@@ -65,7 +66,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 <nav class="custom-gooey-navbar">
     <div class="navbar-brand">
-        <div class="logo-container"><img src="../uploads/system/DasmAlert.png" alt="Logo" class="brand-logo" onerror="this.src='../assets/default.png'"></div>
+        <div class="logo-container">
+            <img src="../uploads/system/DasmAlert.png" alt="Logo" class="brand-logo" onerror="this.src='<?= $default_avatar ?>'">
+        </div>
         <h2>DASMA ALERT</h2>
     </div>
     
@@ -97,7 +100,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         <div class="profile-dropdown" id="profileDropdown">
             <div class="profile-toggle" onclick="toggleDropdown(event)">
-                <img src="<?= $profile_photo ?>?v=<?= time() ?>" alt="Profile">
+                <img src="<?= $profile_photo ?>" alt="Profile">
             </div>
             <div class="dropdown-menu">
                 <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
