@@ -1,9 +1,11 @@
 <?php
-
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
-ob_start(); 
-
 require_once '../php/config.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+ob_start();
+
 require_once '../php/auth.php';
 
 $auth = new Auth($conn);
@@ -15,19 +17,12 @@ if (!$auth->is_logged_in()) {
     die(json_encode(['success' => false, 'message' => 'Unauthorized']));
 }
 
-// PATCH VULN-A13: Auth context resolved up front (was previously computed
-// after several action handlers had already executed, so those handlers
-// ran with no role check at all — any logged-in account, including a
-// plain 'user'/'responder', could invoke them).
 $action     = $_GET['action'] ?? $_POST['action'] ?? '';
 $user_id    = $_SESSION['user_id'] ?? null;
 $role       = $_SESSION['role'] ?? 'user';
 $admin_brgy = $_SESSION['barangay'] ?? '';
 
-// PATCH VULN-A13: Server-side role gate. Every action that mutates data or
-// exposes incident/user data now calls this before doing any work. This is
-// enforced independent of which buttons the UI happens to render for the
-// current role, since the browser's DOM can't be trusted.
+session_write_close();
 $ADMIN_TIER_ROLES = ['admin', 'barangay_admin', 'superadmin'];
 function requireRole(array $allowedRoles, $role) {
     if (!in_array($role, $allowedRoles, true)) {

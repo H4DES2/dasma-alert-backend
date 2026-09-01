@@ -1,15 +1,22 @@
 <?php
-session_start();
 require_once '../php/config.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../php/auth.php';
 
-if (!isset($auth) || !($auth instanceof Auth)) { $auth = new Auth($conn); }
+if (!isset($auth) || !($auth instanceof Auth)) { 
+    $auth = new Auth($conn); 
+}
 
 // STRICT SUPERADMIN CHECK
 if (!$auth->isSuperAdmin()) {
     header("Location: ../php/login.php");
     exit();
 }
+
+session_write_close();
 
 // =========================================================================================
 // AUTO-REPAIR: SPAM & REJECTED INCIDENTS RELATIONAL FIX

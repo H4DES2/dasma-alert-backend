@@ -1,20 +1,25 @@
 <?php
-session_start();
 require_once '../php/config.php';
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
 require_once '../php/auth.php';
 
 if (!isset($auth) || !($auth instanceof Auth)) { 
     $auth = new Auth($conn); 
 }
 
-// 🚀 SECURITY: Allow both Superadmin and Admin
-if (!$auth->isSuperAdmin() && (!$auth->isAdmin())) {
-    header("Location: ../php/login.php");
+if (!$auth->isSuperAdmin() && !$auth->isAdmin()) {
+    header('Location: ../php/login.php');
     exit();
 }
 
-$role = $_SESSION['role'];
-$user_id = $_SESSION['user_id'];
+$role    = $_SESSION['role'] ?? '';
+$user_id = (int)($_SESSION['user_id'] ?? 0);
+
+// Release session lock immediately so parallel requests and page switches are non-blocking
+session_write_close();
 
 // 🚨 GET ADMIN'S ASSIGNED BARANGAY
 $u_data = ($res = $conn->query("SELECT barangay FROM users WHERE id = $user_id")) ? $res->fetch_assoc() : null;
