@@ -4,7 +4,15 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once '../php/config.php';
 require_once '../php/auth.php';
-
+// Temporary index migration (runs once safely)
+try {
+    $conn->query("CREATE INDEX idx_user_profiles_user_id ON user_profiles(user_id)");
+    $conn->query("CREATE INDEX idx_incidents_status_brgy ON incidents(status, barangay)");
+    $conn->query("CREATE INDEX idx_response_teams_status ON response_teams(status)");
+    $conn->query("CREATE INDEX idx_evac_centers_status ON evacuation_centers(status)");
+} catch (Exception $e) {
+    // Indexes already exist or created
+}
 if (!isset($auth) || !($auth instanceof Auth)) { 
     $auth = new Auth($conn); 
 }
