@@ -115,8 +115,8 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= time() ?>">
-    <link rel="stylesheet" href="../css/admin/dashboard.css?v=<?= time() ?>">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+    <link rel="stylesheet" href="../css/admin/dashboard.css?v=<?= filemtime('../css/admin/dashboard.css') ?>">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
@@ -528,6 +528,6 @@ $initial_payload = [
     window.soundEnabled = <?= ($sound_saved === 1) ? 'true' : 'false' ?>;
     window.initialDashboardData = <?= json_encode($initial_payload) ?>;
 </script>
-<script src="../js/admin/dashboard.js?v=<?= time() ?>"></script>
+<script src="../js/admin/dashboard.js?v=<?= filemtime('../js/admin/dashboard.js') ?>" defer></script>
 </body>
 </html>

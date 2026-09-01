@@ -50,8 +50,8 @@ if ($result && $result->num_rows > 0) {
     <title>Evacuation Centers | Command Center</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="../css/admin/navbar.css">
-    <link rel="stylesheet" href="../css/admin/evacuation_centers.css">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+    <link rel="stylesheet" href="../css/admin/evacuation_centers.css?v=<?= filemtime('../css/admin/evacuation_centers.css') ?>">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 </head>
 <body>
@@ -267,6 +267,6 @@ if ($result && $result->num_rows > 0) {
             </div>
         </div>
     </div>                                       
-    <script src="../js/admin/evacuation_centers.js?v=<?= filemtime('../js/admin/evacuation_centers.js') ?>"></script>
+    <script src="../js/admin/evacuation_centers.js?v=<?= filemtime('../js/admin/evacuation_centers.js') ?>" defer></script>
 </body>
 </html>

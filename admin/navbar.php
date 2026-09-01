@@ -62,7 +62,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     })();
 </script>
 
-<link rel="stylesheet" href="../css/admin/navbar.css?v=<?= time() ?>">
+<link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
 
 <nav class="custom-gooey-navbar">
     <div class="navbar-brand">
@@ -140,4 +140,4 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 </div>
 
-<script src="../js/admin/navbar.js?v=<?= time() ?>" defer></script>
+<script src="../js/admin/navbar.js?v=<?= filemtime('../js/admin/navbar.js') ?>" defer></script>

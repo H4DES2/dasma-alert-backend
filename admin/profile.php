@@ -46,8 +46,8 @@ if (!empty($raw_photo)) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Profile | Command Center</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link rel="stylesheet" href="../css/admin/navbar.css">
-    <link rel="stylesheet" href="../css/admin/profile.css">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+    <link rel="stylesheet" href="../css/admin/profile.css?v=<?= filemtime('../css/admin/profile.css') ?>">
 </head>
 <body>
     <div class="dashboard-container">
@@ -143,6 +143,6 @@ if (!empty($raw_photo)) {
             </div>
         </main>
     </div>
-     <script src="../js/admin/profile.js?v=<?= filemtime('../js/admin/profile.js') ?>"></script>                       
+     <script src="../js/admin/profile.js?v=<?= filemtime('../js/admin/profile.js') ?>" defer></script>               
 </body>
 </html>

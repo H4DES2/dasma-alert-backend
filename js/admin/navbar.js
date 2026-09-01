@@ -10,33 +10,52 @@ window.addEventListener('click', (e) => {
     if (prof && !prof.contains(e.target)) prof.classList.remove('active'); 
 });
 
-// Gooey navbar blob calculation
-function updateBlob(activeElement, animate = false) {
+// Fast Gooey Selector
+function updateBlob(activeElement) {
     const selector = document.querySelector('.hori-selector');
     if (!activeElement || !selector) return;
-    if (!animate) selector.style.transition = 'none';
-    else selector.style.transition = 'all 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55)';
+    selector.style.transition = 'none';
     selector.style.left = activeElement.offsetLeft + "px";
     selector.style.width = activeElement.offsetWidth + "px";
     selector.style.height = activeElement.offsetHeight + "px";
     selector.style.top = activeElement.offsetTop + "px";
 }
 
-document.querySelectorAll('#navbarSupportedContent li').forEach(li => {
-    li.addEventListener('click', function(e) {
-        const anchor = this.querySelector('a');
-        if (!anchor) return;
-        const url = anchor.getAttribute('href');
-        e.preventDefault();
+// 🚀 Instant Click Navigation + Link Hover Preloader
+const preloadedUrls = new Set();
+document.querySelectorAll('#navbarSupportedContent li a').forEach(link => {
+    const url = link.getAttribute('href');
+
+    // Preload HTML when user hovers or begins touch
+    const preloadPage = () => {
+        if (url && !preloadedUrls.has(url)) {
+            const prefetchLink = document.createElement('link');
+            prefetchLink.rel = 'prefetch';
+            prefetchLink.href = url;
+            document.head.appendChild(prefetchLink);
+            preloadedUrls.add(url);
+        }
+    };
+
+    link.addEventListener('mouseenter', preloadPage, { passive: true });
+    link.addEventListener('touchstart', preloadPage, { passive: true });
+
+    // Immediate click handling
+    link.addEventListener('click', function() {
+        const parentLi = this.parentElement;
         document.querySelectorAll('#navbarSupportedContent li').forEach(el => el.classList.remove('active'));
-        this.classList.add('active');
-        updateBlob(this, true);
-        setTimeout(() => { window.location.href = url; }, 400);
+        parentLi.classList.add('active');
+        updateBlob(parentLi);
     });
 });
 
-window.addEventListener('load', () => updateBlob(document.querySelector('#navbarSupportedContent li.active'), false));
-window.addEventListener('resize', () => { updateBlob(document.querySelector('#navbarSupportedContent li.active'), false); });
+window.addEventListener('DOMContentLoaded', () => {
+    updateBlob(document.querySelector('#navbarSupportedContent li.active'));
+});
+
+window.addEventListener('resize', () => { 
+    updateBlob(document.querySelector('#navbarSupportedContent li.active')); 
+});
 
 // Confirmation Modal (Backup / Logout)
 let pendingAction = null;

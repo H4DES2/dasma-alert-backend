@@ -76,8 +76,8 @@ $role_sections = [
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>User Management | Command Center</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link rel="stylesheet" href="../css/admin/navbar.css">
-    <link rel="stylesheet" href="../css/admin/user_management.css">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+    <link rel="stylesheet" href="../css/admin/user_management.css?v=<?= filemtime('../css/admin/user_management.css') ?>">
 </head>
 <body>
     <?php include 'navbar.php'; ?>
@@ -223,6 +223,6 @@ $role_sections = [
             <div id="m-user-body" style="display: flex; flex-direction: column;"></div>
         </div>
     </div>
-<script src="../js/admin/user_management.js?v=<?= filemtime('../js/admin/user_management.js') ?>"></script>
+<script src="../js/admin/user_management.js?v=<?= filemtime('../js/admin/user_management.js') ?>" defer></script>
 </body>
 </html>

@@ -177,8 +177,8 @@ $stmt_e->close();
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
-    <link rel="stylesheet" href="../css/admin/navbar.css">
-<link rel="stylesheet" href="../css/admin/analytics.css">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+    <link rel="stylesheet" href="../css/admin/analytics.css?v=<?= filemtime('../css/admin/analytics.css') ?>">
 </head>
 <body>
     
@@ -508,6 +508,6 @@ if (!empty($archived_incidents)) {
     window.evacCapacity      = <?= json_encode($evac_capacity ?? []) ?>;
     window.heatData          = <?= json_encode($heat_coords) ?>;
 </script>
-<script src="../js/admin/analytics.js?v=<?= filemtime('../js/admin/analytics.js') ?>"></script>
+<script src="../js/admin/analytics.js?v=<?= filemtime('../js/admin/analytics.js') ?>" defer></script>
 </body>
 </html>

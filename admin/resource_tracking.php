@@ -79,8 +79,8 @@ if ($teams_result && $teams_result->num_rows > 0) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Resource Tracking | Command Center</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link rel="stylesheet" href="../css/admin/navbar.css">
-    <link rel="stylesheet" href="../css/admin/resource_tracking.css">
+    <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+    <link rel="stylesheet" href="../css/admin/resource_tracking.css?v=<?= filemtime('../css/admin/resource_tracking.css') ?>">
 </head>
 <body>
     <?php include 'navbar.php'; ?>
@@ -264,6 +264,6 @@ if ($teams_result && $teams_result->num_rows > 0) {
             <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
-<script src="../js/admin/resource_tracking.js?v=<?= filemtime('../js/admin/resource_tracking.js') ?>"></script>
+<script src="../js/admin/resource_tracking.js?v=<?= filemtime('../js/admin/resource_tracking.js') ?>" defer></script>
 </body>
 </html>
