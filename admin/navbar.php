@@ -1,5 +1,7 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) { session_start(); }
+if (session_status() === PHP_SESSION_NONE) { 
+    session_start(); 
+}
 require_once '../php/config.php';
 
 $s_user_id = (int)($_SESSION['user_id'] ?? 0);
@@ -14,7 +16,7 @@ $stmt = $conn->prepare("
 ");
 $stmt->bind_param("i", $s_user_id);
 $stmt->execute();
-$s_prefs = $stmt->get_result()->fetch_assoc();
+$user_data = $stmt->get_result()->fetch_assoc() ?? [];
 $stmt->close();
 
 $ALLOWED_THEMES = ['light', 'dark'];

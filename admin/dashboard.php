@@ -27,13 +27,14 @@ $role    = $_SESSION['role'];
 $user_id = (int)$_SESSION['user_id'];
 
 $barangays = [];
-$b_res = $conn->query("SELECT name FROM barangays WHERE status = 'active' ORDER BY name ASC");
-if ($b_res) {
-    while ($row = $b_res->fetch_assoc()) {
-        $barangays[] = $row['name'];
+if ($role === 'superadmin') {
+    $b_res = $conn->query("SELECT name FROM barangays WHERE status = 'active' ORDER BY name ASC");
+    if ($b_res) {
+        $barangays = array_column($b_res->fetch_all(MYSQLI_ASSOC), 'name');
     }
 }
 
+// Fetch user sector and sound preferences
 $u_stmt = $conn->prepare("
     SELECT u.barangay, IFNULL(p.sound_alert, 0) as sound_alert 
     FROM users u 
@@ -42,7 +43,7 @@ $u_stmt = $conn->prepare("
 ");
 $u_stmt->bind_param("i", $user_id);
 $u_stmt->execute();
-$u_data      = $u_stmt->get_result()->fetch_assoc();
+$u_data = $u_stmt->get_result()->fetch_assoc() ?? [];
 $u_stmt->close();
 
 $my_brgy     = $u_data['barangay'] ?? '';
