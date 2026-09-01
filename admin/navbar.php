@@ -72,11 +72,11 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 <nav class="custom-gooey-navbar">
     <div class="navbar-brand">
-        <div class="logo-container">
-            <img src="../uploads/system/DasmAlert.png" alt="Logo" class="brand-logo" onerror="this.src='<?= $default_avatar ?>'">
-        </div>
-        <h2>DASMA ALERT</h2>
+    <div class="logo-container">
+        <img src="../uploads/system/DasmAlert.png" alt="Logo" class="brand-logo">
     </div>
+    <h2>DASMA ALERT</h2>
+</div>
     
     <div id="navbarSupportedContent">
         <ul>
