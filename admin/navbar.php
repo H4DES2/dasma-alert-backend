@@ -31,14 +31,20 @@ $js_font    = json_encode($db_font);
 // Safe fallback avatar using inline SVG data URI to avoid 404 requests
 $default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
 
-$raw_photo     = $user_data['profile_photo'] ?? '';
+// Safe fallback avatar using inline SVG data URI to avoid 404 requests
+$default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
+
+$raw_photo     = trim($user_data['profile_photo'] ?? '');
 $profile_photo = $default_avatar;
 
 if (!empty($raw_photo)) {
-    if (file_exists(__DIR__ . '/../' . $raw_photo)) {
-        $profile_photo = '../' . htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
-    } elseif (file_exists(__DIR__ . '/../../dasma_api/' . $raw_photo)) {
-        $profile_photo = '../../dasma_api/' . htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
+    $clean_path = ltrim($raw_photo, '/');
+    if (file_exists(__DIR__ . '/../' . $clean_path)) {
+        $profile_photo = '../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+    } elseif (file_exists(__DIR__ . '/../../' . $clean_path)) {
+        $profile_photo = '../../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+    } else {
+        $profile_photo = '/' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
     }
 }
 
@@ -100,7 +106,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
         <div class="profile-dropdown" id="profileDropdown">
             <div class="profile-toggle" onclick="toggleDropdown(event)">
-                <img src="<?= $profile_photo ?>" alt="Profile">
+                <img src="<?= $profile_photo ?>" alt="Profile" onerror="this.onerror=null; this.src='<?= $default_avatar ?>';">
             </div>
             <div class="dropdown-menu">
                 <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
