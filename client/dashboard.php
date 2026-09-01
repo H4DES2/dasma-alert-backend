@@ -161,10 +161,6 @@ $show_banner = ($active_broadcast && $active_broadcast['id'] != $dismissed_id);
                 <div class="kpi-header-row"><i class='bx bxs-group' style="font-size:3.5rem; color:#388e3c;"></i><div class="kpi-card-content"><h3 id="live-kpi-evac">0</h3><p>Local Evacuees</p></div></div>
                 <div class="kpi-details-container" id="kpi-evacuees-details"><div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div></div>
             </div>
-
-            <div class="kpi-card yellow">
-                <div class="kpi-header-row"><i class='bx bxs-cloud' style="font-size: 3.5rem; color: #fbc02d;"></i><div class="kpi-card-content"><h3 id="weather-label">Normal</h3><p id="weather-temp">Weather: 26°C</p></div></div>
-            </div>
         </div>
 
         <div class="dashboard-grid">
