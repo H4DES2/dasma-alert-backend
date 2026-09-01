@@ -105,17 +105,17 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <?php endif; ?>
 
         <div class="profile-dropdown" id="profileDropdown">
-            <div class="profile-toggle" onclick="toggleDropdown(event)">
-    <img src="<?= $profile_photo ?>" alt="Profile" onerror="this.src='<?= $default_avatar ?>';">
+    <div class="profile-toggle" onclick="toggleDropdown(event)">
+        <img src="<?= htmlspecialchars($profile_photo, ENT_QUOTES, 'UTF-8') ?>" alt="Profile">
+    </div>
+    <div class="dropdown-menu">
+        <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
+        <?php if ($s_role === 'superadmin'): ?>
+        <button onclick="showCustomModal('backup')" class="dropdown-item"><i class='bx bxs-data'></i> BACKUP DATABASE</button>
+        <?php endif; ?>
+        <button onclick="showCustomModal('logout')" class="dropdown-item logout-btn"><i class='bx bx-log-out-circle'></i> LOGOUT SESSION</button>
+    </div>
 </div>
-            <div class="dropdown-menu">
-                <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
-                <?php if ($s_role === 'superadmin'): ?>
-                <button onclick="showCustomModal('backup')" class="dropdown-item"><i class='bx bxs-data'></i> BACKUP DATABASE</button>
-                <?php endif; ?>
-                <button onclick="showCustomModal('logout')" class="dropdown-item logout-btn"><i class='bx bx-log-out-circle'></i> LOGOUT SESSION</button>
-            </div>
-        </div>
     </div>
 </nav>
 

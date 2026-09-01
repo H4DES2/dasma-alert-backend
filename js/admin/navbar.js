@@ -1,9 +1,21 @@
 // Dropdown toggle
-function toggleDropdown(event) { 
-    event.stopPropagation(); 
-    const prof = document.getElementById('profileDropdown');
-    if (prof) prof.classList.toggle('active');
+function toggleDropdown(event) {
+    if (event) {
+        event.stopPropagation();
+    }
+    const dropdown = document.getElementById('profileDropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('active');
+    }
 }
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function (e) {
+    const dropdown = document.getElementById('profileDropdown');
+    if (dropdown && !dropdown.contains(e.target)) {
+        dropdown.classList.remove('active');
+    }
+});
 
 window.addEventListener('click', (e) => { 
     const prof = document.getElementById('profileDropdown');
