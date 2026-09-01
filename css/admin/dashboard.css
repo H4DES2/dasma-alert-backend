@@ -43,7 +43,7 @@ body {
     -webkit-font-smoothing: antialiased;
 }
 
-/* 🚀 CONTAINER (Dynamic Width & Padding) */
+/* 🚀 CONTAINER */
 .main-content { 
     width: 100% !important;
     max-width: 1600px;
@@ -121,7 +121,7 @@ html.global-dark-mode .skeleton {
 .skeleton-badge { height: 24px; width: 70px; border-radius: var(--radius-md); }
 .skeleton-avatar { height: 32px; width: 45px; border-radius: var(--radius-md); margin: 0 auto; }
 
-/* 🚀 FLUID KPI SUMMARY GRID */
+/* 🚀 KPI SUMMARY GRID */
 .kpi-grid { 
     display: grid; 
     grid-template-columns: repeat(2, minmax(0, 1fr)); 
@@ -342,6 +342,64 @@ html.global-dark-mode .skeleton {
     cursor: pointer;
 }
 
+/* 🚀 SOUND TOGGLE COMPONENT */
+.sound-toggle-wrapper {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--surface-subtle);
+    padding: 4px 10px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-color);
+    font-weight: 700;
+    font-size: 0.82rem;
+    color: var(--text-secondary);
+}
+
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 36px;
+    height: 20px;
+    margin: 0;
+}
+
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
+.toggle-slider {
+    position: absolute;
+    cursor: pointer;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background-color: var(--border-color);
+    transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 20px;
+}
+
+.toggle-slider:before {
+    position: absolute;
+    content: "";
+    height: 14px;
+    width: 14px;
+    left: 3px;
+    bottom: 3px;
+    background-color: white;
+    transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+    background-color: var(--color-success);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+    transform: translateX(16px);
+}
+
 /* 🚀 TRIAGE TABLE STYLING */
 .triage-table { 
     width: 100%; 
@@ -419,7 +477,7 @@ html.global-dark-mode .skeleton {
 .modal { 
     display: none; 
     position: fixed; 
-    z-index: 9999; 
+    z-index: 10000 !important; 
     left: 0; top: 0; 
     width: 100vw; 
     height: 100dvh; 
@@ -451,14 +509,52 @@ html.global-dark-mode .skeleton {
     height: 32px; 
     border-radius: 50%;
     background: var(--surface-subtle); 
-    border: 1px solid var(--border-color);
+    border: 1px solid var(--border-color); 
     display: flex; 
     align-items: center; 
-    justify-content: center;
+    justify-content: center; 
     font-size: 1.2rem; 
     color: var(--text-secondary); 
     cursor: pointer; 
     z-index: 1000;
+}
+
+/* 🚀 LEAFLET MAP CONTROLS & DARK MODE */
+.leaflet-control-layers {
+    background: var(--surface-card) !important;
+    color: var(--text-primary) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow-md) !important;
+    border: 1px solid var(--border-color) !important;
+    padding: 10px 14px !important;
+    font-family: var(--font-family) !important;
+}
+
+.leaflet-control-layers-expanded {
+    background: var(--surface-card) !important;
+    color: var(--text-primary) !important;
+}
+
+.leaflet-control-layers label {
+    color: var(--text-primary) !important;
+    font-weight: 700 !important;
+    font-size: 0.85rem !important;
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+}
+
+.leaflet-control-layers input[type="radio"],
+.leaflet-control-layers input[type="checkbox"] {
+    accent-color: var(--color-info) !important;
+    cursor: pointer;
+}
+
+.leaflet-control-layers-separator {
+    border-top: 1px solid var(--border-color) !important;
+    margin: 6px 0 !important;
 }
 
 /* 🚀 RESPONSIVE MOBILE BEHAVIOR */
@@ -496,33 +592,75 @@ html.global-dark-mode .main-content {
     background-color: var(--bg-main) !important; 
     color: var(--text-primary) !important; 
 }
+
 html.global-dark-mode .sitting-panel, 
 html.global-dark-mode .modal-content, 
 html.global-dark-mode .kpi-card { 
     background: var(--surface-card) !important; 
     border-color: var(--border-color) !important; 
 }
+
 html.global-dark-mode #dasma-map, 
 html.global-dark-mode .table-scroll-wrapper { 
     background: var(--bg-main) !important; 
     border-color: var(--border-color) !important; 
 }
-html.global-dark-mode h1, html.global-dark-mode h2, html.global-dark-mode h3, 
-html.global-dark-mode p, html.global-dark-mode label, 
+
+html.global-dark-mode h1, 
+html.global-dark-mode h2, 
+html.global-dark-mode h3, 
+html.global-dark-mode p, 
+html.global-dark-mode label, 
 html.global-dark-mode span:not(.badge) { 
     color: var(--text-primary) !important; 
 }
+
 html.global-dark-mode .triage-table th { 
     background: var(--surface-card) !important; 
     color: var(--text-muted) !important; 
     border-bottom-color: var(--border-color); 
 }
+
 html.global-dark-mode .triage-table td { 
     color: var(--text-primary) !important; 
     border-bottom-color: var(--border-color); 
 }
+
 html.global-dark-mode .filter-dropdown { 
     background: var(--surface-subtle); 
     color: var(--text-primary); 
     border-color: var(--border-color); 
+}
+
+html.global-dark-mode .sound-toggle-wrapper {
+    background: var(--surface-subtle);
+    border-color: var(--border-color);
+}
+
+html.global-dark-mode .toggle-slider {
+    background-color: #3f3f46;
+}
+
+html.global-dark-mode .leaflet-control-layers,
+html.global-dark-mode .leaflet-control-layers-expanded {
+    background: #18181b !important;
+    border-color: #27272a !important;
+    color: #f4f4f5 !important;
+}
+
+html.global-dark-mode .leaflet-control-layers label,
+html.global-dark-mode .leaflet-control-layers span {
+    color: #f4f4f5 !important;
+}
+
+html.global-dark-mode .leaflet-control-zoom {
+    border: 1px solid #27272a !important;
+    border-radius: var(--radius-md) !important;
+    overflow: hidden;
+}
+
+html.global-dark-mode .leaflet-control-zoom a {
+    background-color: #18181b !important;
+    color: #f4f4f5 !important;
+    border-bottom: 1px solid #27272a !important;
 }
