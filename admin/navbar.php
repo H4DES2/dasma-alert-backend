@@ -1,12 +1,8 @@
 <?php
-if (session_status() === PHP_SESSION_NONE) { 
-    session_start(); 
-}
 require_once '../php/config.php';
 
 $s_user_id = (int)($_SESSION['user_id'] ?? 0);
 $s_role    = $_SESSION['role'] ?? '';
-session_write_close();
 
 $stmt = $conn->prepare("
     SELECT u.username, u.first_name, p.theme, p.font_size, p.profile_photo
