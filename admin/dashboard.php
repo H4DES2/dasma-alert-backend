@@ -4,15 +4,7 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once '../php/config.php';
 require_once '../php/auth.php';
-// Temporary index migration (runs once safely)
-try {
-    $conn->query("CREATE INDEX idx_user_profiles_user_id ON user_profiles(user_id)");
-    $conn->query("CREATE INDEX idx_incidents_status_brgy ON incidents(status, barangay)");
-    $conn->query("CREATE INDEX idx_response_teams_status ON response_teams(status)");
-    $conn->query("CREATE INDEX idx_evac_centers_status ON evacuation_centers(status)");
-} catch (Exception $e) {
-    // Indexes already exist or created
-}
+
 if (!isset($auth) || !($auth instanceof Auth)) { 
     $auth = new Auth($conn); 
 }
@@ -56,33 +48,6 @@ $u_stmt->close();
 $my_brgy     = $u_data['barangay'] ?? '';
 $sound_saved = (int)($u_data['sound_alert'] ?? 0);
 
-if ($role === 'admin') {
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM incidents WHERE status != 'archived' AND barangay = ?");
-    $stmt->bind_param("s", $my_brgy);
-    $stmt->execute();
-    $active_incidents = (int)$stmt->get_result()->fetch_assoc()['count'];
-    $stmt->close();
-
-    $stmt = $conn->prepare("SELECT COUNT(*) as count FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.status IN ('deployed','on-scene') AND i.barangay = ?");
-    $stmt->bind_param("s", $my_brgy);
-    $stmt->execute();
-    $responders_deployed = (int)$stmt->get_result()->fetch_assoc()['count'];
-    $stmt->close();
-
-    $stmt = $conn->prepare("SELECT SUM(current_occupants) as count FROM evacuation_centers WHERE barangay = ?");
-    $stmt->bind_param("s", $my_brgy);
-    $stmt->execute();
-    $evacuees_count = (int)($stmt->get_result()->fetch_assoc()['count'] ?? 0);
-    $stmt->close();
-} else {
-    $active_incidents    = (int)($conn->query("SELECT COUNT(*) as count FROM incidents WHERE status != 'archived'")->fetch_assoc()['count'] ?? 0);
-    $responders_deployed = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.status IN ('deployed','on-scene')")->fetch_assoc()['count'] ?? 0);
-    $evacuees_count      = (int)($conn->query("SELECT SUM(current_occupants) as count FROM evacuation_centers")->fetch_assoc()['count'] ?? 0);
-}
-
-$alert_level  = 'Normal Status';
-$weather_temp = '--°C';
-
 $active_broadcast = ($res = $conn->query("SELECT * FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1")) ? $res->fetch_assoc() : null;
 $show_banner      = ($role !== 'superadmin' && $active_broadcast && $active_broadcast['id'] != ($_COOKIE['dismissed_broadcast_id'] ?? 0));
 
@@ -97,18 +62,7 @@ try {
 } catch (Exception $e) {}
 
 function getReadableLocation($lat, $lng, $fallbackText) {
-    if ($fallbackText !== "Locating..." && $fallbackText !== "Unknown Area" && !strpos($fallbackText, "+")) {
-        return $fallbackText;
-    }
-    $url     = "https://nominatim.openstreetmap.org/reverse?format=json&lat={$lat}&lon={$lng}&zoom=14";
-    $options = ['http' => ['method' => "GET", 'header' => "User-Agent: DasmaAlertApp/1.0\r\n"]];
-    $context = stream_context_create($options);
-    $response = @file_get_contents($url, false, $context);
-    if ($response) {
-        $data = json_decode($response, true);
-        return $data['display_name'] ?? $fallbackText;
-    }
-    return $fallbackText;
+    return (!empty($fallbackText) && $fallbackText !== "Locating...") ? $fallbackText : "Lat: $lat, Lng: $lng";
 }
 ?>
 <!DOCTYPE html>
@@ -117,7 +71,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title><?php echo ucfirst($role); ?> | Command Center</title>
-    <!-- Modern Typography & Icons -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -142,7 +95,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     <?php include 'navbar.php'; ?>
     <main class="main-content">
 
-        <!-- KPI Summary Grid (Now Initialized with Skeletons) -->
+        <!-- 🚀 Optimized 3-Card KPI Summary Grid -->
         <div class="kpi-grid">
             <div class="kpi-card red">
                 <div class="kpi-header-row">
@@ -185,17 +138,8 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                     <div><div class="skeleton skeleton-text short" style="margin: 0;"></div></div>
                 </div>
             </div>
-
-            <div class="kpi-card yellow">
-                <div class="kpi-header-row">
-                    <div class="kpi-icon-wrapper"><i class='bx bxs-cloud'></i></div>
-                    <div class="kpi-card-content">
-                        <h3 id="weather-alert"><span class="skeleton skeleton-text" style="height: 28px; width: 80%; margin: 0;"></span></h3>
-                        <p id="weather-temp"><span class="skeleton skeleton-text short" style="height: 14px; margin: 6px 0 0 0;"></span></p>
-                    </div>
-                </div>
-            </div>
         </div>
+
         <!-- Main Dashboard Split Layout -->
         <div class="dashboard-split-layout">
             <div class="sitting-panel left-panel">
@@ -225,9 +169,9 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                         <div class="sound-toggle-wrapper">
                             <span style="display: flex; align-items: center; gap: 4px;"><i class='bx bx-volume-full'></i> Sound</span>
                             <label class="toggle-switch">
-                        <input type="checkbox" id="soundToggleBtn" onchange="toggleSound()" <?php echo ($sound_saved === 1) ? 'checked' : ''; ?>>
-                        <span class="toggle-slider"></span>
-                        </label>
+                                <input type="checkbox" id="soundToggleBtn" onchange="toggleSound()" <?php echo ($sound_saved === 1) ? 'checked' : ''; ?>>
+                                <span class="toggle-slider"></span>
+                            </label>
                         </div>
 
                         <?php if ($role === 'superadmin'): ?>
@@ -255,7 +199,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                             </tr>
                         </thead>
                         <tbody id="triage-table-body">
-                            <!-- Skeleton Row 1 -->
                             <tr>
                                 <td style="vertical-align: middle;">
                                     <div class="skeleton skeleton-text short"></div>
@@ -269,35 +212,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                                 <td style="vertical-align: middle;">
                                     <div class="skeleton skeleton-text short"></div>
                                     <div class="skeleton skeleton-text long"></div>
-                                </td>
-                                <td style="text-align:center; vertical-align: middle;">
-                                    <div class="skeleton skeleton-avatar"></div>
-                                </td>
-                                <td style="text-align:center; vertical-align: middle;">
-                                    <div class="skeleton skeleton-badge"></div><br>
-                                    <div class="skeleton skeleton-text short" style="margin: 6px auto 0;"></div>
-                                </td>
-                                <td style="vertical-align: middle; width: 150px; padding-right: 25px;">
-                                    <div style="display:flex; flex-direction:column; gap:6px;">
-                                        <div class="skeleton skeleton-button"></div>
-                                        <div class="skeleton skeleton-button"></div>
-                                    </div>
-                                </td>
-                            </tr>
-                            <!-- Skeleton Row 2 -->
-                            <tr>
-                                <td style="vertical-align: middle;">
-                                    <div class="skeleton skeleton-text short" style="width: 30%;"></div>
-                                    <div class="skeleton skeleton-text" style="width: 70%;"></div>
-                                </td>
-                                <td style="vertical-align: middle;">
-                                    <div class="skeleton skeleton-text" style="width: 90%;"></div>
-                                    <div class="skeleton skeleton-text short"></div>
-                                    <div class="skeleton skeleton-text" style="width: 50%; margin-top: 5px;"></div>
-                                </td>
-                                <td style="vertical-align: middle;">
-                                    <div class="skeleton skeleton-text short" style="width: 50%;"></div>
-                                    <div class="skeleton skeleton-text long" style="width: 80%;"></div>
                                 </td>
                                 <td style="text-align:center; vertical-align: middle;">
                                     <div class="skeleton skeleton-avatar"></div>
@@ -371,7 +285,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <!-- MODAL 1: Dispatch Teams -->
+        <!-- MODALS -->
         <div id="dispatchModal" class="modal">
             <div class="modal-content" style="max-width: 450px;">
                 <div class="close-modal" onclick="closeModal('dispatchModal')"><i class='bx bx-x'></i></div>
@@ -389,7 +303,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <!-- MODAL 2: Announcements -->
         <div id="announcementModal" class="modal">
             <div class="modal-content" style="max-width: 500px;">
                 <div class="close-modal" onclick="closeModal('announcementModal')"><i class='bx bx-x'></i></div>
@@ -413,7 +326,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <!-- MODAL 3: Official Evidence -->
         <div id="evidenceModal" class="modal">
             <div class="modal-content" style="max-width: 750px; padding: 0; overflow: visible; border-radius: var(--radius-xl); border: none; box-shadow: var(--shadow-lg);">
                 <div class="close-modal" onclick="closeModal('evidenceModal')"><i class='bx bx-x'></i></div>
@@ -456,7 +368,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
         
-        <!-- MODAL 4: Universal Alert/Confirm -->
         <div id="universalModal" class="modal">
             <div class="modal-content" style="text-align: center; width: 380px;">
                 <i id="uniModalIcon" class='bx' style="font-size: 4rem; margin-bottom: 16px;"></i>
@@ -466,7 +377,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <!-- MODAL 5: Mobile Incident Details -->
         <div id="mobileIncidentModal" class="modal">
             <div class="modal-content" style="max-width: 90%; padding: 24px;">
                 <div class="close-modal" onclick="closeModal('mobileIncidentModal')"><i class='bx bx-x'></i></div>
@@ -504,37 +414,8 @@ function getReadableLocation($lat, $lng, $fallbackText) {
         </div>
     </main>
 
-<?php
-// Safe initial dashboard KPI query payload with error fallback
-$kpi_active = 0;
-$kpi_evac = 0;
-$kpi_dep = 0;
-
-try {
-    $kpi_active_res = $conn->query("SELECT COUNT(*) AS total FROM incidents WHERE status NOT IN ('Resolved', 'Spam', 'False Alarm', 'archived')");
-    $kpi_active = $kpi_active_res ? (int)$kpi_active_res->fetch_assoc()['total'] : 0;
-
-    $kpi_evac_res = $conn->query("SELECT SUM(current_occupants) AS total FROM evacuation_centers WHERE status = 'Active'");
-    $kpi_evac = $kpi_evac_res ? (int)$kpi_evac_res->fetch_assoc()['total'] : 0;
-
-    $kpi_dep_res = $conn->query("SELECT COUNT(*) AS total FROM response_teams WHERE status IN ('deployed', 'on-scene')");
-    $kpi_dep = $kpi_dep_res ? (int)$kpi_dep_res->fetch_assoc()['total'] : 0;
-} catch (Exception $e) {
-    // Keep defaults on query exception
-}
-
-$initial_payload = [
-    'kpi' => [
-        'active'   => $kpi_active,
-        'deployed' => $kpi_dep,
-        'evacuees' => $kpi_evac
-    ]
-];
-?>
-
 <script>
     window.soundEnabled = <?= ($sound_saved === 1) ? 'true' : 'false' ?>;
-    window.initialDashboardData = <?= json_encode($initial_payload) ?>;
 </script>
 <script src="../js/admin/dashboard.js?v=<?= filemtime('../js/admin/dashboard.js') ?>" defer></script>
 </body>

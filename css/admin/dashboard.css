@@ -121,20 +121,20 @@ html.global-dark-mode .skeleton {
 .skeleton-badge { height: 24px; width: 70px; border-radius: var(--radius-md); }
 .skeleton-avatar { height: 32px; width: 45px; border-radius: var(--radius-md); margin: 0 auto; }
 
-/* 🚀 KPI SUMMARY GRID */
+
 .kpi-grid { 
     display: grid; 
-    grid-template-columns: repeat(2, minmax(0, 1fr)); 
-    gap: clamp(8px, 2.5vw, 20px); 
+    grid-template-columns: repeat(1, minmax(0, 1fr)); 
+    gap: clamp(10px, 2.5vw, 20px); 
     margin-top: 6px; 
     margin-bottom: clamp(16px, 3vh, 30px); 
     align-items: stretch; 
     width: 100%;
 }
 
-@media (min-width: 900px) {
+@media (min-width: 768px) {
     .kpi-grid { 
-        grid-template-columns: repeat(4, minmax(0, 1fr)); 
+        grid-template-columns: repeat(3, minmax(0, 1fr)); 
     }
 }
 
