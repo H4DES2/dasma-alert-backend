@@ -19,16 +19,17 @@ $stmt->close();
 $ALLOWED_THEMES = ['light', 'dark'];
 $ALLOWED_FONTS  = ['12px', '14px', '16px', '18px', '20px', '22px', '24px'];
 
-$raw_theme  = $s_prefs['theme']     ?? 'light';
-$raw_font   = $s_prefs['font_size'] ?? '16px';
+// Normalize case and strip whitespace; default to 'dark'
+$raw_theme  = strtolower(trim($s_prefs['theme'] ?? 'dark'));
+$raw_font   = trim($s_prefs['font_size'] ?? '16px');
 
-$db_theme   = in_array($raw_theme, $ALLOWED_THEMES) ? $raw_theme : 'light';
+$db_theme   = in_array($raw_theme, $ALLOWED_THEMES) ? $raw_theme : 'dark';
 $db_font    = in_array($raw_font,  $ALLOWED_FONTS)  ? $raw_font  : '16px';
 
 $js_theme   = json_encode($db_theme);
 $js_font    = json_encode($db_font);
 
-// 🚨 ROBUST PATH RESOLVER FOR NAVBAR AVATAR
+// Path resolver for avatar
 $raw_photo     = $s_prefs['profile_photo'] ?? '';
 $profile_photo = '../assets/default.png';
 
@@ -43,12 +44,16 @@ if (!empty($raw_photo)) {
 $current_page = basename($_SERVER['PHP_SELF']);
 ?>
 
-<!-- Inline theme applier to prevent flash of unstyled theme on initial load -->
+<!-- Inline theme applier to prevent flash of light mode -->
 <script>
     (function() {
-        const theme    = <?= $js_theme ?>;
+        const dbTheme  = <?= $js_theme ?>;
         const fontSize = <?= $js_font ?>;
-        if (theme === 'dark') {
+        
+        // Sync with localStorage
+        localStorage.setItem('dasma_theme', dbTheme);
+
+        if (dbTheme === 'dark') {
             document.documentElement.classList.add('global-dark-mode');
         } else {
             document.documentElement.classList.remove('global-dark-mode');
@@ -57,7 +62,7 @@ $current_page = basename($_SERVER['PHP_SELF']);
     })();
 </script>
 
-<link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
+<link rel="stylesheet" href="../css/admin/navbar.css?v=<?= time() ?>">
 
 <nav class="custom-gooey-navbar">
     <div class="navbar-brand">
@@ -135,4 +140,4 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 </div>
 
-<script src="../js/admin/navbar.js?v=<?= filemtime('../js/admin/navbar.js') ?>" defer></script>
+<script src="../js/admin/navbar.js?v=<?= time() ?>" defer></script>
