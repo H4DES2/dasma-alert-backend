@@ -66,18 +66,24 @@ define('BASE_URL',  $_ENV['BASE_URL']  ?? 'http://localhost/Alert');
 define('TOKEN_EXPIRY', 3600);
 
 // ==========================================
-// --- DATABASE CONNECTION (SSL & CLOUD READY) ---
+// --- DATABASE CONNECTION (PERSISTENT & SSL) ---
 // ==========================================
 $conn = mysqli_init();
 
+// Fast connection timeout to avoid blocking page execution
+$conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 3);
+
+// Persistent host prefix
+$db_persistent_host = (strpos(DB_HOST, 'p:') === 0) ? DB_HOST : ('p:' . DB_HOST);
+
 if (DB_PORT !== 3306) {
-    // Cloud database with SSL (Aiven, TiDB, Render)
+    // Cloud database with SSL & Persistent Pool (Aiven, Render)
     $conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, false);
     $conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
-    $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
+    $connected = @$conn->real_connect($db_persistent_host, DB_USER, DB_PASS, DB_NAME, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
 } else {
     // Local fallback (Standard MySQL / XAMPP)
-    $connected = @$conn->real_connect(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
+    $connected = @$conn->real_connect($db_persistent_host, DB_USER, DB_PASS, DB_NAME, DB_PORT);
 }
 
 if (!$connected) {
