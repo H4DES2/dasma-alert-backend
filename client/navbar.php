@@ -21,10 +21,11 @@ $db_font   = in_array($raw_font, $_allowed_fonts)   ? $raw_font  : '16px';
 $js_theme  = json_encode($db_theme);
 $js_font   = json_encode($db_font);
 
-$default_avatar = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>');
-$profile_photo = (!empty($s_prefs['profile_photo']) && file_exists('../' . $s_prefs['profile_photo'])) 
-    ? htmlspecialchars('../' . $s_prefs['profile_photo'], ENT_QUOTES, 'UTF-8') 
-    : $default_avatar;
+// Inline base64 SVGs to ensure fallbacks never 404 on Render
+$default_logo = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="%23d32f2f"><path d="M12 2L1 21h22L12 2zm0 3.45l8.27 14.3H3.73L12 5.45zM11 10h2v4h-2zm0 6h2v2h-2z"/></svg>');
+$default_avatar = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>');
+
+$profile_photo = (!empty($s_prefs['profile_photo'])) ? htmlspecialchars('../' . ltrim($s_prefs['profile_photo'], '/'), ENT_QUOTES, 'UTF-8') : $default_avatar;
 
 $raw_name = !empty($s_prefs['first_name']) ? $s_prefs['first_name'] : ($s_prefs['username'] ?? 'User');
 $display_name = htmlspecialchars($raw_name); 
@@ -46,7 +47,9 @@ $current_page = basename($_SERVER['PHP_SELF']);
 
 <nav class="custom-gooey-navbar">
     <div class="navbar-brand">
-        <div class="logo-container"><img src="../uploads/system/logo.png" alt="CDRRMO Logo" class="brand-logo" onerror="this.src='../assets/default.png'"></div>
+        <div class="logo-container">
+            <img src="../uploads/system/DasmAlert.png" alt="Logo" class="brand-logo" onerror="this.onerror=null; this.src='<?= $default_logo ?>';">
+        </div>
         <h2>Dasma Alert</h2>
     </div>
     
@@ -74,8 +77,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
     <div class="navbar-actions">
         <div class="profile-dropdown" id="profileDropdown">
             <div class="profile-toggle" onclick="toggleDropdown(event)">
-    <img src="<?= $profile_photo ?>" alt="Profile" onerror="this.src='<?= $default_avatar ?>'">
-</div>
+                <img src="<?= $profile_photo ?>" alt="Profile" onerror="this.onerror=null; this.src='<?= $default_avatar ?>';">
+            </div>
             <div class="dropdown-menu">
                 <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> My Profile</a>
                 <button onclick="showCustomModal('logout')" class="dropdown-item logout-btn"><i class='bx bx-log-out-circle'></i> Logout</button>
