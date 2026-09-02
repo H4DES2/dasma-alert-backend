@@ -6,15 +6,6 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once '../php/auth.php';
 
-// Safe load of ClientManager matching potential case-sensitive filenames
-if (file_exists('../php/ClientManager.php')) {
-    require_once '../php/ClientManager.php';
-} elseif (file_exists('../php/client_manager.php')) {
-    require_once '../php/client_manager.php';
-} elseif (file_exists('../php/clientManager.php')) {
-    require_once '../php/clientManager.php';
-}
-
 if (!isset($auth)) { 
     $auth = new Auth($conn); 
 }
@@ -32,7 +23,6 @@ if (!$auth->isAdmin()) {
     exit();
 }
 
-// Release session lock so AJAX polling does not freeze navigation
 session_write_close();
 // 🚀 LIVE KPI API ENDPOINT
 if (isset($_GET['ajax_kpi'])) {
