@@ -172,3 +172,42 @@
             .modal-content { padding: 24px; }
             #dasma-map { min-height: 400px; }
         }
+        /* SKELETON SHIMMER EFFECT */
+.skeleton {
+    background: linear-gradient(90deg, #e2e8f0 25%, #f1f5f9 50%, #e2e8f0 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    border-radius: 8px;
+    display: inline-block;
+}
+
+html.global-dark-mode .skeleton {
+    background: linear-gradient(90deg, #21262d 25%, #30363d 50%, #21262d 75%) !important;
+    background-size: 200% 100%;
+}
+
+@keyframes skeleton-pulse {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+.skeleton-text {
+    height: 1.2rem;
+    width: 60%;
+    margin-bottom: 6px;
+}
+
+.skeleton-counter {
+    height: 2rem;
+    width: 48px;
+}
+
+.skeleton-row td {
+    padding: 18px 20px;
+}
+
+.skeleton-line {
+    height: 14px;
+    border-radius: 6px;
+    width: 80%;
+}

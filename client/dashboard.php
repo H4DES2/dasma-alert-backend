@@ -153,18 +153,42 @@ $show_banner = ($active_broadcast && $active_broadcast['id'] != $dismissed_id);
 
         <div class="kpi-grid">
             <div class="kpi-card red">
-                <div class="kpi-header-row"><i class='bx bxs-error-circle' style="font-size:3.5rem; color:#d32f2f;"></i><div class="kpi-card-content"><h3 id="live-kpi-active">0</h3><p>Active Local Incidents</p></div></div>
-                <div class="kpi-details-container" id="kpi-active-details"><div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div></div>
+                <div class="kpi-header-row">
+                    <i class='bx bxs-error-circle' style="font-size:3.5rem; color:#d32f2f;"></i>
+                    <div class="kpi-card-content">
+                        <h3 id="live-kpi-active"><span class="skeleton skeleton-counter"></span></h3>
+                        <p>Active Local Incidents</p>
+                    </div>
+                </div>
+                <div class="kpi-details-container" id="kpi-active-details">
+                    <div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div>
+                </div>
             </div>
             
             <div class="kpi-card blue">
-                <div class="kpi-header-row"><i class='bx bxs-ambulance' style="font-size:3.5rem; color:#1976d2;"></i><div class="kpi-card-content"><h3 id="live-kpi-deployed">0</h3><p>Responders In-Zone</p></div></div>
-                <div class="kpi-details-container" id="kpi-deployed-details"><div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div></div>
+                <div class="kpi-header-row">
+                    <i class='bx bxs-ambulance' style="font-size:3.5rem; color:#1976d2;"></i>
+                    <div class="kpi-card-content">
+                        <h3 id="live-kpi-deployed"><span class="skeleton skeleton-counter"></span></h3>
+                        <p>Responders In-Zone</p>
+                    </div>
+                </div>
+                <div class="kpi-details-container" id="kpi-deployed-details">
+                    <div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div>
+                </div>
             </div>
 
             <div class="kpi-card green">
-                <div class="kpi-header-row"><i class='bx bxs-group' style="font-size:3.5rem; color:#388e3c;"></i><div class="kpi-card-content"><h3 id="live-kpi-evac">0</h3><p>Local Evacuees</p></div></div>
-                <div class="kpi-details-container" id="kpi-evacuees-details"><div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div></div>
+                <div class="kpi-header-row">
+                    <i class='bx bxs-group' style="font-size:3.5rem; color:#388e3c;"></i>
+                    <div class="kpi-card-content">
+                        <h3 id="live-kpi-evac"><span class="skeleton skeleton-counter"></span></h3>
+                        <p>Local Evacuees</p>
+                    </div>
+                </div>
+                <div class="kpi-details-container" id="kpi-evacuees-details">
+                    <div style="background:none; border:none; text-align:center; opacity:0.6; padding:10px;">Loading details...</div>
+                </div>
             </div>
         </div>
 
@@ -194,7 +218,30 @@ $show_banner = ($active_broadcast && $active_broadcast['id'] != $dismissed_id);
                                 <th style="width: 15%; text-align: center;">Actions</th>
                             </tr></thead>
                             <tbody id="local-incident-table">
-                                <tr><td colspan="6" style="text-align:center; padding:40px; color:#888;"><i class='bx bx-loader-alt bx-spin'></i> Synchronizing Sector Data...</td></tr>
+                                <tr class="skeleton-row">
+                                    <td><div class="skeleton skeleton-line" style="width: 60px;"></div></td>
+                                    <td><div class="skeleton skeleton-line" style="width: 130px;"></div></td>
+                                    <td><div class="skeleton skeleton-line" style="width: 90px;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 40px; margin: 0 auto;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 70px; margin: 0 auto;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 50px; margin: 0 auto;"></div></td>
+                                </tr>
+                                <tr class="skeleton-row">
+                                    <td><div class="skeleton skeleton-line" style="width: 60px;"></div></td>
+                                    <td><div class="skeleton skeleton-line" style="width: 150px;"></div></td>
+                                    <td><div class="skeleton skeleton-line" style="width: 80px;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 40px; margin: 0 auto;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 70px; margin: 0 auto;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 50px; margin: 0 auto;"></div></td>
+                                </tr>
+                                <tr class="skeleton-row">
+                                    <td><div class="skeleton skeleton-line" style="width: 60px;"></div></td>
+                                    <td><div class="skeleton skeleton-line" style="width: 110px;"></div></td>
+                                    <td><div class="skeleton skeleton-line" style="width: 100px;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 40px; margin: 0 auto;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 70px; margin: 0 auto;"></div></td>
+                                    <td style="text-align: center;"><div class="skeleton skeleton-line" style="width: 50px; margin: 0 auto;"></div></td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
