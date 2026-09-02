@@ -122,7 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
             </div>
             <?php endif; ?>
 
-            <form method="POST" action="">
+            <form method="POST" action="/php/login.php">
                 <div class="field">
                     <label>Username</label>
                     <div class="input-wrap">
