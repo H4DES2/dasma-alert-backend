@@ -29,13 +29,8 @@
     RewriteEngine On
     RewriteBase /
 
-    # Only redirect GET requests to clean /login (prevents dropping POST credentials)
-    RewriteCond %{REQUEST_METHOD} !POST
-    RewriteCond %{THE_REQUEST} \s/+(?:php/)?login\.php[\s?] [NC]
-    RewriteRule ^ /login [R=301,L]
-
-    # Map /login internally to php/login.php
-    RewriteRule ^login/?$ php/login.php [L,QSA]
+    # Map both /login and /login.php internally to /php/login.php
+    RewriteRule ^login(\.php)?/?$ php/login.php [L,QSA]
 
     # Clean portal shortcuts
     RewriteRule ^admin/?$ admin/dashboard.php [L,QSA]
