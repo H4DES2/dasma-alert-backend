@@ -29,15 +29,16 @@
     RewriteEngine On
     RewriteBase /
 
-    # 1. Clean URL: map /login directly to /php/login.php
+    # Redirect external requests from /php/login.php to clean /login
+    RewriteCond %{THE_REQUEST} \s/+(?:php/)?login\.php[\s?] [NC]
+    RewriteRule ^ /login [R=301,L]
+
+    # Internally route /login back to /php/login.php
     RewriteRule ^login/?$ php/login.php [L,QSA]
 
-    # 2. Map /admin to /admin/dashboard.php
+    # Map portal shorthand routes
     RewriteRule ^admin/?$ admin/dashboard.php [L,QSA]
-
-    # 3. Map /client to /client/dashboard.php
     RewriteRule ^client/?$ client/dashboard.php [L,QSA]
 
-    # 4. Prevent direct directory browsing
     Options -Indexes
 </IfModule>
