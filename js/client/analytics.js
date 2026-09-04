@@ -8,13 +8,19 @@ document.addEventListener("DOMContentLoaded", function() {
     // 1. PIE CHART INITIALIZATION
     const pieCanvas = document.getElementById('breakdownPieChart');
     if (pieCanvas) {
+        const labels = window.pieLabels && window.pieLabels.length ? window.pieLabels : ['No Incident Data'];
+        const values = window.pieValues && window.pieValues.length ? window.pieValues : [1];
+        const colors = window.pieValues && window.pieValues.length 
+            ? ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#009688', '#795548']
+            : [isDarkMode ? '#21262d' : '#e2e8f0'];
+
         new Chart(pieCanvas.getContext('2d'), {
-            type: 'pie',
+            type: 'doughnut',
             data: {
-                labels: window.pieLabels || [],
+                labels: labels,
                 datasets: [{
-                    data: window.pieValues || [],
-                    backgroundColor: ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#009688', '#795548'],
+                    data: values,
+                    backgroundColor: colors,
                     borderWidth: 2,
                     borderColor: isDarkMode ? '#161b22' : '#ffffff'
                 }]
@@ -23,7 +29,10 @@ document.addEventListener("DOMContentLoaded", function() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { 
-                    legend: { position: 'right', labels: { color: textColor, font: { weight: 'bold' } } }
+                    legend: { 
+                        position: 'right', 
+                        labels: { color: textColor, font: { weight: 'bold' } } 
+                    }
                 }
             }
         });
@@ -109,6 +118,12 @@ function renderSeasonality() {
     }
 }
 
+function openLogModal(btn) {
+    const rawData = btn.getAttribute('data-logs') || '';
+    const title = btn.getAttribute('data-type') || 'Incident';
+    viewLogs(rawData, title);
+}
+
 function viewLogs(data, title) {
     const titleEl = document.getElementById('logTitle');
     if (titleEl) titleEl.innerHTML = `<i class='bx bx-list-ul'></i> ${title} Timeline`;
@@ -117,16 +132,16 @@ function viewLogs(data, title) {
     if (!container) return;
     container.innerHTML = '';
     
-    if (!data) { 
-        container.innerHTML = '<p style="text-align:center; padding:20px; color:#888;">No logs found.</p>'; 
+    if (!data || data.trim() === '') { 
+        container.innerHTML = '<p style="text-align:center; padding:25px; opacity:0.6; font-weight:600;">No timeline logs recorded for this incident.</p>'; 
     } else {
-        data.split('|||').forEach(line => {
+        data.split('|||').reverse().forEach(line => {
             let p = line.split('|-|');
             if (p.length === 3) {
                 container.innerHTML += `
-                    <div style="background:rgba(0,0,0,0.03); padding:15px; border-radius:12px; margin-bottom:12px; border-left:5px solid #1976d2;">
-                        <small><b style="color: #1976d2;">${p[0]} - ${p[1]}</b></small><br>
-                        <span style="font-weight: 600;">${p[2]}</span>
+                    <div style="background: rgba(25, 118, 210, 0.08); padding: 14px; border-radius: 12px; margin-bottom: 10px; border-left: 4px solid #1976d2;">
+                        <div style="font-size: 0.8rem; font-weight: 800; color: #1976d2; margin-bottom: 4px;">${p[0]} • ${p[1]}</div>
+                        <div style="font-weight: 600; font-size: 0.95rem; line-height: 1.4;">${p[2]}</div>
                     </div>`;
             }
         });

@@ -1,6 +1,6 @@
 
-        const role = "<?php echo addslashes($role); ?>";
-        const assignedBrgy = "<?php echo addslashes($my_brgy); ?>";
+        const role = window.APP_ROLE || "superadmin";
+        const assignedBrgy = window.APP_ASSIGNED_BRGY || "";
         let modalMap = null;
         let modalMarker = null;
 
@@ -37,19 +37,18 @@
             };
         }
 
-        function openAddModal() {
-            if(role !== 'superadmin' && !assignedBrgy) {
-                return customAlert("No Barangay", "Set your jurisdiction in your profile first.", "bx-error-circle", "#d32f2f");
-            }
-
+       function openAddModal() {
             document.getElementById('addName').value = '';
-            document.getElementById('addBarangay').value = role === 'superadmin' ? '' : assignedBrgy;
             
-            if(role !== 'superadmin') {
-                document.getElementById('addBarangay').disabled = true;
-                document.getElementById('addBarangay').classList.add('readonly-input');
+            const brgySelect = document.getElementById('addBarangay');
+            if (role === 'superadmin' || !assignedBrgy) {
+                brgySelect.disabled = false;
+                brgySelect.classList.remove('readonly-input');
+                brgySelect.selectedIndex = 0;
             } else {
-                document.getElementById('addBarangay').disabled = false;
+                brgySelect.value = assignedBrgy;
+                brgySelect.disabled = true;
+                brgySelect.classList.add('readonly-input');
             }
 
             document.getElementById('addCapacity').value = '';

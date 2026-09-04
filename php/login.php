@@ -1,11 +1,93 @@
 <?php
-session_start();
+// CORS Headers for Flutter Web & Mobile
+header("Access-Control-Allow-Origin: *");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
+header("Access-Control-Allow-Headers: Content-Type, Authorization, X-Requested-With");
+
+if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 require_once __DIR__ . '/config.php';
 require_once __DIR__ . '/auth.php';
 
 /** @var \mysqli $conn */
 if (!isset($auth)) { $auth = new Auth($conn); }
 
+// ==========================================
+// 1. API LOGIN HANDLER (Flutter Mobile App)
+// ==========================================
+$isApiRequest = (
+    (isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) ||
+    (isset($_POST['username']) && !isset($_POST['login_submit']))
+);
+
+if ($isApiRequest) {
+    header('Content-Type: application/json; charset=utf-8');
+
+    $inputData = $_POST;
+    if (empty($inputData)) {
+        $raw = file_get_contents('php://input');
+        $json = json_decode($raw, true);
+        if (is_array($json)) {
+            $inputData = $json;
+        }
+    }
+
+    $username = trim($inputData['username'] ?? '');
+    $password = $inputData['password'] ?? '';
+
+    if (empty($username) || empty($password)) {
+        echo json_encode([
+            "status" => "error",
+            "success" => false,
+            "message" => "Please enter both username and password."
+        ]);
+        exit();
+    }
+
+    // Authenticate user without is_verified column
+    $stmt = $conn->prepare("SELECT id, username, password, role FROM users WHERE username = ? OR email = ? LIMIT 1");
+    $stmt->bind_param("ss", $username, $username);
+    $stmt->execute();
+    $user = $stmt->get_result()->fetch_assoc();
+
+    if ($user && password_verify($password, $user['password'])) {
+        // Normalize role strings so Flutter recognizes them
+        $rawRole = strtolower(trim($user['role'] ?? ''));
+        $cleanRole = 'citizen';
+
+        if (strpos($rawRole, 'responder') !== false) {
+            $cleanRole = 'responder';
+        } elseif (strpos($rawRole, 'superadmin') !== false) {
+            $cleanRole = 'superadmin';
+        } elseif (strpos($rawRole, 'admin') !== false) {
+            $cleanRole = 'admin';
+        }
+
+        echo json_encode([
+            "status" => "success",
+            "success" => true,
+            "message" => "Login successful",
+            "role" => $cleanRole,
+            "user" => [
+                "id" => (string)$user['id'],
+                "username" => $user['username'],
+                "role" => $cleanRole,
+                "is_verified" => 1
+            ]
+        ]);
+        exit();
+}
+}
+// ==========================================
+// 2. WEB PORTAL SESSION CHECK
+// ==========================================
 if ($auth->is_logged_in()) {
     $role = $_SESSION['role'] ?? '';
     if ($role === 'superadmin') { header("Location: ../admin/dashboard.php"); exit(); }
@@ -30,6 +112,9 @@ if (isset($_GET['reset']) && $_GET['reset'] === 'success') {
     $message = "Password successfully reset! Please log in with your new credentials.";
 }
 
+// ==========================================
+// 3. WEB PORTAL FORM SUBMISSION
+// ==========================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
     $username = trim($_POST['login_username'] ?? '');
     $password = $_POST['login_password'] ?? '';
@@ -122,7 +207,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
             </div>
             <?php endif; ?>
 
-            <form method="POST" action="/php/login.php">
+            <form method="POST" action="">
                 <div class="field">
                     <label>Username</label>
                     <div class="input-wrap">

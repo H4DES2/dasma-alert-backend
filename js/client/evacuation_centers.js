@@ -1,6 +1,5 @@
-
-        const role = "<?php echo addslashes($role); ?>";
-        const assignedBrgy = "<?php echo addslashes($assigned_brgy); ?>";
+        const role = window.APP_ROLE || 'admin';
+        const assignedBrgy = window.ASSIGNED_BRGY || '';
         let evacMap, evacMarker;
 
         function customAlert(title, message, iconClass = 'bx-info-circle', color = '#1976d2') {
@@ -38,54 +37,59 @@
         }
 
         function openAddModal() {
-            if(role !== 'superadmin' && !assignedBrgy) {
-                return customAlert("No Barangay", "Set your jurisdiction in your profile first.", "bx-error-circle", "#d32f2f");
-            }
+    if (role !== 'superadmin' && !assignedBrgy) {
+        return customAlert("No Barangay", "Set your jurisdiction in your profile first.", "bx-error-circle", "#d32f2f");
+    }
 
-            document.getElementById('addName').value = '';
-            document.getElementById('addCapacity').value = '';
-            document.getElementById('addLat').value = '';
-            document.getElementById('addLng').value = '';
+    document.getElementById('addName').value = '';
+    document.getElementById('addCapacity').value = '';
+    document.getElementById('addLat').value = '';
+    document.getElementById('addLng').value = '';
+    
+    const brgyInput = document.getElementById('addBarangay');
+    if (role === 'superadmin') {
+        brgyInput.value = '';
+        brgyInput.readOnly = false;
+        brgyInput.classList.remove('readonly-input');
+        brgyInput.placeholder = "e.g. San Agustin I";
+    } else {
+        brgyInput.value = assignedBrgy;
+        brgyInput.readOnly = true;
+        brgyInput.classList.add('readonly-input');
+    }
+
+    document.getElementById('addModal').style.display = 'flex';
+
+    setTimeout(() => {
+        if (!evacMap) {
+            const dasmaBounds = [ [14.2600, 120.9000], [14.3800, 120.9800] ];
+            evacMap = L.map('add-evac-map', { 
+                maxBounds: dasmaBounds, 
+                maxBoundsViscosity: 1.0, 
+                minZoom: 13 
+            }).setView([14.3294, 120.9368], 13);
             
-            // 🚀 POPULATE AND LOCK BARANGAY FIELD FOR ADMINS
-            document.getElementById('addBarangay').value = role === 'superadmin' ? '' : assignedBrgy;
-            if(role !== 'superadmin') {
-                document.getElementById('addBarangay').readOnly = true;
-                document.getElementById('addBarangay').classList.add('readonly-input');
-            }
-
-            document.getElementById('addModal').style.display = 'flex';
-
-            setTimeout(() => {
-                if(!evacMap) {
-                    const dasmaBounds = [ [14.2600, 120.9000], [14.3800, 120.9800] ];
-                    evacMap = L.map('add-evac-map', { 
-                        maxBounds: dasmaBounds, 
-                        maxBoundsViscosity: 1.0, 
-                        minZoom: 13 
-                    }).setView([14.3294, 120.9368], 13);
-                    
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(evacMap);
-                    
-                    evacMap.on('click', function(e) {
-                        let lat = e.latlng.lat;
-                        let lng = e.latlng.lng;
-                        
-                        if(evacMarker) { 
-                            evacMarker.setLatLng(e.latlng); 
-                        } else { 
-                            let eIcon = L.divIcon({ html: `<i class='bx bxs-home-heart' style='color: #388e3c; font-size: 32px;'></i>`, className: 'custom-leaflet-icon', iconSize: [32, 32], iconAnchor: [16, 32] });
-                            evacMarker = L.marker(e.latlng, {icon: eIcon}).addTo(evacMap); 
-                        }
-                        document.getElementById('addLat').value = lat;
-                        document.getElementById('addLng').value = lng;
-                    });
-                } else {
-                    evacMap.invalidateSize();
-                    if(evacMarker) { evacMap.removeLayer(evacMarker); evacMarker = null; }
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(evacMap);
+            
+            evacMap.on('click', function(e) {
+                let lat = e.latlng.lat;
+                let lng = e.latlng.lng;
+                
+                if (evacMarker) { 
+                    evacMarker.setLatLng(e.latlng); 
+                } else { 
+                    let eIcon = L.divIcon({ html: `<i class='bx bxs-home-heart' style='color: #388e3c; font-size: 32px;'></i>`, className: 'custom-leaflet-icon', iconSize: [32, 32], iconAnchor: [16, 32] });
+                    evacMarker = L.marker(e.latlng, {icon: eIcon}).addTo(evacMap); 
                 }
-            }, 300);
+                document.getElementById('addLat').value = lat;
+                document.getElementById('addLng').value = lng;
+            });
+        } else {
+            evacMap.invalidateSize();
+            if (evacMarker) { evacMap.removeLayer(evacMarker); evacMarker = null; }
         }
+    }, 300);
+}
 
         function submitAdd() {
             let name = document.getElementById('addName').value.trim();

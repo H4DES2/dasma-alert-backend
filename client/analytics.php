@@ -26,7 +26,11 @@ if (empty($my_brgy)) {
     $stmt->close();
 }
 
-// Fetch Archived / Completed Data for this Barangay
+// Normalize / Handle Barangay Aliases
+$target_brgy = trim($my_brgy);
+$like_brgy   = '%' . $target_brgy . '%';
+
+// Include both 'archived' and 'resolved' incidents, with alias support
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.created_at, i.image_path,
     DATE_FORMAT(i.created_at, '%M %d, %Y - %h:%i %p') as date_str,
@@ -35,11 +39,12 @@ $query = "
      LEFT JOIN users u ON il.user_id = u.id 
      WHERE il.incident_id = i.id ORDER BY il.created_at ASC) as all_logs
     FROM incidents i
-    WHERE i.status = 'archived' AND i.barangay = ?
+    WHERE i.status IN ('archived', 'resolved') 
+      AND (i.barangay = ? OR i.barangay LIKE ?)
     ORDER BY i.created_at DESC";
 
 $stmt = $conn->prepare($query);
-$stmt->bind_param("s", $my_brgy);
+$stmt->bind_param("ss", $target_brgy, $like_brgy);
 $stmt->execute();
 $result = $stmt->get_result();
 
@@ -52,6 +57,9 @@ while ($row = $result->fetch_assoc()) {
     $type_counts[$type] = ($type_counts[$type] ?? 0) + 1;
 }
 $stmt->close();
+
+// Fix: Assign to $archived_incidents for the HTML table
+$archived_incidents = $incidents;
 
 // Prepare JSON arrays for JS & Chart.js
 $js_incidents = json_encode($incidents);
@@ -143,21 +151,20 @@ $pie_values   = json_encode(array_values($type_counts));
                                 ?>
                                 <tr class="clickable-row" onclick="openMobileModal(this)">
                                     <td>
-                                        <div style="font-weight: 800; font-size: 1.1rem; color: #222;"><?php echo htmlspecialchars($inc['incident_type']); ?></div>
-                                        <div style="font-size: 0.8rem; color: #888; font-weight: 600;"><?php echo $inc['date_str']; ?></div>
+                                        <div class="incident-title-text" style="font-weight: 800; font-size: 1.1rem;"><?php echo htmlspecialchars($inc['incident_type']); ?></div>
+                                        <div class="incident-date-text" style="font-size: 0.8rem; font-weight: 600;"><?php echo $inc['date_str']; ?></div>
                                         <i class='bx bx-chevron-right mobile-expand-icon'></i>
                                     </td>
                                     <td>
-                                        <span style="font-weight: 800; font-size: 1rem; color: #222;"><?php echo htmlspecialchars($inc['barangay']); ?></span>
+                                        <span class="incident-title-text" style="font-weight: 800; font-size: 1rem;"><?php echo htmlspecialchars($inc['barangay']); ?></span>
                                     </td>
                                     <td style="text-align: center;">
                                         <span class="badge <?php echo $badge; ?>"><?php echo strtoupper($inc['severity']); ?></span>
                                     </td>
                                     <td>
                                         <div class="btn-action-group">
-                                            <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewEvidence('<?php echo $safe_img; ?>', '<?php echo $safe_type; ?>', '<?php echo $safe_brgy; ?>')"><i class='bx bx-image'></i></button>
-                                            <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?php echo $logs_js; ?>', '<?php echo $safe_type; ?>')"><i class='bx bx-list-ul'></i></button>
-                                            <button class="btn-table-icon bg-red" onclick="event.stopPropagation(); deleteArchived(<?php echo $inc['id']; ?>)"><i class='bx bx-trash'></i></button>
+                                            <button type="button" class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewEvidence('<?php echo $safe_img; ?>', '<?php echo $safe_type; ?>', '<?php echo $safe_brgy; ?>')"><i class='bx bx-image'></i></button>
+                                            <button type="button" class="btn-table-icon bg-blue" data-logs="<?= htmlspecialchars($inc['all_logs'] ?? '', ENT_QUOTES, 'UTF-8') ?>" data-type="<?= htmlspecialchars($inc['incident_type'], ENT_QUOTES, 'UTF-8') ?>" onclick="event.stopPropagation(); openLogModal(this)"><i class='bx bx-list-ul'></i></button>
                                         </div>
                                     </td>
                                 </tr>

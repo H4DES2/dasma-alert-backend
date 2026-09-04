@@ -1,4 +1,4 @@
-    const assignedBrgy = "<?php echo addslashes($assigned_brgy ?? ''); ?>";
+    const assignedBrgy = window.ASSIGNED_BRGY || "";
     let map, markerLayer;
     let lastTableHTML = "", lastMapHash = "";
     
@@ -208,11 +208,19 @@
                 else {
                     data.forEach(t => {
                         let recBadge = t.is_recommended ? `<span style="background:#388e3c; color:white; padding: 2px 8px; border-radius: 8px; font-size: 0.65rem; font-weight: 900; margin-left: 8px;">⭐ RECOMMENDED</span>` : "";
-                        let bgStyle = t.is_recommended ? "background: #f1f8e9; border-left: 4px solid #388e3c;" : "";
-                        html += `<label style="display:flex; align-items:center; gap:12px; padding:12px; border-bottom:1px solid #edf2f7; cursor:pointer; ${bgStyle}">
-                            <input type="checkbox" class="dispatch-team-cb" value="${t.id}" data-name="${t.team_name}" style="transform: scale(1.3);">
-                            <span style="font-size:1.1rem; color:#333;"><b>${t.team_name}</b> <small style="color:#888;">(${t.team_type})</small> ${recBadge}<br><span style="color:#1976d2; font-size:0.8rem; font-weight:bold;">📍 ${t.assigned_barangay || 'City-Wide'}</span></span>
-                        </label>`;
+                        // AFTER
+const isDark = document.documentElement.classList.contains('global-dark-mode');
+let bgStyle = "";
+if (t.is_recommended) {
+    bgStyle = isDark ? "background: rgba(56, 142, 60, 0.2); border-left: 4px solid #388e3c;" : "background: #f1f8e9; border-left: 4px solid #388e3c;";
+}
+html += `<label style="display:flex; align-items:center; gap:12px; padding:12px; border-bottom:1px solid var(--border-color, #edf2f7); cursor:pointer; ${bgStyle}">
+    <input type="checkbox" class="dispatch-team-cb" value="${t.id}" data-name="${t.team_name}" style="transform: scale(1.3);">
+    <span style="font-size:1.05rem;">
+        <b>${t.team_name}</b> <small style="opacity: 0.7;">(${t.team_type})</small> ${recBadge}<br>
+        <span style="color:#1976d2; font-size:0.8rem; font-weight:bold;">📍 ${t.assigned_barangay || 'City-Wide'}</span>
+    </span>
+</label>`;
                     });
                 }
                 document.getElementById('available_teams_list').innerHTML = html;

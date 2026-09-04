@@ -315,7 +315,8 @@ $show_banner = ($active_broadcast && $active_broadcast['id'] != $dismissed_id);
         </div>
     </main>
 <script>
-    window.soundEnabled = <?= ($sound_saved === 1) ? 'true' : 'false' ?>;
+    window.soundEnabled = <?= ($sound_saved ?? 1) ? 'true' : 'false' ?>;
+    window.ASSIGNED_BRGY = <?= json_encode($assigned_brgy); ?>;
 </script>
 <script src="../js/client/dashboard.js?v=<?= filemtime('../js/client/dashboard.js') ?>"></script>
 </body>

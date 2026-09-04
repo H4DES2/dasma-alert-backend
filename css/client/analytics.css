@@ -142,3 +142,68 @@
             }
             .modal-content { padding: 24px; }
         }
+        /* 🚀 VIEW LOGS MODAL CONTRAST */
+#viewLogsModal {
+    display: none;
+    position: fixed;
+    z-index: 10006;
+    left: 0;
+    top: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(15, 23, 42, 0.65);
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(5px);
+}
+
+#viewLogsModal .modal-content {
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 30px;
+    width: 100%;
+    max-width: 500px;
+    border: 1px solid #edf2f7;
+    box-shadow: 0 25px 50px rgba(0,0,0,0.2);
+}
+
+html.global-dark-mode #viewLogsModal .modal-content {
+    background: #161b22 !important;
+    border-color: #30363d !important;
+    color: #f0f6fc !important;
+}
+
+html.global-dark-mode #logContainer > div {
+    background: #0d1117 !important;
+    border-left-color: #1976d2 !important;
+    color: #f0f6fc !important;
+}
+
+html.global-dark-mode #logContainer p {
+    color: #8b949e !important;
+}
+/* Vault Table Text Contrast */
+.data-table .incident-title-text {
+    color: #1a1a1a;
+}
+
+.data-table .incident-date-text {
+    color: #6b7280;
+}
+
+html.global-dark-mode .data-table .incident-title-text {
+    color: #f0f6fc !important;
+}
+
+html.global-dark-mode .data-table .incident-date-text {
+    color: #8b949e !important;
+}
+
+html.global-dark-mode .data-table td {
+    color: #f0f6fc !important;
+    border-bottom-color: #21262d !important;
+}
+
+html.global-dark-mode .data-table tr:hover {
+    background-color: rgba(255, 255, 255, 0.03);
+}

@@ -22,7 +22,7 @@ header("X-Frame-Options: SAMEORIGIN");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 
 // ==========================================
-// --- .ENV LOADER FUNCTION ---
+// --- .ENV LOADER FUNCTION (For Local Development) ---
 // ==========================================
 function loadEnv($path) {
     if (!file_exists($path)) return false;
@@ -53,21 +53,22 @@ foreach ($possible_paths as $path) {
 
 // ==========================================
 // --- CONFIGURATION CONSTANTS ---
+// Priority: getenv() (Render cloud) -> $_ENV (.env file) -> Default fallback
 // ==========================================
-define('DB_HOST',   $_ENV['DB_HOST']   ?? 'localhost');
-define('DB_PORT',   (int)($_ENV['DB_PORT']   ?? 3306));
-define('DB_USER',   $_ENV['DB_USER']   ?? 'root');
-define('DB_PASS',   $_ENV['DB_PASS']   ?? '');
-define('DB_NAME',   $_ENV['DB_NAME']   ?? 'alert');
+define('DB_HOST',   getenv('DB_HOST') ?: ($_ENV['DB_HOST'] ?? 'localhost'));
+define('DB_PORT',   (int)(getenv('DB_PORT') ?: ($_ENV['DB_PORT'] ?? 3306)));
+define('DB_USER',   getenv('DB_USER') ?: ($_ENV['DB_USER'] ?? 'root'));
+define('DB_PASS',   getenv('DB_PASS') ?: ($_ENV['DB_PASS'] ?? ''));
+define('DB_NAME',   getenv('DB_NAME') ?: ($_ENV['DB_NAME'] ?? 'alert'));
 
-define('SMTP_HOST', $_ENV['SMTP_HOST'] ?? $_ENV['MAIL_HOST'] ?? 'smtp.gmail.com');
-define('SMTP_PORT', (int)($_ENV['SMTP_PORT'] ?? $_ENV['MAIL_PORT'] ?? 587));
-define('SMTP_USER', $_ENV['SMTP_USER'] ?? $_ENV['MAIL_USERNAME'] ?? $_ENV['GMAIL_USER'] ?? '');
-define('SMTP_PASS', $_ENV['SMTP_PASS'] ?? $_ENV['MAIL_PASSWORD'] ?? $_ENV['GMAIL_PASS'] ?? '');
-define('FROM_EMAIL',$_ENV['FROM_EMAIL']?? $_ENV['MAIL_FROM_ADDRESS'] ?? SMTP_USER);
-define('FROM_NAME', $_ENV['FROM_NAME']  ?? $_ENV['MAIL_FROM_NAME'] ?? 'Dasma Alert');
+define('SMTP_HOST', getenv('SMTP_HOST') ?: ($_ENV['SMTP_HOST'] ?? 'smtp.gmail.com'));
+define('SMTP_PORT', (int)(getenv('SMTP_PORT') ?: ($_ENV['SMTP_PORT'] ?? 587)));
+define('SMTP_USER', getenv('SMTP_USER') ?: ($_ENV['SMTP_USER'] ?? ''));
+define('SMTP_PASS', getenv('SMTP_PASS') ?: ($_ENV['SMTP_PASS'] ?? ''));
+define('FROM_EMAIL',getenv('FROM_EMAIL') ?: ($_ENV['FROM_EMAIL'] ?? SMTP_USER));
+define('FROM_NAME', getenv('FROM_NAME') ?: ($_ENV['FROM_NAME'] ?? 'Dasma Alert'));
 
-define('BASE_URL',  $_ENV['BASE_URL']  ?? 'http://localhost/Alert');
+define('BASE_URL',  getenv('BASE_URL') ?: ($_ENV['BASE_URL'] ?? 'https://dasma-alert-backend.onrender.com'));
 define('TOKEN_EXPIRY', 3600);
 
 // ==========================================
@@ -75,25 +76,25 @@ define('TOKEN_EXPIRY', 3600);
 // ==========================================
 $conn = mysqli_init();
 
-// Fast connection timeout to avoid blocking page execution
-$conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 3);
+// Fast connection timeout
+$conn->options(MYSQLI_OPT_CONNECT_TIMEOUT, 5);
 
-// Persistent host prefix
+// Persistent host connection prefix
 $db_persistent_host = (strpos(DB_HOST, 'p:') === 0) ? DB_HOST : ('p:' . DB_HOST);
 
-if (DB_PORT !== 3306) {
-    // Cloud database with SSL & Persistent Pool (Aiven, Render)
+if (DB_PORT !== 3306 || strpos(DB_HOST, 'aivencloud.com') !== false) {
+    // Aiven / Render Cloud database requiring SSL
     $conn->options(MYSQLI_OPT_SSL_VERIFY_SERVER_CERT, false);
     $conn->ssl_set(NULL, NULL, NULL, NULL, NULL);
     $connected = @$conn->real_connect($db_persistent_host, DB_USER, DB_PASS, DB_NAME, DB_PORT, NULL, MYSQLI_CLIENT_SSL);
 } else {
-    // Local fallback (Standard MySQL / XAMPP)
+    // Local fallback (XAMPP)
     $connected = @$conn->real_connect($db_persistent_host, DB_USER, DB_PASS, DB_NAME, DB_PORT);
 }
 
 if (!$connected) {
     error_log("Database connection failed: " . mysqli_connect_error());
-    die(json_encode(["success" => false, "message" => "Database connection unavailable."]));
+    die(json_encode(["success" => false, "message" => "Database connection unavailable: " . mysqli_connect_error()]));
 }
 
 $conn->set_charset("utf8mb4");
@@ -122,3 +123,4 @@ function isInsideDasma($lat, $lng) {
     }
     return $inside;
 }
+?>

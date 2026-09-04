@@ -21,16 +21,14 @@ $user_id = (int)($_SESSION['user_id'] ?? 0);
 // Release session lock immediately so parallel requests and page switches are non-blocking
 session_write_close();
 
-// 🚨 GET ADMIN'S ASSIGNED BARANGAY
+// Admin's assigned barangay
 $u_data = ($res = $conn->query("SELECT barangay FROM users WHERE id = $user_id")) ? $res->fetch_assoc() : null;
 $my_brgy = $u_data['barangay'] ?? '';
 
-// 🚨 ROLE-BASED QUERY
+// Role-based query
 if ($role === 'superadmin') {
-    // Superadmin sees all centers
     $query = "SELECT * FROM evacuation_centers ORDER BY name ASC";
 } else {
-    // Barangay Admin sees only their sector
     $safe_brgy = $conn->real_escape_string($my_brgy);
     $query = "SELECT * FROM evacuation_centers WHERE barangay = '$safe_brgy' ORDER BY name ASC";
 }
@@ -38,11 +36,37 @@ if ($role === 'superadmin') {
 $result = $conn->query($query);
 $centers = [];
 
-// 🚀 Valid barangay list for the Add Facility dropdown (prevents fk_evac_brgy violations)
+// Fetch barangay list with hardcoded Dasmariñas fallback
 $brgy_list = [];
 if ($bres = $conn->query("SELECT name FROM barangays ORDER BY name ASC")) {
-    while ($b = $bres->fetch_assoc()) { $brgy_list[] = $b['name']; }
+    while ($b = $bres->fetch_assoc()) { 
+        $brgy_list[] = $b['name']; 
+    }
 }
+
+if (empty($brgy_list)) {
+    $brgy_list = [
+        "Burol I", "Burol II", "Burol III", "Burol Main",
+        "Datu Esmael", "Emmanuel Bergado I", "Emmanuel Bergado II",
+        "Fatima I", "Fatima II", "Fatima III", "H-2",
+        "Langkaan I", "Langkaan II", "Luzviminda I", "Luzviminda II",
+        "Paliparan I", "Paliparan II", "Paliparan III",
+        "Sabang", "Salawag", "Salitran I", "Salitran II", "Salitran III", "Salitran IV",
+        "Sampaloc I", "Sampaloc II", "Sampaloc III", "Sampaloc IV", "Sampaloc V",
+        "San Agustin I", "San Agustin II", "San Agustin III",
+        "San Andres I", "San Andres II", "San Antonio De Padua I", "San Antonio De Padua II",
+        "San Dionisio", "San Esteban", "San Francisco I", "San Francisco II",
+        "San Isidro Labrador I", "San Isidro Labrador II", "San Jose", "San Juan",
+        "San Lorenzo Ruiz I", "San Lorenzo Ruiz II", "San Luis I", "San Luis II",
+        "San Manuel I", "San Manuel II", "San Mateo", "San Miguel", "San Miguel I", "San Miguel II",
+        "San Nicolas I", "San Nicolas II", "San Roque", "San Simon",
+        "Santa Cristina I", "Santa Cristina II", "Santa Cruz I", "Santa Cruz II",
+        "Santa Fe", "Santa Lucia", "Santa Maria", "Santo Cristo",
+        "Santo Niño I", "Santo Niño II", "Victoria Reyes",
+        "Zone I", "Zone I-A", "Zone I-B", "Zone II", "Zone III", "Zone IV"
+    ];
+}
+
 if ($result && $result->num_rows > 0) {
     $centers = $result->fetch_all(MYSQLI_ASSOC);
 }
@@ -67,7 +91,7 @@ if ($result && $result->num_rows > 0) {
             <div>
                 <h1>Evacuation Centers</h1>
                 <p style="color: #666; margin-top: 5px; font-weight: 700;">
-                    <?php echo ($role === 'superadmin') ? "City-Wide Facility Management" : "Sectoral Facility Tracker: $my_brgy"; ?>
+                    <?php echo ($role === 'superadmin') ? "City-Wide Facility Management" : "Sectoral Facility Tracker: " . htmlspecialchars($my_brgy); ?>
                 </p>
             </div>
             <?php if ($role === 'superadmin'): ?>
@@ -102,13 +126,12 @@ if ($result && $result->num_rows > 0) {
                                 $capacity = (int)($center['capacity'] ?? 1);
                                 $percentage = ($capacity > 0) ? ($occupants / $capacity) * 100 : 0;
                                 
-                                // Standard 4 Pax per Modular Tent
                                 $families_tents = ceil($occupants / 4);
                                 $max_tents = ceil($capacity / 4);
                                 
-                                $bar_color = '#388e3c'; // Green
-                                if ($percentage >= 80) $bar_color = '#fbc02d'; // Yellow
-                                if ($percentage >= 100) $bar_color = '#d32f2f'; // Red
+                                $bar_color = '#388e3c';
+                                if ($percentage >= 80) $bar_color = '#fbc02d';
+                                if ($percentage >= 100) $bar_color = '#d32f2f';
                             ?>
                             <tr class="clickable-row" onclick="openMobileModal(this)">
                                 <td>
@@ -246,7 +269,7 @@ if ($result && $result->num_rows > 0) {
             <div style="display: flex; gap: 15px;" id="uniModalButtons"></div>
         </div>
     </div>
-     <!-- MODAL: Mobile Row Details -->
+
     <div id="mobileEvacModal" class="modal" style="z-index: 10005;">
         <div class="modal-content" style="max-width: 90%; padding: 24px;">
             <div class="close-modal" onclick="closeModal('mobileEvacModal')"><i class='bx bx-x'></i></div>
@@ -272,6 +295,10 @@ if ($result && $result->num_rows > 0) {
             </div>
         </div>
     </div>                                       
+    <script>
+        window.APP_ROLE = <?php echo json_encode($role); ?>;
+        window.APP_ASSIGNED_BRGY = <?php echo json_encode($my_brgy); ?>;
+    </script>
     <script src="../js/admin/evacuation_centers.js?v=<?= filemtime('../js/admin/evacuation_centers.js') ?>" defer></script>
 </body>
 </html>

@@ -219,7 +219,10 @@ if ($role === 'superadmin') {
             <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
-
-    <script src="../js/client/evacuation_centers.js?v=<?= filemtime('../js/client/evacuation_centers.js') ?>"></script>
+<script>
+    window.APP_ROLE = <?= json_encode($role); ?>;
+    window.ASSIGNED_BRGY = <?= json_encode($assigned_brgy); ?>;
+</script>
+<script src="../js/client/evacuation_centers.js?v=<?= filemtime('../js/client/evacuation_centers.js') ?>"></script>
 </body>
 </html>

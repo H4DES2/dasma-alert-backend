@@ -78,17 +78,24 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
         $target_dir = $_SERVER['DOCUMENT_ROOT'] . "/dasma_api/uploads/announcements/";
         if (!is_dir($target_dir)) { mkdir($target_dir, 0777, true); }
         
-        // PATCH VULN-A04: MIME + extension whitelist
-        $a_allowed_mime = ["image/jpeg","image/png","image/gif","image/webp"];
-        $a_allowed_ext  = ["jpg","jpeg","png","gif","webp"];
+       // PATCH VULN-A04: MIME + extension whitelist
+        $a_allowed_mime = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/pjpeg"];
+        $a_allowed_ext  = ["jpg", "jpeg", "png", "gif", "webp", "jfif"];
         $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
         $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
         finfo_close($a_finfo);
         $a_ext   = strtolower(pathinfo($_FILES["image"]["name"], PATHINFO_EXTENSION));
+
         if (!in_array($a_mime, $a_allowed_mime) || !in_array($a_ext, $a_allowed_ext) || !getimagesize($_FILES["image"]["tmp_name"])) {
             echo "invalid_file_type"; exit();
         }
-        $filename    = time() . "_" . bin2hex(random_bytes(4)) . "." . $a_ext;
+
+        // Standardize jfif to jpg
+        if ($a_ext === 'jfif') {
+            $a_ext = 'jpg';
+        }
+
+        $filename = time() . "_" . bin2hex(random_bytes(4)) . "." . $a_ext;
         $target_file = $target_dir . $filename;
         if (move_uploaded_file($_FILES["image"]["tmp_name"], $target_file)) {
             $image_path = "uploads/announcements/" . $filename;
@@ -329,24 +336,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $types .= "s"; $params[] = "%" . $type . "%";
         }
 
-        // 🚀 THE FIX: Enforce a strict City Geofence so incidents outside Dasmariñas are completely ignored
         $type_clause .= " AND (i.latitude BETWEEN 14.2500 AND 14.3900 AND i.longitude BETWEEN 120.8900 AND 121.0200) ";
 
-        if ($role === 'superadmin') {
-            if (!empty($_GET['brgy'])) {
-                $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
-                $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-                $types .= "ss"; $params[] = $_GET['brgy']; $params[] = "%" . $_GET['brgy'] . "%";
-                $evac_types .= "ss"; $evac_params[] = $_GET['brgy']; $evac_params[] = "%" . $_GET['brgy'] . "%";
-            }
-        } elseif ($role === 'admin' || $role === 'barangay_admin') {
-            $target_brgy = !empty($_GET['brgy']) ? $_GET['brgy'] : $admin_brgy;
-            if (!empty($target_brgy)) {
-                $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
-                $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-                $types .= "ss"; $params[] = $target_brgy; $params[] = "%" . $target_brgy . "%";
-                $evac_types .= "ss"; $evac_params[] = $target_brgy; $evac_params[] = "%" . $target_brgy . "%";
-            }
+        $target_brgy = !empty($_GET['brgy']) ? trim($_GET['brgy']) : trim($admin_brgy);
+        if (!empty($target_brgy) && strtolower($target_brgy) !== 'all barangays' && strtolower($target_brgy) !== 'all') {
+            $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
+            $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
+            $types .= "ss"; $params[] = $target_brgy; $params[] = "%" . $target_brgy . "%";
+            $evac_types .= "ss"; $evac_params[] = $target_brgy; $evac_params[] = "%" . $target_brgy . "%";
         }
         
         // Helper for Master Sync prepared statements
@@ -1111,15 +1108,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ob_end_clean();
         header('Content-Type: application/json');
 
-        $user_id      = $_SESSION['user_id'] ?? 0;
-        $first_name   = $_POST['first_name'] ?? '';
-        $last_name    = $_POST['last_name'] ?? '';
-        $phone_number = $_POST['phone_number'] ?? '';
-        $position     = $_POST['position'] ?? '';
-        $radio_callsign = $_POST['radio_callsign'] ?? '';
-        $department   = $_POST['department'] ?? '';
-        $current_pwd  = $_POST['current_password'] ?? '';
-        $new_pwd      = $_POST['new_password'] ?? '';
+       $user_id        = (int)($_SESSION['user_id'] ?? 0);
+        $first_name     = trim($_POST['first_name'] ?? '');
+        $last_name      = trim($_POST['last_name'] ?? '');
+        $phone_number   = trim($_POST['phone_number'] ?? '');
+        $position       = trim($_POST['position'] ?? '');
+        $radio_callsign = trim($_POST['radio_callsign'] ?? '');
+        $department     = trim($_POST['department'] ?? '');
+        $barangay_raw   = trim($_POST['barangay'] ?? '');
+        $current_pwd    = $_POST['current_password'] ?? '';
+        $new_pwd        = $_POST['new_password'] ?? '';
 
         // 1. Verify password & fetch existing user data
         $stmt = $conn->prepare("SELECT password, barangay FROM users WHERE id = ?");
@@ -1133,34 +1131,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
-        // 🔒 FOREIGN KEY SAFEGUARD: Validate barangay to prevent FK constraint crashes
-        $barangay = !empty($barangay_raw) ? $barangay_raw : ($user['barangay'] ?? null);
-
-        if (!empty($barangay)) {
-            $chk_b = $conn->prepare("SELECT name FROM barangays WHERE name = ? LIMIT 1");
-            $chk_b->bind_param("s", $barangay);
-            $chk_b->execute();
-            if ($chk_b->get_result()->num_rows === 0) {
-                $barangay = null; // Set to NULL if name is not found in barangays table
-            }
-            $chk_b->close();
-        }
+        // Use the newly submitted barangay if provided, otherwise preserve existing
+        $barangay = (!empty($barangay_raw)) ? $barangay_raw : ($user['barangay'] ?? null);
 
         if (!empty($new_pwd)) {
-    $hashed_pwd = password_hash($new_pwd, PASSWORD_DEFAULT);
-    $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=?, password=? WHERE id=?");
-    $stmt_u->bind_param("sssssi", $first_name, $last_name, $barangay, $department, $hashed_pwd, $user_id);
+            $hashed_pwd = password_hash($new_pwd, PASSWORD_DEFAULT);
+            $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=?, password=? WHERE id=?");
+            $stmt_u->bind_param("sssssi", $first_name, $last_name, $barangay, $department, $hashed_pwd, $user_id);
         } else {
-    $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=? WHERE id=?");
-    $stmt_u->bind_param("ssssi", $first_name, $last_name, $barangay, $department, $user_id);
+            $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=? WHERE id=?");
+            $stmt_u->bind_param("ssssi", $first_name, $last_name, $barangay, $department, $user_id);
         }
         $stmt_u->execute();
         $stmt_u->close();
 
-        if (!empty($barangay)) { $_SESSION['barangay'] = $barangay; }
+        if (!empty($barangay)) { 
+            $_SESSION['barangay'] = $barangay; 
+        }
         $_SESSION['first_name'] = $first_name;
         $_SESSION['last_name']  = $last_name;
-
         // 3. Upsert user_profiles record
         $chk_prof = $conn->query("SELECT user_id FROM user_profiles WHERE user_id = " . (int)$user_id);
         if ($chk_prof && $chk_prof->num_rows === 0) {
