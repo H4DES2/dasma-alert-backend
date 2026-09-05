@@ -277,7 +277,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                                     </td>
                                     <td style="text-align:center;">
                                         <?php if(!empty($ann['image_path'])): ?>
-                                            <img src="/dasma_api/<?php echo htmlspecialchars($ann['image_path']); ?>" style="height:56px; width:80px; border-radius:var(--radius-md); object-fit:cover; border: 1px solid var(--border-color);">
+                                            <img src="/<?php echo ltrim(str_replace('dasma_api/', '', $ann['image_path']), '/'); ?>" style="height:56px; width:80px; border-radius:var(--radius-md); object-fit:cover; border: 1px solid var(--border-color);">
                                         <?php else: ?>
                                             <span style="color:var(--text-muted); font-style:italic; font-size: 0.8rem;">No Image</span>
                                         <?php endif; ?>

@@ -375,12 +375,15 @@ function rejectIncident(ids) {
 function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs, extra, backupRequested) { 
     const imgEl = document.getElementById('evidenceImageFull');
     if (imagePath && imagePath !== 'NULL' && imagePath !== '') {
-        imgEl.src = '/dasma_api/' + imagePath;
+        // Strip any leading slashes or redundant dasma_api prefixes
+        let cleanPath = imagePath.replace(/^\/?(dasma_api\/)?/, '');
+        
+        // If imagePath is already a full URL, use it directly; otherwise serve from root
+        imgEl.src = cleanPath.startsWith('http') ? cleanPath : '/' + cleanPath;
         imgEl.parentElement.style.display = 'flex';
     } else {
         imgEl.parentElement.style.display = 'none';
     }
-    
     const typeNode = document.getElementById('evType'); if(typeNode) typeNode.innerText = incidentType;
     const brgyNode = document.getElementById('evBrgy'); if(brgyNode) brgyNode.innerText = brgy;
     const dateNode = document.getElementById('evDateTime'); if(dateNode) dateNode.innerText = `${date} at ${time}`;
