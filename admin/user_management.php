@@ -164,8 +164,7 @@ $role_sections = [
                                             <i class='bx bxs-circle' style="font-size: 0.6rem;"></i> <?php echo strtoupper($row['status']); ?>
                                         </span>
                                     </td>
-
-                                    <td class="action-cell">
+                                        <td class="action-cell">
                                         <div class="action-btn-group">
                                             <?php if ((int)$row['id'] === (int)$_SESSION['user_id']): ?>
                                                 <span style="color: #8e24aa; font-size: 0.8rem; font-weight: 700;"><i class='bx bxs-user-check'></i> Your Account</span>
@@ -173,13 +172,13 @@ $role_sections = [
                                                 <button onclick="event.stopPropagation(); toggleUserStatus(<?php echo $row['id']; ?>, 'pending')" class="btn-status" style="background: #2e7d32;">
                                                     <i class='bx bx-check'></i> Approve
                                                 </button>
-                                                <button onclick="event.stopPropagation(); rejectUser(<?php echo $row['id']; ?>)" class="btn-status" style="background: #c62828;">
-                                                    <i class='bx bx-x'></i> Reject
+                                                <button onclick="event.stopPropagation(); deleteUserAccount(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['username']); ?>')" class="btn-status" style="background: #c62828;">
+                                                    <i class='bx bx-trash'></i> Delete
                                                 </button>
                                             <?php else: ?>
                                                 <button onclick="event.stopPropagation(); toggleUserStatus(<?php echo $row['id']; ?>, '<?php echo $row['status']; ?>')" 
                                                         class="btn-status"
-                                                        style="background: <?php echo $row['status'] === 'Active' ? '#d32f2f' : '#388e3c'; ?>;">
+                                                        style="background: <?php echo $row['status'] === 'Active' ? '#f57c00' : '#388e3c'; ?>;">
                                                     <?php echo $row['status'] === 'Active' ? "<i class='bx bx-user-x'></i> Suspend" : "<i class='bx bx-user-check'></i> Activate"; ?>
                                                 </button>
 
@@ -198,6 +197,13 @@ $role_sections = [
                                                     }
                                                     ?>
                                                 </select>
+
+                                                <button onclick="event.stopPropagation(); deleteUserAccount(<?php echo $row['id']; ?>, '<?php echo htmlspecialchars($row['username']); ?>')" 
+                                                        class="btn-status" 
+                                                        style="background: #d32f2f; padding: 6px 10px;" 
+                                                        title="Permanently Delete User">
+                                                    <i class='bx bx-trash'></i>
+                                                </button>
                                             <?php endif; ?>
                                         </div>
                                     </td>

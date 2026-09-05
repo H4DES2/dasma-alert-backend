@@ -1322,18 +1322,65 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    // 🚀 SECURED: Delete User
     if ($action === 'delete_user') {
         requireRole(['superadmin'], $role);
-        $target_user = (int)$_POST['user_id'];
+        $target_user = (int)($_POST['user_id'] ?? 0);
+
         if ($target_user === (int)$user_id) {
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Cannot delete your own account.']); exit();
+            ob_end_clean(); 
+            echo json_encode(['success' => false, 'message' => 'Cannot delete your own account.']); 
+            exit();
         }
-        $stmt = $conn->prepare("DELETE FROM users WHERE id = ? AND role != 'superadmin'");
-        $stmt->bind_param("i", $target_user);
-        if ($stmt->execute()) { ob_end_clean(); echo json_encode(['success' => true]); } 
-        else { ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Failed to delete user account.']); }
-        $stmt->close();
+
+        // Prevent deletion of any superadmin accounts
+        $chk = $conn->prepare("SELECT role FROM users WHERE id = ?");
+        $chk->bind_param("i", $target_user);
+        $chk->execute();
+        $user_row = $chk->get_result()->fetch_assoc();
+        $chk->close();
+
+        if (!$user_row) {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'User not found.']);
+            exit();
+        }
+
+        if ($user_row['role'] === 'superadmin') {
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Superadmin accounts cannot be deleted.']);
+            exit();
+        }
+
+        $conn->begin_transaction();
+        try {
+            // Remove associated profile records first
+            $del_prof = $conn->prepare("DELETE FROM user_profiles WHERE user_id = ?");
+            $del_prof->bind_param("i", $target_user);
+            $del_prof->execute();
+            $del_prof->close();
+
+            // Clear reporter references on incidents if nullable, or leave as recorded
+            $upd_inc = $conn->prepare("UPDATE incidents SET reported_by = NULL WHERE reported_by = ?");
+            if ($upd_inc) {
+                $upd_inc->bind_param("i", $target_user);
+                $upd_inc->execute();
+                $upd_inc->close();
+            }
+
+            // Delete the main user row
+            $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
+            $stmt->bind_param("i", $target_user);
+            $stmt->execute();
+            $stmt->close();
+
+            $conn->commit();
+            ob_end_clean();
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            $conn->rollback();
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+        }
         exit();
     }
     

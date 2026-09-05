@@ -161,3 +161,29 @@
 
         document.getElementById('mobileUserModal').style.display = 'flex';
     }
+    function deleteUserAccount(userId, username) {
+    customConfirm(
+        "Delete User Account",
+        `Are you sure you want to permanently delete user "${username}"? All associated profile data will be permanently removed from the database. This action cannot be undone.`,
+        "bx-trash",
+        "#d32f2f",
+        function() {
+            let fd = new FormData();
+            fd.append('action', 'delete_user');
+            fd.append('user_id', userId);
+
+            fetch('admin_actions.php', { method: 'POST', body: fd })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    customAlert("Delete Failed", data.message, "bx-x-circle", "#d32f2f");
+                }
+            })
+            .catch(err => {
+                customAlert("Network Error", "Could not complete deletion.", "bx-x-circle", "#d32f2f");
+            });
+        }
+    );
+}
