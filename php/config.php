@@ -102,6 +102,8 @@ $conn->set_charset("utf8mb4");
 // ==========================================
 // --- HELPERS ---
 // ==========================================
+date_default_timezone_set('Asia/Manila');
+$conn->query("SET time_zone = '+08:00'");
 function get_client_ip() {
     return filter_var($_SERVER['REMOTE_ADDR'] ?? '127.0.0.1', FILTER_VALIDATE_IP) ?: '127.0.0.1';
 }
