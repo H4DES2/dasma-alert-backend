@@ -983,10 +983,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         exit();
     }
 
-    // 🚀 SECURED: Get Team Members
+    // 🚀 SECURED: Get Team Members (Compatible with sql_mode=only_full_group_by)
     if ($action === 'get_team_members') {
         requireRole($ADMIN_TIER_ROLES, $role);
-        if (ob_get_length()) ob_end_clean();
+        while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json');
         
         $team_id = (int)($_GET['team_id'] ?? 0);
@@ -1003,13 +1003,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $team_type = trim($teamData['team_type']);
             $assigned_barangay = trim($teamData['assigned_barangay'] ?? '');
 
-            // 1. Try to find responders specifically matched to this team or department
+            // 1. Query matching team name, type, or sector
             $stmt = $conn->prepare("
                 SELECT 
                     u.id, 
                     COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.username) AS name,
-                    COALESCE(p.radio_callsign, 'Unit Responder') AS radio_callsign, 
-                    COALESCE(p.is_online, 0) AS is_online
+                    COALESCE(MAX(p.radio_callsign), 'Unit Responder') AS radio_callsign, 
+                    COALESCE(MAX(u.is_online), MAX(p.is_online), 0) AS is_online
                 FROM users u 
                 LEFT JOIN user_profiles p ON u.id = p.user_id 
                 WHERE LOWER(TRIM(u.role)) = 'responder'
@@ -1018,7 +1018,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     OR LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
                     OR (? != '' AND LOWER(TRIM(COALESCE(u.barangay, ''))) = LOWER(?))
                 )
-                GROUP BY u.id
+                GROUP BY u.id, u.first_name, u.last_name, u.username
                 ORDER BY is_online DESC, u.id ASC
             ");
 
@@ -1029,31 +1029,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 while ($row = $res->fetch_assoc()) {
                     $parts = explode(' ', $row['name'], 2);
                     $row['first_name'] = $parts[0];
-                    $row['last_name'] = $parts[1] ?? '';
+                    $row['last_name']  = $parts[1] ?? '';
                     $members[] = $row;
                 }
                 $stmt->close();
             }
 
-            // 2. If no specific department match was found, list all registered responders in the system
+            // 2. If no direct department match, list all responders across the city
             if (empty($members)) {
-                $fallbackStmt = $conn->query("
+                $fallbackRes = $conn->query("
                     SELECT 
                         u.id, 
                         COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.username) AS name,
-                        COALESCE(p.radio_callsign, 'Unit Responder') AS radio_callsign, 
-                        COALESCE(p.is_online, 0) AS is_online
+                        COALESCE(MAX(p.radio_callsign), 'Unit Responder') AS radio_callsign, 
+                        COALESCE(MAX(u.is_online), MAX(p.is_online), 0) AS is_online
                     FROM users u 
                     LEFT JOIN user_profiles p ON u.id = p.user_id 
                     WHERE LOWER(TRIM(u.role)) = 'responder'
-                    GROUP BY u.id
+                    GROUP BY u.id, u.first_name, u.last_name, u.username
                     ORDER BY is_online DESC, u.id ASC
                 ");
-                if ($fallbackStmt) {
-                    while ($row = $fallbackStmt->fetch_assoc()) {
+
+                if ($fallbackRes) {
+                    while ($row = $fallbackRes->fetch_assoc()) {
                         $parts = explode(' ', $row['name'], 2);
                         $row['first_name'] = $parts[0];
-                        $row['last_name'] = $parts[1] ?? '';
+                        $row['last_name']  = $parts[1] ?? '';
                         $members[] = $row;
                     }
                 }
