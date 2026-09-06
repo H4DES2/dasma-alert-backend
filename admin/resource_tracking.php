@@ -185,6 +185,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
                             <th>Unit Type</th>
                             <th>Assigned Sector</th>
                             <th>Status</th>
+                            <?php if($role === 'superadmin'): ?><th style="text-align: center; width: 100px;">Actions</th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -201,11 +202,22 @@ if ($teams_result && $teams_result->num_rows > 0) {
                                 
                                 $assigned_to = !empty($team['assigned_barangay']) ? htmlspecialchars($team['assigned_barangay']) : 'City-Wide';
                             ?>
-                            <tr class="clickable-row" data-team-id="<?php echo (int)$team['id']; ?>" data-team-name="<?php echo htmlspecialchars($team['team_name'], ENT_QUOTES); ?>" style="cursor: pointer;">
+                            <tr class="clickable-row" onclick="viewTeamMembers(<?php echo $team['id']; ?>, '<?php echo addslashes($team['team_name']); ?>')">
                                 <td><strong><?php echo htmlspecialchars($team['team_name']); ?></strong></td>
                                 <td><i class='bx <?php echo $type_icon; ?>' style="font-size: 1.2rem; vertical-align: middle; margin-right: 8px; opacity: 0.7;"></i> <?php echo htmlspecialchars($team['team_type']); ?></td>
                                 <td><strong style="color:#1976d2; font-size:0.85rem;"><i class='bx bxs-map-pin'></i> <?php echo $assigned_to; ?></strong></td>
                                 <td><span class="badge <?php echo $team['status']; ?>"><?php echo strtoupper($team['status']); ?></span></td>
+                                
+                                <?php if($role === 'superadmin'): ?>
+                                <td style="text-align: center;">
+                                    <button class="btn-sm" 
+                                            style="background: rgba(211, 47, 47, 0.15); color: #ff5252; border: 1px solid rgba(255, 82, 82, 0.3); padding: 6px 10px; border-radius: 8px; cursor: pointer;"
+                                            title="Delete Unit"
+                                            onclick="event.stopPropagation(); deleteTeam(<?php echo (int)$team['id']; ?>, '<?php echo addslashes($team['team_name']); ?>')">
+                                        <i class='bx bx-trash' style="font-size: 1.1rem; vertical-align: middle;"></i>
+                                    </button>
+                                </td>
+                                <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>

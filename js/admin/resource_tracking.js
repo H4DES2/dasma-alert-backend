@@ -43,7 +43,35 @@
         document.getElementById('new_team_name').value = "";
         document.getElementById('addUnitModal').style.display = 'flex';
     }
+    function deleteTeam(teamId, teamName) {
+    customConfirm(
+        "Delete Response Unit?",
+        `Are you sure you want to permanently delete "${teamName}"? This action cannot be undone.`,
+        "bx-trash",
+        "#d32f2f",
+        function() {
+            let formData = new FormData();
+            formData.append('action', 'delete_team');
+            formData.append('id', teamId);
 
+            fetch('../admin/admin_actions.php', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    customAlert("Delete Failed", data.message || "Could not delete unit.", "bx-error", "#d32f2f");
+                }
+            })
+            .catch(err => {
+                customAlert("Server Error", "An error occurred while deleting the unit.", "bx-error", "#d32f2f");
+            });
+        }
+    );
+}
     function submitNewUnit() {
         let name = document.getElementById('new_team_name').value.trim();
         let type = document.getElementById('new_team_type').value;
