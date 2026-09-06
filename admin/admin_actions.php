@@ -1002,22 +1002,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $team_type = trim($teamData['team_type']);
             $assigned_barangay = trim($teamData['assigned_barangay'] ?? '');
 
-            // Match responders by exact team name, department keyword, team type, or barangay unit
             $stmt = $conn->prepare("
                 SELECT 
                     u.id, 
                     u.first_name, 
                     u.last_name, 
                     COALESCE(p.radio_callsign, 'No Callsign') as radio_callsign, 
-                    COALESCE(p.is_online, 0) as is_online
+                    COALESCE(u.is_online, 0) as is_online
                 FROM users u 
                 LEFT JOIN user_profiles p ON u.id = p.user_id 
                 WHERE LOWER(TRIM(u.role)) = 'responder'
                 AND (
-                    LOWER(TRIM(u.department)) = LOWER(?)
-                    OR LOWER(TRIM(u.department)) = LOWER(?)
-                    OR (? != '' AND LOWER(TRIM(u.department)) LIKE CONCAT('%', LOWER(?), '%'))
-                    OR (? != '' AND LOWER(TRIM(u.barangay)) = LOWER(?))
+                    LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
+                    OR LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
+                    OR (? != '' AND LOWER(TRIM(COALESCE(u.department, ''))) LIKE CONCAT('%', LOWER(?), '%'))
+                    OR (? != '' AND LOWER(TRIM(COALESCE(u.barangay, ''))) = LOWER(?))
+                    OR ? = 'City-Wide'
+                    OR ? = ''
                 )
                 GROUP BY u.id
                 ORDER BY is_online DESC, u.first_name ASC
@@ -1025,12 +1026,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
             if ($stmt) {
                 $stmt->bind_param(
-                    "ssssss", 
+                    "ssssssss", 
                     $team_name, 
                     $team_type, 
                     $team_type, 
                     $team_type, 
                     $assigned_barangay, 
+                    $assigned_barangay,
+                    $assigned_barangay,
                     $assigned_barangay
                 );
                 $stmt->execute();
