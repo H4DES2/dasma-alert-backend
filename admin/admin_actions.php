@@ -84,7 +84,6 @@ if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         $post_fields = [
             'file'          => $cfile,
             'upload_preset' => $upload_preset,
-            'folder'        => 'dasma_announcements'
         ];
 
         $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
@@ -101,12 +100,11 @@ if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         if ($http_code === 200 && !empty($json_res['secure_url'])) {
             $image_path = $json_res['secure_url'];
         } else {
-            echo "Cloudinary Upload Failed: " . ($response ?: 'No response');
+            echo "Cloudinary Upload Failed (HTTP " . $http_code . "): " . ($response ?: 'Empty response from cURL');
             exit();
         }
     }
 
-// 🚀 SECURED: Delete Announcement
 if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
@@ -119,7 +117,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
     exit();
 }
 
-// 🚀 MULTI-ID SYNC: Reject Incident
 if (isset($_POST['action']) && $_POST['action'] === 'reject_incident') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
@@ -134,7 +131,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'reject_incident') {
     exit();
 }
 
-// 🚀 MULTI-ID SYNC: Request Backup
 if (isset($_POST['action']) && $_POST['action'] === 'request_backup') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
@@ -148,7 +144,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'request_backup') {
     exit();
 }
 
-// 🚀 MULTI-ID SYNC: Resolve Incident
 if (isset($_POST['action']) && $_POST['action'] === 'admin_resolve_incident') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
@@ -163,7 +158,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_resolve_incident') {
     exit();
 }
 
-// 🚀 SECURED MULTI-ID SYNC: Confirm Verification
 if (isset($_POST['action']) && $_POST['action'] === 'confirm_verify') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
@@ -182,8 +176,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_verify') {
     echo json_encode(['success' => true]);
     exit();
 }
-
-// 🚀 SECURED MULTI-ID SYNC: Verify Severity Levels
 if (isset($_POST['action']) && $_POST['action'] === 'verify_incident') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
@@ -208,11 +200,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'verify_incident') {
     exit();
 }
 
-// PATCH VULN-A02+A03 / VULN-A13: $action/$user_id/$role/$admin_brgy and the
-// requireRole() gate are now defined immediately after the login check above,
-// so every handler in this file — including the ones before this line — is
-// covered.
-
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
     // 🚀 SECURED: Get Active Incidents
@@ -225,7 +212,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $types = "";
         $brgy_filter = "";
         
-        // 🚀 GEOFENCE: Restrict to Dasmariñas boundaries
         $city_limits = " AND (latitude BETWEEN 14.2500 AND 14.3900 AND longitude BETWEEN 120.8900 AND 121.0200) ";
         
         if ($role === 'admin' || $role === 'barangay_admin') {
@@ -247,8 +233,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         echo json_encode($incidents);
         exit();
     }
-
-    // 🚀 SECURED: Master Sync API
+    
     if ($action === 'master_sync') {
         requireRole($ADMIN_TIER_ROLES, $role);
         session_write_close(); 
