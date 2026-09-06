@@ -378,8 +378,16 @@ function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs,
         // Strip any leading slashes or redundant dasma_api prefixes
         let cleanPath = imagePath.replace(/^\/?(dasma_api\/)?/, '');
         
-        // If imagePath is already a full URL, use it directly; otherwise serve from root
-        imgEl.src = cleanPath.startsWith('http') ? cleanPath : '/' + cleanPath;
+        // Define your API host where uploads are stored
+        const API_BASE_URL = 'https://dasma-api-l9ql.onrender.com';
+
+        // Point relative paths to the API server
+        if (cleanPath.startsWith('http')) {
+            imgEl.src = cleanPath;
+        } else {
+            imgEl.src = API_BASE_URL + '/' + cleanPath.replace(/^\/+/, '');
+        }
+
         imgEl.parentElement.style.display = 'flex';
     } else {
         imgEl.parentElement.style.display = 'none';
