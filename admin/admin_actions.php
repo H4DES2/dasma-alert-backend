@@ -676,16 +676,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
     // 🚀 SECURED: Delete Team
     if ($action === 'delete_team') {
-        requireRole(['superadmin', 'admin'], $role);
-        $team_id = (int)($_POST['id'] ?? 0);
+        requireRole($ADMIN_TIER_ROLES, $role);
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
+
+        $team_id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
 
         if ($team_id <= 0) {
-            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Invalid unit ID.']);
             exit();
         }
 
-        // 1. Check if unit is currently assigned to an incident
+        // Check if unit is currently assigned to an incident
         $checkStmt = $conn->prepare("SELECT team_name, current_incident_id, status FROM response_teams WHERE id = ?");
         $checkStmt->bind_param("i", $team_id);
         $checkStmt->execute();
@@ -693,29 +695,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $checkStmt->close();
 
         if (!$team) {
-            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Unit not found.']);
             exit();
         }
 
         if (!empty($team['current_incident_id']) || $team['status'] === 'deployed' || $team['status'] === 'on-scene') {
-            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Cannot delete an active or deployed unit. Recall unit first.']);
             exit();
         }
 
-        // 2. Safely delete the unit
+        // Safely delete unit
         $delStmt = $conn->prepare("DELETE FROM response_teams WHERE id = ?");
         $delStmt->bind_param("i", $team_id);
         
         if ($delStmt->execute()) {
             $delStmt->close();
-            ob_end_clean();
             echo json_encode(['success' => true, 'message' => 'Unit deleted successfully.']);
         } else {
             $err = $delStmt->error;
             $delStmt->close();
-            ob_end_clean();
             echo json_encode(['success' => false, 'message' => 'Database error: ' . $err]);
         }
         exit();

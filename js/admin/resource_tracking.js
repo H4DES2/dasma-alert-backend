@@ -43,7 +43,7 @@
         document.getElementById('new_team_name').value = "";
         document.getElementById('addUnitModal').style.display = 'flex';
     }
-    function deleteTeam(teamId, teamName) {
+   function deleteTeam(teamId, teamName) {
     customConfirm(
         "Delete Response Unit?",
         `Are you sure you want to permanently delete "${teamName}"? This action cannot be undone.`,
@@ -54,12 +54,21 @@
             formData.append('action', 'delete_team');
             formData.append('id', teamId);
 
-            fetch('../admin/admin_actions.php', {
+            // Use direct path in the same directory, passing action in query param as a fail-safe
+            fetch('admin_actions.php?action=delete_team', {
                 method: 'POST',
                 body: formData
             })
-            .then(res => res.json())
-            .then(data => {
+            .then(res => res.text())
+            .then(text => {
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    console.error("Server output:", text);
+                    throw new Error("Invalid response from server: " + text.substring(0, 100));
+                }
+
                 if (data.success) {
                     location.reload();
                 } else {
@@ -67,7 +76,8 @@
                 }
             })
             .catch(err => {
-                customAlert("Server Error", "An error occurred while deleting the unit.", "bx-error", "#d32f2f");
+                console.error("Delete error:", err);
+                customAlert("Server Error", err.message || "An error occurred while deleting the unit.", "bx-error", "#d32f2f");
             });
         }
     );
