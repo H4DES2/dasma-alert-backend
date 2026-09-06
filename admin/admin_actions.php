@@ -45,6 +45,11 @@ if ($check_col && $check_col->num_rows === 0) {
     $conn->query("ALTER TABLE incidents ADD COLUMN severity VARCHAR(50) DEFAULT 'Pending'");
     $conn->query("ALTER TABLE incidents ADD COLUMN admin_remarks TEXT DEFAULT NULL");
 }
+$check_boundary = $conn->query("SHOW COLUMNS FROM barangays LIKE 'boundary'");
+if ($check_boundary && $check_boundary->num_rows === 0) {
+    $conn->query("ALTER TABLE barangays ADD COLUMN boundary MULTIPOLYGON NULL SRID 4326");
+    @$conn->query("CREATE SPATIAL INDEX idx_barangay_boundary ON barangays(boundary)");
+}
 $conn->query("CREATE TABLE IF NOT EXISTS incident_logs (
     id INT AUTO_INCREMENT PRIMARY KEY,
     incident_id INT NOT NULL,
