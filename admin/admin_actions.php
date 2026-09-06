@@ -674,51 +674,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         echo json_encode($response);
         exit();
     }
-    // 🚀 SECURED: Delete Team
-    if ($action === 'delete_team') {
-        requireRole($ADMIN_TIER_ROLES, $role);
-        while (ob_get_level() > 0) { ob_end_clean(); }
-        header('Content-Type: application/json');
-
-        $team_id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
-
-        if ($team_id <= 0) {
-            echo json_encode(['success' => false, 'message' => 'Invalid unit ID.']);
-            exit();
-        }
-
-        // Check if unit is currently assigned to an incident
-        $checkStmt = $conn->prepare("SELECT team_name, current_incident_id, status FROM response_teams WHERE id = ?");
-        $checkStmt->bind_param("i", $team_id);
-        $checkStmt->execute();
-        $team = $checkStmt->get_result()->fetch_assoc();
-        $checkStmt->close();
-
-        if (!$team) {
-            echo json_encode(['success' => false, 'message' => 'Unit not found.']);
-            exit();
-        }
-
-        if (!empty($team['current_incident_id']) || $team['status'] === 'deployed' || $team['status'] === 'on-scene') {
-            echo json_encode(['success' => false, 'message' => 'Cannot delete an active or deployed unit. Recall unit first.']);
-            exit();
-        }
-
-        // Safely delete unit
-        $delStmt = $conn->prepare("DELETE FROM response_teams WHERE id = ?");
-        $delStmt->bind_param("i", $team_id);
-        
-        if ($delStmt->execute()) {
-            $delStmt->close();
-            echo json_encode(['success' => true, 'message' => 'Unit deleted successfully.']);
-        } else {
-            $err = $delStmt->error;
-            $delStmt->close();
-            echo json_encode(['success' => false, 'message' => 'Database error: ' . $err]);
-        }
-        exit();
-    }
-    // 🚀 NEW: Server-Sent Events (SSE) Stream Sync
+    
     if ($action === 'stream_sync') {
         requireRole($ADMIN_TIER_ROLES, $role);
         header('Content-Type: text/event-stream');
@@ -1084,7 +1040,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    // 🚀 SECURED: Update Team Status
+
+if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] === 'delete_team')) {
+        requireRole($ADMIN_TIER_ROLES, $role);
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
+
+        $team_id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
+
+        if ($team_id <= 0) {
+            echo json_encode(['success' => false, 'message' => 'Invalid unit ID.']);
+            exit();
+        }
+
+        // 1. Check if unit exists and is not currently deployed
+        $checkStmt = $conn->prepare("SELECT team_name, current_incident_id, status FROM response_teams WHERE id = ?");
+        $checkStmt->bind_param("i", $team_id);
+        $checkStmt->execute();
+        $team = $checkStmt->get_result()->fetch_assoc();
+        $checkStmt->close();
+
+        if (!$team) {
+            echo json_encode(['success' => false, 'message' => 'Unit not found in database.']);
+            exit();
+        }
+
+        if (!empty($team['current_incident_id']) || $team['status'] === 'deployed' || $team['status'] === 'on-scene') {
+            echo json_encode(['success' => false, 'message' => 'Cannot delete an active or deployed unit. Recall unit first.']);
+            exit();
+        }
+
+        // 2. Perform deletion
+        $delStmt = $conn->prepare("DELETE FROM response_teams WHERE id = ?");
+        $delStmt->bind_param("i", $team_id);
+        
+        if ($delStmt->execute()) {
+            $delStmt->close();
+            echo json_encode(['success' => true, 'message' => 'Unit deleted successfully.']);
+        } else {
+            $err = $delStmt->error;
+            $delStmt->close();
+            echo json_encode(['success' => false, 'message' => 'Database error: ' . $err]);
+        }
+        exit();
+    }
+    
     if ($action === 'update_team_status') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
