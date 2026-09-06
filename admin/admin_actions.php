@@ -117,19 +117,53 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
     exit();
 }
 
-if (isset($_POST['action']) && $_POST['action'] === 'reject_incident') {
-    requireRole($ADMIN_TIER_ROLES, $role);
-    ob_end_clean();
-    $ids_raw = $_POST['incident_id'] ?? '';
-    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
-    if (!empty($ids_array)) {
-        $id_list = implode(',', $ids_array);
-        $conn->query("UPDATE incidents SET status = 'rejected', admin_remarks = 'Rejected by Admin (False Alarm)' WHERE id IN ($id_list)");
-        $conn->query("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id IN ($id_list)");
+if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $a_allowed_mime = ["image/jpeg", "image/pjpeg", "image/png", "image/gif", "image/webp"];
+        $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
+        $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
+        finfo_close($a_finfo);
+
+        $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+        $allowed_exts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'jfif'];
+
+        if (!in_array($a_mime, $a_allowed_mime) || !in_array($ext, $allowed_exts) || !@getimagesize($_FILES["image"]["tmp_name"])) {
+            echo "Invalid image format ($a_mime / .$ext)."; 
+            exit();
+        }
+
+        // Standardize file name for Cloudinary (convert .jfif to .jpg)
+        $clean_ext = ($ext === 'jfif') ? 'jpg' : $ext;
+        $file_name = time() . '_' . bin2hex(random_bytes(4)) . '.' . $clean_ext;
+        $file_mime = ($ext === 'jfif') ? 'image/jpeg' : $a_mime;
+
+        // Upload to Cloudinary using unsigned preset
+        $cloud_name    = 'wyxsiraw';
+        $upload_preset = 'dasma_preset';
+
+        $cfile = new CURLFile($_FILES['image']['tmp_name'], $file_mime, $file_name);
+        $post_fields = [
+            'file'          => $cfile,
+            'upload_preset' => $upload_preset
+        ];
+
+        $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+        $response  = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $json_res = json_decode($response, true);
+        if ($http_code === 200 && !empty($json_res['secure_url'])) {
+            $image_path = $json_res['secure_url'];
+        } else {
+            echo "Cloudinary Upload Failed (HTTP {$http_code}): " . ($response ?: 'Empty response');
+            exit();
+        }
     }
-    echo json_encode(['success' => true]);
-    exit();
-}
 
 if (isset($_POST['action']) && $_POST['action'] === 'request_backup') {
     requireRole($ADMIN_TIER_ROLES, $role);
