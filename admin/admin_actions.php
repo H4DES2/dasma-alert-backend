@@ -991,31 +991,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $team_id = (int)($_GET['team_id'] ?? 0);
         $members = [];
         
-        $teamStmt = $conn->prepare("SELECT team_name, assigned_barangay FROM response_teams WHERE id = ?");
+        $teamStmt = $conn->prepare("SELECT id, team_name, team_type, assigned_barangay FROM response_teams WHERE id = ?");
         $teamStmt->bind_param("i", $team_id);
         $teamStmt->execute();
         $teamData = $teamStmt->get_result()->fetch_assoc();
         $teamStmt->close();
 
         if ($teamData) {
-            $team_name = $teamData['team_name'];
-            $assigned_barangay = $teamData['assigned_barangay'] ?? '';
+            $team_name = trim($teamData['team_name']);
+            $team_type = trim($teamData['team_type']);
+            $assigned_barangay = trim($teamData['assigned_barangay'] ?? '');
 
+            // Match responders by exact team name, department keyword, team type, or barangay unit
             $stmt = $conn->prepare("
-                SELECT u.id, u.first_name, u.last_name, p.radio_callsign, IFNULL(u.is_online, 0) as is_online
+                SELECT 
+                    u.id, 
+                    u.first_name, 
+                    u.last_name, 
+                    COALESCE(p.radio_callsign, 'No Callsign') as radio_callsign, 
+                    COALESCE(p.is_online, 0) as is_online
                 FROM users u 
                 LEFT JOIN user_profiles p ON u.id = p.user_id 
-                WHERE u.role = 'responder'
-                AND u.department IS NOT NULL 
-                AND u.department != ''
+                WHERE LOWER(TRIM(u.role)) = 'responder'
                 AND (
-                    u.department = ? 
-                    OR (? LIKE CONCAT('%', u.department, '%') AND u.barangay = ?)
+                    LOWER(TRIM(u.department)) = LOWER(?)
+                    OR LOWER(TRIM(u.department)) = LOWER(?)
+                    OR (? != '' AND LOWER(TRIM(u.department)) LIKE CONCAT('%', LOWER(?), '%'))
+                    OR (? != '' AND LOWER(TRIM(u.barangay)) = LOWER(?))
                 )
                 GROUP BY u.id
+                ORDER BY is_online DESC, u.first_name ASC
             ");
+
             if ($stmt) {
-                $stmt->bind_param("sss", $team_name, $team_name, $assigned_barangay);
+                $stmt->bind_param(
+                    "ssssss", 
+                    $team_name, 
+                    $team_type, 
+                    $team_type, 
+                    $team_type, 
+                    $assigned_barangay, 
+                    $assigned_barangay
+                );
                 $stmt->execute();
                 $result = $stmt->get_result();
                 while ($row = $result->fetch_assoc()) { 
