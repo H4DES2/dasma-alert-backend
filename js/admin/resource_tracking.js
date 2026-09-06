@@ -63,23 +63,18 @@
         });
     }
 
-    window.viewTeamMembers = function(teamId, teamName) {
+    function viewTeamMembers(teamId, teamName) {
     const modal = document.getElementById('teamMembersModal');
     const title = document.getElementById('tm_title');
     const content = document.getElementById('tm_content');
 
-    if (!modal || !title || !content) {
-        console.error("Modal elements missing from DOM.");
-        return;
-    }
+    if (!modal || !title || !content) return;
 
     title.innerText = teamName;
-    content.innerHTML = '<div style="text-align:center; padding: 25px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin" style="font-size: 1.8rem; margin-bottom: 8px;"></i><br>Loading personnel...</div>';
-    
-    // Force visible overlay
-    modal.style.setProperty('display', 'flex', 'important');
+    content.innerHTML = '<div style="text-align:center; padding: 25px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin" style="font-size: 1.8rem;"></i><br>Loading personnel...</div>';
+    modal.style.display = 'flex';
 
-    fetch(`../admin/admin_actions.php?action=get_team_members&team_id=${teamId}`)
+    fetch(`admin_actions.php?action=get_team_members&team_id=${encodeURIComponent(teamId)}`)
     .then(res => res.json())
     .then(data => {
         if (!Array.isArray(data) || data.length === 0) {
@@ -116,7 +111,20 @@
         content.innerHTML = html;
     })
     .catch(err => {
-        console.error("Failed to load personnel:", err);
-        content.innerHTML = '<div style="text-align:center; padding: 20px; color: #d32f2f; font-weight: bold;">Failed to load personnel. Check network console.</div>';
+        console.error("Failed to fetch unit members:", err);
+        content.innerHTML = '<div style="text-align:center; padding: 20px; color: #d32f2f; font-weight: bold;">Failed to load personnel.</div>';
     });
-};
+}
+
+// Global click delegation for all unit rows
+document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('.clickable-row').forEach(row => {
+        row.addEventListener('click', () => {
+            const teamId = row.getAttribute('data-team-id');
+            const teamName = row.getAttribute('data-team-name');
+            if (teamId) {
+                viewTeamMembers(teamId, teamName);
+            }
+        });
+    });
+});

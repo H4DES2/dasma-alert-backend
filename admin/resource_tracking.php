@@ -201,12 +201,12 @@ if ($teams_result && $teams_result->num_rows > 0) {
                                 
                                 $assigned_to = !empty($team['assigned_barangay']) ? htmlspecialchars($team['assigned_barangay']) : 'City-Wide';
                             ?>
-                            <tr class="clickable-row" style="cursor: pointer !important;" onclick="window.viewTeamMembers(<?php echo (int)$team['id']; ?>, '<?php echo addslashes($team['team_name']); ?>')">
-    <td style="pointer-events: none;"><strong><?php echo htmlspecialchars($team['team_name']); ?></strong></td>
-    <td style="pointer-events: none;"><i class='bx <?php echo $type_icon; ?>' style="font-size: 1.2rem; vertical-align: middle; margin-right: 8px; opacity: 0.7;"></i> <?php echo htmlspecialchars($team['team_type']); ?></td>
-    <td style="pointer-events: none;"><strong style="color:#1976d2; font-size:0.85rem;"><i class='bx bxs-map-pin'></i> <?php echo $assigned_to; ?></strong></td>
-    <td style="pointer-events: none;"><span class="badge <?php echo $team['status']; ?>"><?php echo strtoupper($team['status']); ?></span></td>
-</tr>
+                            <tr class="clickable-row" data-team-id="<?php echo (int)$team['id']; ?>" data-team-name="<?php echo htmlspecialchars($team['team_name'], ENT_QUOTES); ?>" style="cursor: pointer;">
+                                <td><strong><?php echo htmlspecialchars($team['team_name']); ?></strong></td>
+                                <td><i class='bx <?php echo $type_icon; ?>' style="font-size: 1.2rem; vertical-align: middle; margin-right: 8px; opacity: 0.7;"></i> <?php echo htmlspecialchars($team['team_type']); ?></td>
+                                <td><strong style="color:#1976d2; font-size:0.85rem;"><i class='bx bxs-map-pin'></i> <?php echo $assigned_to; ?></strong></td>
+                                <td><span class="badge <?php echo $team['status']; ?>"><?php echo strtoupper($team['status']); ?></span></td>
+                            </tr>
                             <?php endforeach; ?>
                         <?php endif; ?>
                     </tbody>
