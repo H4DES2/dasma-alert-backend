@@ -983,7 +983,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         exit();
     }
 
-    // 🚀 SECURED: Get Team Members (Accurate Schema-Mapped)
+    // 🚀 SECURED: Get Team Members (Strict Assignment Only - No Fallback)
     if ($action === 'get_team_members') {
         requireRole($ADMIN_TIER_ROLES, $role);
         while (ob_get_level() > 0) { ob_end_clean(); }
@@ -1003,7 +1003,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $team_type = trim($teamData['team_type']);
             $assigned_brgy = trim($teamData['assigned_barangay'] ?? '');
 
-            // 1. Match responder directly assigned to this unit name or matching type
+            // Strict matching by explicit unit assignment or unit sector
             $stmt = $conn->prepare("
                 SELECT 
                     u.id, 
@@ -1017,7 +1017,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 WHERE LOWER(TRIM(u.role)) = 'responder'
                 AND (
                     LOWER(TRIM(u.department)) = LOWER(?)
-                    OR LOWER(TRIM(u.department)) = LOWER(?)
                     OR (? != '' AND LOWER(TRIM(u.barangay)) = LOWER(?))
                 )
                 GROUP BY u.id, u.first_name, u.last_name, u.username, u.is_online
@@ -1025,7 +1024,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             ");
 
             if ($stmt) {
-                $stmt->bind_param("ssss", $team_name, $team_type, $assigned_brgy, $assigned_brgy);
+                $stmt->bind_param("sss", $team_name, $assigned_brgy, $assigned_brgy);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 while ($row = $res->fetch_assoc()) {
@@ -1033,30 +1032,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     $members[] = $row;
                 }
                 $stmt->close();
-            }
-
-            // 2. If this unit has no direct responders assigned, list all available responders across the department
-            if (empty($members)) {
-                $fallback = $conn->query("
-                    SELECT 
-                        u.id, 
-                        u.first_name, 
-                        u.last_name, 
-                        u.username,
-                        COALESCE(MAX(p.radio_callsign), 'Unit Responder') AS radio_callsign, 
-                        u.is_online
-                    FROM users u 
-                    LEFT JOIN user_profiles p ON u.id = p.user_id 
-                    WHERE LOWER(TRIM(u.role)) = 'responder'
-                    GROUP BY u.id, u.first_name, u.last_name, u.username, u.is_online
-                    ORDER BY u.is_online DESC, u.first_name ASC
-                ");
-                if ($fallback) {
-                    while ($row = $fallback->fetch_assoc()) {
-                        $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')) ?: $row['username'];
-                        $members[] = $row;
-                    }
-                }
             }
         }
         
