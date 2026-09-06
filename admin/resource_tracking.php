@@ -251,11 +251,11 @@ if ($teams_result && $teams_result->num_rows > 0) {
     </div>
 
     <!-- Team Members Modal -->
-    <div id="teamMembersModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(4px);">
-        <div class="modal-content" style="max-width: 450px; width: 90%; background: #1e1e1e; border: 1px solid rgba(255,255,255,0.1); border-radius: 16px; padding: 24px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+    <div id="teamMembersModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.75); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(5px);">
+        <div class="modal-content" style="max-width: 460px; width: 92%; background: #18191a; border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px; box-shadow: 0 12px 35px rgba(0,0,0,0.6); position:relative;">
             <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
                 <h3 style="margin:0; color: #fff; font-size: 1.25rem;"><i class='bx bxs-group' style="color: #1976d2;"></i> <span id="tm_title">Unit Personnel</span></h3>
-                <span class="close-modal" onclick="closeModal('teamMembersModal')" style="color: #aaa; font-size: 1.8rem; cursor:pointer; line-height: 1;">&times;</span>
+                <span class="close-modal" onclick="closeModal('teamMembersModal')" style="color: #bbb; font-size: 2rem; cursor:pointer; line-height: 1;">&times;</span>
             </div>
             <div class="modal-body" id="tm_content" style="max-height: 380px; overflow-y: auto;">
                 <div style="text-align:center; padding: 20px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin"></i> Loading personnel...</div>
