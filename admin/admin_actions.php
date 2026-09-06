@@ -983,7 +983,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         exit();
     }
 
-    // 🚀 SECURED: Get Team Members (Compatible with sql_mode=only_full_group_by)
+    // 🚀 SECURED: Get Team Members (Accurate Schema-Mapped)
     if ($action === 'get_team_members') {
         requireRole($ADMIN_TIER_ROLES, $role);
         while (ob_get_level() > 0) { ob_end_clean(); }
@@ -992,7 +992,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $team_id = (int)($_GET['team_id'] ?? 0);
         $members = [];
         
-        $teamStmt = $conn->prepare("SELECT team_name, team_type, assigned_barangay FROM response_teams WHERE id = ?");
+        $teamStmt = $conn->prepare("SELECT id, team_name, team_type, assigned_barangay FROM response_teams WHERE id = ?");
         $teamStmt->bind_param("i", $team_id);
         $teamStmt->execute();
         $teamData = $teamStmt->get_result()->fetch_assoc();
@@ -1001,60 +1001,59 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if ($teamData) {
             $team_name = trim($teamData['team_name']);
             $team_type = trim($teamData['team_type']);
-            $assigned_barangay = trim($teamData['assigned_barangay'] ?? '');
+            $assigned_brgy = trim($teamData['assigned_barangay'] ?? '');
 
-            // 1. Query matching team name, type, or sector
+            // 1. Match responder directly assigned to this unit name or matching type
             $stmt = $conn->prepare("
                 SELECT 
                     u.id, 
-                    COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.username) AS name,
+                    u.first_name, 
+                    u.last_name, 
+                    u.username,
                     COALESCE(MAX(p.radio_callsign), 'Unit Responder') AS radio_callsign, 
-                    COALESCE(MAX(u.is_online), MAX(p.is_online), 0) AS is_online
+                    u.is_online
                 FROM users u 
                 LEFT JOIN user_profiles p ON u.id = p.user_id 
                 WHERE LOWER(TRIM(u.role)) = 'responder'
                 AND (
-                    LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
-                    OR LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
-                    OR (? != '' AND LOWER(TRIM(COALESCE(u.barangay, ''))) = LOWER(?))
+                    LOWER(TRIM(u.department)) = LOWER(?)
+                    OR LOWER(TRIM(u.department)) = LOWER(?)
+                    OR (? != '' AND LOWER(TRIM(u.barangay)) = LOWER(?))
                 )
-                GROUP BY u.id, u.first_name, u.last_name, u.username
-                ORDER BY is_online DESC, u.id ASC
+                GROUP BY u.id, u.first_name, u.last_name, u.username, u.is_online
+                ORDER BY u.is_online DESC, u.first_name ASC
             ");
 
             if ($stmt) {
-                $stmt->bind_param("ssss", $team_name, $team_type, $assigned_barangay, $assigned_barangay);
+                $stmt->bind_param("ssss", $team_name, $team_type, $assigned_brgy, $assigned_brgy);
                 $stmt->execute();
                 $res = $stmt->get_result();
                 while ($row = $res->fetch_assoc()) {
-                    $parts = explode(' ', $row['name'], 2);
-                    $row['first_name'] = $parts[0];
-                    $row['last_name']  = $parts[1] ?? '';
+                    $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')) ?: $row['username'];
                     $members[] = $row;
                 }
                 $stmt->close();
             }
 
-            // 2. If no direct department match, list all responders across the city
+            // 2. If this unit has no direct responders assigned, list all available responders across the department
             if (empty($members)) {
-                $fallbackRes = $conn->query("
+                $fallback = $conn->query("
                     SELECT 
                         u.id, 
-                        COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.username) AS name,
+                        u.first_name, 
+                        u.last_name, 
+                        u.username,
                         COALESCE(MAX(p.radio_callsign), 'Unit Responder') AS radio_callsign, 
-                        COALESCE(MAX(u.is_online), MAX(p.is_online), 0) AS is_online
+                        u.is_online
                     FROM users u 
                     LEFT JOIN user_profiles p ON u.id = p.user_id 
                     WHERE LOWER(TRIM(u.role)) = 'responder'
-                    GROUP BY u.id, u.first_name, u.last_name, u.username
-                    ORDER BY is_online DESC, u.id ASC
+                    GROUP BY u.id, u.first_name, u.last_name, u.username, u.is_online
+                    ORDER BY u.is_online DESC, u.first_name ASC
                 ");
-
-                if ($fallbackRes) {
-                    while ($row = $fallbackRes->fetch_assoc()) {
-                        $parts = explode(' ', $row['name'], 2);
-                        $row['first_name'] = $parts[0];
-                        $row['last_name']  = $parts[1] ?? '';
+                if ($fallback) {
+                    while ($row = $fallback->fetch_assoc()) {
+                        $row['name'] = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? '')) ?: $row['username'];
                         $members[] = $row;
                     }
                 }

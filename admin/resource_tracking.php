@@ -251,14 +251,16 @@ if ($teams_result && $teams_result->num_rows > 0) {
     </div>
 
     <!-- Team Members Modal -->
-    <div id="teamMembersModal" class="modal" style="display:none; position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.75); z-index:99999; justify-content:center; align-items:center; backdrop-filter:blur(5px);">
-        <div class="modal-content" style="max-width: 460px; width: 92%; background: #18191a; border: 1px solid rgba(255,255,255,0.12); border-radius: 18px; padding: 24px; box-shadow: 0 12px 35px rgba(0,0,0,0.6); position:relative;">
-            <div class="modal-header" style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 16px;">
-                <h3 style="margin:0; color: #fff; font-size: 1.25rem;"><i class='bx bxs-group' style="color: #1976d2;"></i> <span id="tm_title">Unit Personnel</span></h3>
-                <span class="close-modal" onclick="closeModal('teamMembersModal')" style="color: #bbb; font-size: 2rem; cursor:pointer; line-height: 1;">&times;</span>
+    <div id="teamMembersModal" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; background:rgba(0,0,0,0.8); z-index:999999; justify-content:center; align-items:center; backdrop-filter:blur(6px);">
+        <div style="max-width: 480px; width: 92%; background: #18191a; border: 1px solid rgba(255,255,255,0.15); border-radius: 20px; padding: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.8); position:relative; color:#fff;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 20px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 12px;">
+                <h3 style="margin:0; font-size: 1.3rem; display:flex; align-items:center; gap:8px;">
+                    <i class='bx bxs-group' style="color: #1976d2;"></i> <span id="tm_title">Unit Personnel</span>
+                </h3>
+                <span onclick="document.getElementById('teamMembersModal').style.display='none'" style="color: #aaa; font-size: 2rem; cursor:pointer; line-height: 1; font-weight: 300;">&times;</span>
             </div>
-            <div class="modal-body" id="tm_content" style="max-height: 380px; overflow-y: auto;">
-                <div style="text-align:center; padding: 20px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin"></i> Loading personnel...</div>
+            <div id="tm_content" style="max-height: 400px; overflow-y: auto;">
+                <div style="text-align:center; padding: 25px; opacity:0.6;"><i class="bx bx-loader-alt bx-spin"></i> Loading personnel...</div>
             </div>
         </div>
     </div>
