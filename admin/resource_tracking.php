@@ -272,6 +272,6 @@ if ($teams_result && $teams_result->num_rows > 0) {
             <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
-<script src="../js/admin/resource_tracking.js?v=<?= filemtime('../js/admin/resource_tracking.js') ?>" defer></script>
+<script src="../js/admin/resource_tracking.js?v=<?= time() ?>" defer></script>
 </body>
 </html>
