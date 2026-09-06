@@ -65,65 +65,46 @@ if ($check_col_up && $check_col_up->num_rows === 0) {
 }
 // =========================================================================================
 
-// 🚀 SECURED: Save Announcement
-if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
-    requireRole($ADMIN_TIER_ROLES, $role);
-    ob_end_clean(); 
-    $id = isset($_POST['id']) && !empty($_POST['id']) ? (int)$_POST['id'] : null;
-    $title = $_POST['title'];
-    $message = $_POST['message'];
-    
-    $author_id = $_SESSION['user_id']; 
-    $image_path = null;
-
-    if (isset($_FILES['image']) && $_FILES['image']['name'] !== '') {
-        if ($_FILES['image']['error'] !== UPLOAD_ERR_OK) {
-            echo "Upload Error Code: " . $_FILES['image']['error']; exit();
-        }
-        $target_dir = $_SERVER['DOCUMENT_ROOT'] . "/dasma_api/uploads/announcements/";
-        if (!is_dir($target_dir)) { mkdir($target_dir, 0777, true); }
-        
-       // PATCH VULN-A04: MIME + extension whitelist
-        $a_allowed_mime = ["image/jpeg", "image/png", "image/gif", "image/webp", "image/pjpeg"];
-        $a_allowed_ext  = ["jpg", "jpeg", "png", "gif", "webp", "jfif"];
+if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+        $a_allowed_mime = ["image/jpeg", "image/png", "image/gif", "image/webp"];
         $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
         $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
         finfo_close($a_finfo);
-        $a_ext   = strtolower(pathinfo($_FILES["image"]["name"], PATHINFO_EXTENSION));
 
-        if (!in_array($a_mime, $a_allowed_mime) || !in_array($a_ext, $a_allowed_ext) || !getimagesize($_FILES["image"]["tmp_name"])) {
-            echo "invalid_file_type"; exit();
+        if (!in_array($a_mime, $a_allowed_mime) || !@getimagesize($_FILES["image"]["tmp_name"])) {
+            echo "invalid_file_type"; 
+            exit();
         }
 
-        // Standardize jfif to jpg
-        if ($a_ext === 'jfif') {
-            $a_ext = 'jpg';
-        }
+        // Upload to Cloudinary
+        $cloud_name    = 'wyxsiraw';
+        $upload_preset = 'dasma_preset';
 
-        $filename = time() . "_" . bin2hex(random_bytes(4)) . "." . $a_ext;
-        $target_file = $target_dir . $filename;
-        if (move_uploaded_file($_FILES["image"]["tmp_name"], $target_file)) {
-            $image_path = "uploads/announcements/" . $filename;
-        }
-    }
+        $cfile = new CURLFile($_FILES['image']['tmp_name'], $a_mime, $_FILES['image']['name']);
+        $post_fields = [
+            'file'          => $cfile,
+            'upload_preset' => $upload_preset,
+            'folder'        => 'dasma_announcements'
+        ];
 
-    if ($id) {
-        if ($image_path) {
-            $stmt = $conn->prepare("UPDATE announcements SET title=?, message=?, image_path=? WHERE id=?");
-            $stmt->bind_param("sssi", $title, $message, $image_path, $id);
+        $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+        $response  = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $json_res = json_decode($response, true);
+        if ($http_code === 200 && !empty($json_res['secure_url'])) {
+            $image_path = $json_res['secure_url'];
         } else {
-            $stmt = $conn->prepare("UPDATE announcements SET title=?, message=? WHERE id=?");
-            $stmt->bind_param("ssi", $title, $message, $id);
+            echo "Cloudinary Upload Failed: " . ($response ?: 'No response');
+            exit();
         }
-    } else {
-        $stmt = $conn->prepare("INSERT INTO announcements (author_id, title, message, image_path) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("isss", $author_id, $title, $message, $image_path);
     }
-    
-    if ($stmt->execute()) { echo "success"; } else { echo "Database Error: " . $stmt->error; }
-    $stmt->close();
-    exit();
-}
 
 // 🚀 SECURED: Delete Announcement
 if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {

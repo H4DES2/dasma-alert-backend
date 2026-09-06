@@ -277,16 +277,16 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                                     </td>
                                     <td style="text-align:center;">
                                         <?php if(!empty($ann['image_path'])): ?>
-                                            <img src="/<?php echo ltrim(str_replace('dasma_api/', '', $ann['image_path']), '/'); ?>" style="height:56px; width:80px; border-radius:var(--radius-md); object-fit:cover; border: 1px solid var(--border-color);">
+                                            <?php 
+                                                $imgUrl = $ann['image_path'];
+                                                if (!str_starts_with($imgUrl, 'http')) {
+                                                    $imgUrl = 'https://dasma-api-l9ql.onrender.com/' . ltrim(str_replace('dasma_api/', '', $imgUrl), '/');
+                                                }
+                                            ?>
+                                            <img src="<?php echo htmlspecialchars($imgUrl, ENT_QUOTES); ?>" style="height:56px; width:80px; border-radius:var(--radius-md); object-fit:cover; border: 1px solid var(--border-color);">
                                         <?php else: ?>
                                             <span style="color:var(--text-muted); font-style:italic; font-size: 0.8rem;">No Image</span>
                                         <?php endif; ?>
-                                    </td>
-                                    <td style="text-align: center;">
-                                        <div style="display:flex; gap:8px; justify-content:center;">
-                                            <button class="btn-sm" style="background:var(--color-success); padding:8px;" onclick="openAnnouncementModal(<?php echo $ann['id']; ?>, '<?php echo addslashes($ann['title']); ?>', '<?php echo addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $ann['message'])); ?>')"><i class='bx bx-edit' style="font-size: 1.1rem;"></i></button>
-                                            <button class="btn-sm" style="background:var(--color-critical); padding:8px;" onclick="deleteAnnouncement(<?php echo $ann['id']; ?>)"><i class='bx bx-trash' style="font-size: 1.1rem;"></i></button>
-                                        </div>
                                     </td>
                                 </tr>
                             <?php endforeach; ?>

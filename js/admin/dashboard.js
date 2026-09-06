@@ -459,7 +459,24 @@ function openMobileModal(row) {
 
     document.getElementById('mobileIncidentModal').style.display = 'flex';
 }
+function deleteAnnouncement(id) {
+    customConfirm("Delete Announcement", "Are you sure you want to permanently delete this announcement?", "bx-trash", "#ef4444", function() {
+        let fd = new FormData();
+        fd.append('action', 'delete_announcement');
+        fd.append('id', id);
 
+        fetch(API_PATH, { method: 'POST', body: fd })
+        .then(r => r.text())
+        .then(res => {
+            if (res.trim() === 'success') {
+                location.reload();
+            } else {
+                customAlert("Delete Failed", res, "bx-error", "#ef4444");
+            }
+        })
+        .catch(err => customAlert("Error", err.message, "bx-error", "#ef4444"));
+    });
+}
 function saveAnnouncement() {
     let id = document.getElementById('ann_id').value;
     let title = document.getElementById('ann_title').value.trim();
