@@ -988,10 +988,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         requireRole($ADMIN_TIER_ROLES, $role);
         if (ob_get_length()) ob_end_clean();
         header('Content-Type: application/json');
+        
         $team_id = (int)($_GET['team_id'] ?? 0);
         $members = [];
         
-        $teamStmt = $conn->prepare("SELECT id, team_name, team_type, assigned_barangay FROM response_teams WHERE id = ?");
+        $teamStmt = $conn->prepare("SELECT team_name, team_type, assigned_barangay FROM response_teams WHERE id = ?");
         $teamStmt->bind_param("i", $team_id);
         $teamStmt->execute();
         $teamData = $teamStmt->get_result()->fetch_assoc();
@@ -1002,48 +1003,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $team_type = trim($teamData['team_type']);
             $assigned_barangay = trim($teamData['assigned_barangay'] ?? '');
 
+            // 1. Try to find responders specifically matched to this team or department
             $stmt = $conn->prepare("
                 SELECT 
                     u.id, 
-                    u.first_name, 
-                    u.last_name, 
-                    COALESCE(p.radio_callsign, 'No Callsign') as radio_callsign, 
-                    COALESCE(u.is_online, 0) as is_online
+                    COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.username) AS name,
+                    COALESCE(p.radio_callsign, 'Unit Responder') AS radio_callsign, 
+                    COALESCE(p.is_online, 0) AS is_online
                 FROM users u 
                 LEFT JOIN user_profiles p ON u.id = p.user_id 
                 WHERE LOWER(TRIM(u.role)) = 'responder'
                 AND (
                     LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
                     OR LOWER(TRIM(COALESCE(u.department, ''))) = LOWER(?)
-                    OR (? != '' AND LOWER(TRIM(COALESCE(u.department, ''))) LIKE CONCAT('%', LOWER(?), '%'))
                     OR (? != '' AND LOWER(TRIM(COALESCE(u.barangay, ''))) = LOWER(?))
-                    OR ? = 'City-Wide'
-                    OR ? = ''
                 )
                 GROUP BY u.id
-                ORDER BY is_online DESC, u.first_name ASC
+                ORDER BY is_online DESC, u.id ASC
             ");
 
             if ($stmt) {
-                $stmt->bind_param(
-                    "ssssssss", 
-                    $team_name, 
-                    $team_type, 
-                    $team_type, 
-                    $team_type, 
-                    $assigned_barangay, 
-                    $assigned_barangay,
-                    $assigned_barangay,
-                    $assigned_barangay
-                );
+                $stmt->bind_param("ssss", $team_name, $team_type, $assigned_barangay, $assigned_barangay);
                 $stmt->execute();
-                $result = $stmt->get_result();
-                while ($row = $result->fetch_assoc()) { 
-                    $members[] = $row; 
+                $res = $stmt->get_result();
+                while ($row = $res->fetch_assoc()) {
+                    $parts = explode(' ', $row['name'], 2);
+                    $row['first_name'] = $parts[0];
+                    $row['last_name'] = $parts[1] ?? '';
+                    $members[] = $row;
                 }
                 $stmt->close();
             }
+
+            // 2. If no specific department match was found, list all registered responders in the system
+            if (empty($members)) {
+                $fallbackStmt = $conn->query("
+                    SELECT 
+                        u.id, 
+                        COALESCE(NULLIF(TRIM(CONCAT(COALESCE(u.first_name, ''), ' ', COALESCE(u.last_name, ''))), ''), u.username) AS name,
+                        COALESCE(p.radio_callsign, 'Unit Responder') AS radio_callsign, 
+                        COALESCE(p.is_online, 0) AS is_online
+                    FROM users u 
+                    LEFT JOIN user_profiles p ON u.id = p.user_id 
+                    WHERE LOWER(TRIM(u.role)) = 'responder'
+                    GROUP BY u.id
+                    ORDER BY is_online DESC, u.id ASC
+                ");
+                if ($fallbackStmt) {
+                    while ($row = $fallbackStmt->fetch_assoc()) {
+                        $parts = explode(' ', $row['name'], 2);
+                        $row['first_name'] = $parts[0];
+                        $row['last_name'] = $parts[1] ?? '';
+                        $members[] = $row;
+                    }
+                }
+            }
         }
+        
         echo json_encode($members);
         exit();
     }
