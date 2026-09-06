@@ -63,42 +63,60 @@
         });
     }
 
-    function viewTeamMembers(teamId, teamName) {
-        document.getElementById('tm_title').innerText = teamName;
-        document.getElementById('tm_content').innerHTML = '<div style="text-align:center; padding: 20px; opacity:0.6;"><i class="bx bx-loader-alt bx-spin"></i> Loading...</div>';
-        document.getElementById('teamMembersModal').style.display = 'flex';
+    window.viewTeamMembers = function(teamId, teamName) {
+    const modal = document.getElementById('teamMembersModal');
+    const title = document.getElementById('tm_title');
+    const content = document.getElementById('tm_content');
 
-        fetch(`../admin/admin_actions.php?action=get_team_members&team_id=${teamId}`)
-        .then(res => res.json())
-        .then(data => {
-            if(data.length === 0) {
-                document.getElementById('tm_content').innerHTML = '<div style="text-align:center; padding: 20px; font-weight: bold; color: #888;">No responders assigned to this unit yet.</div>';
-            } else {
-                let html = '';
-                data.forEach(user => {
-                    // 🚀 FIX: Online/Offline Status Logic
-                    let isOnline = (user.is_online == 1 || user.is_online == '1');
-                    let statusColor = isOnline ? '#3ada38' : '#888888';
-                    let statusText = isOnline ? 'Online' : 'Offline';
-                    let statusBg = isOnline ? 'rgba(58, 218, 56, 0.1)' : 'rgba(136, 136, 136, 0.1)';
-
-                    html += `<div class="team-member-card" style="background: #f8f9fa; padding: 15px; border-radius: 15px; margin-bottom: 10px; border: 1px solid #edf2f7; display:flex; align-items:center; gap: 15px;">
-                        <div class="team-member-icon-bg" style="background: #eef2f7; width: 45px; height: 45px; border-radius: 50%; display:flex; align-items:center; justify-content:center; position:relative;">
-                            <i class='bx bxs-user-badge' style="font-size:1.5rem; color:#1976d2;"></i>
-                            <span class="status-border" style="position: absolute; bottom: -2px; right: -2px; width: 14px; height: 14px; background: ${statusColor}; border: 3px solid #f8f9fa; border-radius: 50%;"></span>
-                        </div>
-                        <div style="flex: 1;">
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div class="team-member-name" style="font-weight: 800; color: #333; font-size:1.1rem;">${user.first_name} ${user.last_name}</div>
-                                <div style="background: ${statusBg}; color: ${statusColor}; padding: 4px 8px; border-radius: 8px; font-size: 0.65rem; font-weight: 900; text-transform: uppercase; letter-spacing: 0.5px;">${statusText}</div>
-                            </div>
-                            <div style="font-size: 0.8rem; color: #888; text-transform: uppercase; font-weight: 800; margin-top:2px;"><i class='bx bx-radio'></i> ${user.radio_callsign || 'No Callsign'}</div>
-                        </div>
-                    </div>`;
-                });
-                document.getElementById('tm_content').innerHTML = html;
-            }
-        }).catch(e => {
-            document.getElementById('tm_content').innerHTML = '<div style="text-align:center; color: #d32f2f; font-weight:bold;">Failed to load personnel.</div>';
-        });
+    if (!modal || !title || !content) {
+        console.error("Modal elements missing from DOM.");
+        return;
     }
+
+    title.innerText = teamName;
+    content.innerHTML = '<div style="text-align:center; padding: 25px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin" style="font-size: 1.8rem; margin-bottom: 8px;"></i><br>Loading personnel...</div>';
+    
+    // Force visible overlay
+    modal.style.setProperty('display', 'flex', 'important');
+
+    fetch(`../admin/admin_actions.php?action=get_team_members&team_id=${teamId}`)
+    .then(res => res.json())
+    .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+            content.innerHTML = '<div style="text-align:center; padding: 30px; font-weight: 700; color: #888;">No responders assigned to this unit yet.</div>';
+            return;
+        }
+
+        let html = '';
+        data.forEach(user => {
+            const isOnline = (user.is_online == 1 || user.is_online === '1');
+            const statusColor = isOnline ? '#3ada38' : '#888888';
+            const statusText = isOnline ? 'Online' : 'Offline';
+            const statusBg = isOnline ? 'rgba(58, 218, 56, 0.15)' : 'rgba(136, 136, 136, 0.15)';
+            const displayName = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'Responder';
+
+            html += `
+            <div style="background: #252628; padding: 14px 16px; border-radius: 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 14px;">
+                <div style="background: #1e1e1e; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0;">
+                    <i class='bx bxs-user-badge' style="font-size: 1.6rem; color: #1976d2;"></i>
+                    <span style="position: absolute; bottom: 0px; right: 0px; width: 12px; height: 12px; background: ${statusColor}; border: 2px solid #252628; border-radius: 50%;"></span>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <div style="font-weight: 800; color: #fff; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</div>
+                        <div style="background: ${statusBg}; color: ${statusColor}; padding: 3px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.5px; flex-shrink: 0;">${statusText}</div>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #aaa; font-weight: 700; margin-top: 3px;">
+                        <i class='bx bx-radio' style="vertical-align: middle;"></i> ${user.radio_callsign || 'Unit Responder'}
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        content.innerHTML = html;
+    })
+    .catch(err => {
+        console.error("Failed to load personnel:", err);
+        content.innerHTML = '<div style="text-align:center; padding: 20px; color: #d32f2f; font-weight: bold;">Failed to load personnel. Check network console.</div>';
+    });
+};
