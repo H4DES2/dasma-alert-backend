@@ -117,53 +117,106 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
     exit();
 }
 
-if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $a_allowed_mime = ["image/jpeg", "image/pjpeg", "image/png", "image/gif", "image/webp"];
-        $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
-        finfo_close($a_finfo);
+// 🚀 SECURED: Save Announcement
+if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
+    requireRole($ADMIN_TIER_ROLES, $role);
+    while (ob_get_level() > 0) { ob_end_clean(); }
 
-        $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
-        $allowed_exts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'jfif'];
-
-        if (!in_array($a_mime, $a_allowed_mime) || !in_array($ext, $allowed_exts) || !@getimagesize($_FILES["image"]["tmp_name"])) {
-            echo "Invalid image format ($a_mime / .$ext)."; 
-            exit();
+    try {
+        // Auto-Repair schema: ensure required columns exist
+        $cols = [];
+        $col_res = $conn->query("SHOW COLUMNS FROM announcements");
+        if ($col_res) {
+            while ($c = $col_res->fetch_assoc()) {
+                $cols[] = $c['Field'];
+            }
         }
 
-        // Standardize file name for Cloudinary (convert .jfif to .jpg)
-        $clean_ext = ($ext === 'jfif') ? 'jpg' : $ext;
-        $file_name = time() . '_' . bin2hex(random_bytes(4)) . '.' . $clean_ext;
-        $file_mime = ($ext === 'jfif') ? 'image/jpeg' : $a_mime;
+        if (!in_array('author_id', $cols)) {
+            $conn->query("ALTER TABLE announcements ADD COLUMN author_id INT DEFAULT NULL");
+        }
+        if (!in_array('image_path', $cols)) {
+            $conn->query("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(500) DEFAULT NULL");
+        }
 
-        // Upload to Cloudinary using unsigned preset
-        $cloud_name    = 'wyxsiraw';
-        $upload_preset = 'dasma_preset';
+        $id        = isset($_POST['id']) && !empty($_POST['id']) ? (int)$_POST['id'] : null;
+        $title     = trim($_POST['title'] ?? '');
+        $message   = trim($_POST['message'] ?? '');
+        $author_id = !empty($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 1;
+        $image_path = null;
 
-        $cfile = new CURLFile($_FILES['image']['tmp_name'], $file_mime, $file_name);
-        $post_fields = [
-            'file'          => $cfile,
-            'upload_preset' => $upload_preset
-        ];
+        // Cloudinary upload
+        if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
+            $a_allowed_mime = ["image/jpeg", "image/pjpeg", "image/png", "image/gif", "image/webp"];
+            $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
+            finfo_close($a_finfo);
 
-        $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'jfif'];
 
-        $response  = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            if (!in_array($a_mime, $a_allowed_mime) || !in_array($ext, $allowed_exts) || !@getimagesize($_FILES["image"]["tmp_name"])) {
+                echo "Invalid image format ($a_mime / .$ext).";
+                exit();
+            }
 
-        $json_res = json_decode($response, true);
-        if ($http_code === 200 && !empty($json_res['secure_url'])) {
-            $image_path = $json_res['secure_url'];
+            $clean_ext  = ($ext === 'jfif') ? 'jpg' : $ext;
+            $file_name  = time() . '_' . bin2hex(random_bytes(4)) . '.' . $clean_ext;
+            $file_mime  = ($ext === 'jfif') ? 'image/jpeg' : $a_mime;
+            $cloud_name = 'wyxsiraw';
+            $preset     = 'dasma_preset';
+
+            $cfile = new CURLFile($_FILES['image']['tmp_name'], $file_mime, $file_name);
+            $post_fields = [
+                'file'          => $cfile,
+                'upload_preset' => $preset
+            ];
+
+            $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+            $response  = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $json_res = json_decode($response, true);
+            if ($http_code === 200 && !empty($json_res['secure_url'])) {
+                $image_path = $json_res['secure_url'];
+            } else {
+                echo "Cloudinary Upload Failed (HTTP {$http_code}): " . ($response ?: 'No response');
+                exit();
+            }
+        }
+
+        // Database insert / update
+        if ($id) {
+            if ($image_path) {
+                $stmt = $conn->prepare("UPDATE announcements SET title=?, message=?, image_path=? WHERE id=?");
+                $stmt->bind_param("sssi", $title, $message, $image_path, $id);
+            } else {
+                $stmt = $conn->prepare("UPDATE announcements SET title=?, message=? WHERE id=?");
+                $stmt->bind_param("ssi", $title, $message, $id);
+            }
         } else {
-            echo "Cloudinary Upload Failed (HTTP {$http_code}): " . ($response ?: 'Empty response');
-            exit();
+            $stmt = $conn->prepare("INSERT INTO announcements (author_id, title, message, image_path) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("isss", $author_id, $title, $message, $image_path);
         }
+
+        if ($stmt->execute()) {
+            $stmt->close();
+            echo "success";
+        } else {
+            echo "Database Execute Error: " . $stmt->error;
+            $stmt->close();
+        }
+    } catch (Throwable $e) {
+        echo "Server Exception: " . $e->getMessage();
     }
+    exit();
+}
 
 if (isset($_POST['action']) && $_POST['action'] === 'request_backup') {
     requireRole($ADMIN_TIER_ROLES, $role);
