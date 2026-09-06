@@ -327,65 +327,80 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         header('Content-Type: application/json');
 
         if (!function_exists('getStrictBarangay')) {
-            function getStrictBarangay($lat, $lng, $fallbackText) {
-                global $conn;
-                $lat = (float)$lat;
-                $lng = (float)$lng;
+    function getStrictBarangay($lat, $lng, $fallbackText) {
+        global $conn;
+        $lat = (float)$lat;
+        $lng = (float)$lng;
 
-                // 1. Aguinaldo Highway / Congressional Junction / Volet's / NCST corridor check
-                if ($lat >= 14.3180 && $lat <= 14.3275 && $lng >= 120.9380 && $lng <= 120.9490) {
-                    if ($lat <= 14.3248) {
-                        return 'Zone IV';
-                    } elseif ($lng <= 120.9415) {
-                        return 'Zone I-A (Poblacion)';
-                    } else {
-                        return 'Zone I (Poblacion)';
-                    }
+        // 1. Clean external string anomalies and common prefixes
+        $cleanText = trim(str_ireplace([
+            'Barangay ', 'Brgy. ', 'Brgy ', 'Bgy. ', 'Bgy ',
+            ', Dasmariñas', ', Cavite', 'Philippines', 
+            'City of Dasmariñas', 'City', 'Dasmariñas'
+        ], '', $fallbackText));
+
+        // Strip leading/trailing commas and whitespace
+        $cleanText = trim($cleanText, " ,\t\n\r\0\x0B");
+
+        // 2. Exact match against database of official active barangays first
+        static $official_barangays = null;
+        if ($official_barangays === null) {
+            $official_barangays = [];
+            $res = $conn->query("SELECT name FROM barangays WHERE status = 'active'");
+            if ($res) {
+                while ($row = $res->fetch_assoc()) {
+                    $official_barangays[] = $row['name'];
                 }
-
-                // 2. Clean external string anomalies
-                $cleanText = trim(str_ireplace([', Dasmariñas', ', Cavite', 'Philippines', 'City of Dasmariñas', 'City'], '', $fallbackText));
-                
-                $aliases = [
-                    'manuelaville'   => 'San Agustin II', 
-                    '6XWG+X37'       => 'Biga I', 
-                    'the courtyards' => 'Salawag',
-                    'orchard'        => 'Salawag',
-                    'volets'         => 'Zone IV',
-                    'ncst'           => 'Zone IV',
-                    'dlsud'          => 'Zone IV',
-                    'poblacion'      => ($lat <= 14.3248) ? 'Zone IV' : 'Zone I (Poblacion)'
-                ];
-
-                foreach ($aliases as $alias => $real_brgy) {
-                    if (stripos($cleanText, $alias) !== false) return $real_brgy;
-                }
-
-                static $official_barangays = [];
-                if (empty($official_barangays)) {
-                    $res = $conn->query("SELECT name FROM barangays WHERE status = 'active'");
-                    if ($res) {
-                        while ($row = $res->fetch_assoc()) {
-                            $official_barangays[] = $row['name'];
-                        }
-                    }
-                }
-
-                foreach ($official_barangays as $brgy) {
-                    if (strcasecmp($cleanText, $brgy) === 0) return $brgy;
-                }
-
-                foreach ($official_barangays as $brgy) {
-                    if (stripos($cleanText, $brgy) !== false) {
-                        $pos = stripos($cleanText, $brgy);
-                        $nextChar = substr($cleanText, $pos + strlen($brgy), 1);
-                        if (strtoupper($nextChar) === 'I') continue; 
-                        return $brgy;
-                    }
-                }
-                return !empty($cleanText) ? $cleanText : 'Zone IV';
             }
         }
+
+        // Check exact match after prefix removal
+        foreach ($official_barangays as $brgy) {
+            if (strcasecmp($cleanText, $brgy) === 0) {
+                return $brgy;
+            }
+        }
+
+        // 3. Substring match against official barangays
+        foreach ($official_barangays as $brgy) {
+            if (stripos($cleanText, $brgy) !== false) {
+                return $brgy;
+            }
+        }
+
+        // 4. Common landmarks / subdivision aliases
+        $aliases = [
+            'manuelaville'   => 'San Agustin II', 
+            'the courtyards' => 'Salawag',
+            'orchard'        => 'Salawag',
+            'dlsud'          => 'Burol',
+            'de la salle'    => 'Burol',
+            'langkaan'       => 'Langkaan I',
+            'paliparan'      => 'Paliparan III',
+            'salitran'       => 'Salitran I',
+            'sabang'         => 'Sabang',
+            'burol'          => 'Burol Main'
+        ];
+
+        foreach ($aliases as $alias => $real_brgy) {
+            if (stripos($cleanText, $alias) !== false) {
+                return $real_brgy;
+            }
+        }
+
+        // 5. Fall back to user's reported text before applying any hardcoded zone default
+        if (!empty($cleanText) && strtolower($cleanText) !== 'unknown location') {
+            return $cleanText;
+        }
+
+        // 6. Coordinates-based Poblacion fallback only when text is completely empty
+        if ($lat >= 14.3180 && $lat <= 14.3275 && $lng >= 120.9380 && $lng <= 120.9490) {
+            return ($lat <= 14.3248) ? 'Zone IV' : 'Zone I (Poblacion)';
+        }
+
+        return !empty($fallbackText) ? $fallbackText : 'Unassigned Sector';
+    }
+}
 
         if (!function_exists('getDistanceMeters')) {
             function getDistanceMeters($lat1, $lon1, $lat2, $lon2) {
