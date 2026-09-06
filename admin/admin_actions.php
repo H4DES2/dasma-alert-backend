@@ -276,8 +276,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (!function_exists('getStrictBarangay')) {
             function getStrictBarangay($lat, $lng, $fallbackText) {
                 global $conn;
-                static $official_barangays = [];
+                $lat = (float)$lat;
+                $lng = (float)$lng;
 
+                // 1. Aguinaldo Highway / Congressional Junction / Volet's / NCST corridor check
+                if ($lat >= 14.3180 && $lat <= 14.3275 && $lng >= 120.9380 && $lng <= 120.9490) {
+                    if ($lat <= 14.3248) {
+                        return 'Zone IV';
+                    } elseif ($lng <= 120.9415) {
+                        return 'Zone I-A (Poblacion)';
+                    } else {
+                        return 'Zone I (Poblacion)';
+                    }
+                }
+
+                // 2. Clean external string anomalies
+                $cleanText = trim(str_ireplace([', Dasmariñas', ', Cavite', 'Philippines', 'City of Dasmariñas', 'City'], '', $fallbackText));
+                
+                $aliases = [
+                    'manuelaville'   => 'San Agustin II', 
+                    '6XWG+X37'       => 'Biga I', 
+                    'the courtyards' => 'Salawag',
+                    'orchard'        => 'Salawag',
+                    'volets'         => 'Zone IV',
+                    'ncst'           => 'Zone IV',
+                    'dlsud'          => 'Zone IV',
+                    'poblacion'      => ($lat <= 14.3248) ? 'Zone IV' : 'Zone I (Poblacion)'
+                ];
+
+                foreach ($aliases as $alias => $real_brgy) {
+                    if (stripos($cleanText, $alias) !== false) return $real_brgy;
+                }
+
+                static $official_barangays = [];
                 if (empty($official_barangays)) {
                     $res = $conn->query("SELECT name FROM barangays WHERE status = 'active'");
                     if ($res) {
@@ -285,19 +316,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             $official_barangays[] = $row['name'];
                         }
                     }
-                }
-
-                $cleanText = trim(str_ireplace([', Dasmariñas', ', Cavite', 'Philippines'], '', $fallbackText));
-                
-                $aliases = [
-                    'manuelaville' => 'San Agustin II', 
-                    '6XWG+X37' => 'Biga I', 
-                    'the courtyards' => 'Salawag',
-                    'orchard' => 'Salawag'
-                ];
-
-                foreach ($aliases as $alias => $real_brgy) {
-                    if (stripos($cleanText, $alias) !== false) return $real_brgy;
                 }
 
                 foreach ($official_barangays as $brgy) {
@@ -312,7 +330,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         return $brgy;
                     }
                 }
-                return $cleanText;
+                return !empty($cleanText) ? $cleanText : 'Zone IV';
             }
         }
 
@@ -601,8 +619,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         if (!function_exists('getStrictBarangay')) {
             function getStrictBarangay($lat, $lng, $fallbackText) {
                 global $conn;
-                static $official_barangays = [];
+                $lat = (float)$lat;
+                $lng = (float)$lng;
 
+                // 1. Aguinaldo Highway / Congressional Junction / Volet's / NCST corridor check
+                if ($lat >= 14.3180 && $lat <= 14.3275 && $lng >= 120.9380 && $lng <= 120.9490) {
+                    if ($lat <= 14.3248) {
+                        return 'Zone IV';
+                    } elseif ($lng <= 120.9415) {
+                        return 'Zone I-A (Poblacion)';
+                    } else {
+                        return 'Zone I (Poblacion)';
+                    }
+                }
+
+                // 2. Clean external string anomalies
+                $cleanText = trim(str_ireplace([', Dasmariñas', ', Cavite', 'Philippines', 'City of Dasmariñas', 'City'], '', $fallbackText));
+                
+                $aliases = [
+                    'manuelaville'   => 'San Agustin II', 
+                    '6XWG+X37'       => 'Biga I', 
+                    'the courtyards' => 'Salawag',
+                    'orchard'        => 'Salawag',
+                    'volets'         => 'Zone IV',
+                    'ncst'           => 'Zone IV',
+                    'dlsud'          => 'Zone IV',
+                    'poblacion'      => ($lat <= 14.3248) ? 'Zone IV' : 'Zone I (Poblacion)'
+                ];
+
+                foreach ($aliases as $alias => $real_brgy) {
+                    if (stripos($cleanText, $alias) !== false) return $real_brgy;
+                }
+
+                static $official_barangays = [];
                 if (empty($official_barangays)) {
                     $res = $conn->query("SELECT name FROM barangays WHERE status = 'active'");
                     if ($res) {
@@ -612,23 +661,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     }
                 }
 
-                $cleanText = trim(str_ireplace([', Dasmariñas', ', Cavite', 'Philippines'], '', $fallbackText));
-                $aliases = ['manuelaville' => 'San Agustin II', '6XWG+X37' => 'Biga I', 'the courtyards' => 'Salawag', 'orchard' => 'Salawag'];
-                
-                foreach ($aliases as $alias => $real_brgy) { 
-                    if (stripos($cleanText, $alias) !== false) return $real_brgy; 
+                foreach ($official_barangays as $brgy) {
+                    if (strcasecmp($cleanText, $brgy) === 0) return $brgy;
                 }
-                foreach ($official_barangays as $brgy) { 
-                    if (strcasecmp($cleanText, $brgy) === 0) return $brgy; 
-                }
+
                 foreach ($official_barangays as $brgy) {
                     if (stripos($cleanText, $brgy) !== false) {
-                        $nextChar = substr($cleanText, stripos($cleanText, $brgy) + strlen($brgy), 1);
+                        $pos = stripos($cleanText, $brgy);
+                        $nextChar = substr($cleanText, $pos + strlen($brgy), 1);
                         if (strtoupper($nextChar) === 'I') continue; 
                         return $brgy;
                     }
                 }
-                return $cleanText;
+                return !empty($cleanText) ? $cleanText : 'Zone IV';
             }
         }
 
