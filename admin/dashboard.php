@@ -343,14 +343,14 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <div id="evidenceModal" class="modal">
-            <div class="modal-content" style="max-width: 750px; padding: 0; overflow: visible; border-radius: var(--radius-xl); border: none; box-shadow: var(--shadow-lg);">
-                <div class="close-modal" onclick="closeModal('evidenceModal')"><i class='bx bx-x'></i></div>
-                <div style="background: var(--surface-subtle); padding: 20px 28px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); border-radius: var(--radius-xl) var(--radius-xl) 0 0;" class="ev-header">
-                    <h3 style="margin: 0; color: var(--text-primary); font-size: 1.25rem; font-weight:800; display: flex; align-items: center; gap: 10px;">
-                        <i class='bx bx-photo-album' style="color: var(--color-info);"></i> Official Evidence
-                    </h3>
+        <div id="evidenceModal" class="modal" style="z-index: 20000 !important;">
+            <div class="modal-content" style="max-width: 600px; padding: 20px; background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-xl); position: relative; box-shadow: var(--shadow-lg);">
+                <div class="close-modal" onclick="closeModal('evidenceModal')" style="top: 15px; right: 15px; background: rgba(255,255,255,0.2); color: #fff; border: none; cursor: pointer;"><i class='bx bx-x'></i></div>
+                <div style="display: flex; align-items: center; justify-content: center; min-height: 250px; max-height: 80vh; overflow: hidden; border-radius: var(--radius-lg);">
+                    <img id="evidenceImageFull" src="" style="max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: var(--radius-md);">
                 </div>
+            </div>
+        </div>
 
                 <div style="padding: 28px; background: var(--surface-card); border-radius: 0 0 var(--radius-xl) var(--radius-xl);" class="ev-body">
                     <div style="display: flex; gap: 20px; flex-wrap: wrap;">

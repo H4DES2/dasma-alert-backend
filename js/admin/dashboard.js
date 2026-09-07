@@ -477,6 +477,35 @@ function deleteAnnouncement(id) {
         .catch(err => customAlert("Error", err.message, "bx-error", "#ef4444"));
     });
 }
+// Toggle Backup Sub-Row visibility on click
+function toggleBackupRow(incidentId) {
+    const row = document.getElementById('backup-row-' + incidentId);
+    if (row) {
+        row.style.display = (row.style.display === 'none') ? 'table-row' : 'none';
+    }
+}
+
+// Clean Evidence Viewer: Image Only
+function viewEvidence(imagePath) { 
+    const imgEl = document.getElementById('evidenceImageFull');
+    if (!imgEl) return;
+
+    if (imagePath && imagePath !== 'NULL' && imagePath !== '') {
+        let cleanPath = imagePath.replace(/^\/?(dasma_api\/)?/, '');
+        const API_BASE_URL = 'https://dasma-api-l9ql.onrender.com';
+
+        if (cleanPath.startsWith('http')) {
+            imgEl.src = cleanPath;
+        } else {
+            imgEl.src = API_BASE_URL + '/' + cleanPath.replace(/^\/+/, '');
+        }
+
+        const mod = document.getElementById('evidenceModal');
+        if (mod) mod.style.display = 'flex';
+    } else {
+        customAlert("No Evidence", "No image evidence was submitted for this report.", "bx-image-alt", "#71717a");
+    }
+}
 function saveAnnouncement() {
     let id = document.getElementById('ann_id').value;
     let title = document.getElementById('ann_title').value.trim();

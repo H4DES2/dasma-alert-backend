@@ -617,7 +617,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 }
 
                 $clusterCall = ($isParent && $duplicateCount > 0) ? "toggleCluster(\"$clusterKey\");" : "";
-                $onclick = "onclick='openMobileModal(this); $clusterCall'";
+                $onclick = "onclick='openMobileModal(this); toggleBackupRow({$inc['id']}); $clusterCall'";
                 $hover = ($isParent && $duplicateCount > 0) ? "onmouseover='this.style.background=\"#e2e8f0\"' onmouseout='this.style.background=\"transparent\"'" : "";
 
                 $rowHtml = "<tr class='$extraClass' style='cursor: pointer; $extraStyle' $onclick $hover>
@@ -634,7 +634,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     $backup_action = ($role === 'superadmin') ? "<button class='btn-sm' style='background:#1976d2; flex: 1;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" : "<span style='color:#f57c00; font-weight:bold; font-size: 0.9rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
 
                     $rowHtml .= "
-                    <tr class='$extraClass' style='background: rgba(245, 124, 0, 0.03); $extraStyle'>
+                    <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(245, 124, 0, 0.03); $extraStyle'>
                         <td style='border-left: 4px solid #f57c00; border-bottom: 2px solid #f1f4f8;'></td>
                         <td colspan='2' style='border-bottom: 2px solid #f1f4f8; padding-top: 5px; padding-bottom: 15px;'>
                             <div style='background: #251e11; border: 1px dashed #ffb74d; padding: 12px 15px; border-radius: 10px;'>
@@ -1143,11 +1143,10 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
-    // 🚀 SECURED MULTI-ID SYNC: Deploy Team
     if ($action === 'deploy_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $ids_raw = $_POST['incident_id'] ?? '';
-        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
+        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
         $team_ids = json_decode($_POST['team_ids'], true);
         $new_team_names = $_POST['team_names'] ?? ''; 
         
@@ -1155,20 +1154,26 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             $id_list = implode(',', $ids_array);
             $primary_id = $ids_array[0]; 
 
-            $stmt_chk = $conn->prepare("SELECT assigned_to FROM incidents WHERE id = ?");
+            $stmt_chk = $conn->prepare("SELECT assigned_to, status FROM incidents WHERE id = ?");
             $stmt_chk->bind_param("i", $primary_id);
             $stmt_chk->execute();
-            $existing_assigned = $stmt_chk->get_result()->fetch_assoc()['assigned_to'] ?? '';
+            $curr = $stmt_chk->get_result()->fetch_assoc();
+            $existing_assigned = $curr['assigned_to'] ?? '';
+            $current_status = $curr['status'] ?? 'dispatched';
             $stmt_chk->close();
             
+            // Format unit names cleanly
             if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
                 $merged_teams = $existing_assigned . ", " . $new_team_names;
             } else {
                 $merged_teams = $new_team_names;
             }
 
-            $stmt = $conn->prepare("UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
-            $stmt->bind_param("s", $merged_teams);
+            // Keep status as on-scene if already on-scene, otherwise set to dispatched
+            $next_status = ($current_status === 'on-scene') ? 'on-scene' : 'dispatched';
+
+            $stmt = $conn->prepare("UPDATE incidents SET status = ?, assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
+            $stmt->bind_param("ss", $next_status, $merged_teams);
             $stmt->execute();
             $stmt->close();
             
