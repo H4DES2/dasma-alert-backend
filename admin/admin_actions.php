@@ -631,20 +631,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                 if ($inc['backup_requested'] == 1 && (!strpos($extraClass, 'cluster-row'))) {
                     $safe_type_backup = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
-                    $backup_action = ($role === 'superadmin') ? "<button class='btn-sm' style='background:#1976d2; flex: 1;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" : "<span style='color:#f57c00; font-weight:bold; font-size: 0.9rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
+                    $backup_action = ($role === 'superadmin') 
+                        ? "<button class='btn-sm' style='background:#1976d2; padding: 10px 16px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
+                        : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
 
                     $rowHtml .= "
-                    <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(245, 124, 0, 0.03); $extraStyle'>
-                        <td style='border-left: 4px solid #f57c00; border-bottom: 2px solid #f1f4f8;'></td>
-                        <td colspan='2' style='border-bottom: 2px solid #f1f4f8; padding-top: 5px; padding-bottom: 15px;'>
-                            <div style='background: #251e11; border: 1px dashed #ffb74d; padding: 12px 15px; border-radius: 10px;'>
-                                <strong style='color: #d32f2f; font-size: 0.9rem;'><i class='bx bxs-error-alt bx-flashing'></i> BACKUP REQUESTED</strong><br>
-                                <span style='font-size: 0.85rem; color: #555; font-style: italic;'>Local responder needs additional units.</span>
+                    <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(245, 124, 0, 0.05); $extraStyle'>
+                        <td colspan='6' style='padding: 12px 18px; border-left: 4px solid #f57c00; border-bottom: 2px solid var(--border-color);'>
+                            <div style='display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;'>
+                                <div style='display: flex; align-items: center; gap: 12px;'>
+                                    <span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>
+                                    <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
+                                        <b style='color: #ff9800;'>Local responders requested additional support.</b>
+                                    </div>
+                                </div>
+                                <div style='display: flex; align-items: center; gap: 10px;'>
+                                    $backup_action
+                                </div>
                             </div>
-                        </td>
-                        <td style='border-bottom: 2px solid #f1f4f8;'><span class='badge' style='background: #f57c00;'>PENDING BACKUP</span></td>
-                        <td colspan='2' style='border-bottom: 2px solid #f1f4f8; text-align: center;'>
-                            <div style='display: flex; gap: 8px; justify-content: center;'>$backup_action</div>
                         </td>
                     </tr>";
                 }
@@ -1132,7 +1136,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Verify Single Incident
     if ($action === 'verify_incident_single') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id']; 
@@ -1143,37 +1146,41 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
+    
     if ($action === 'deploy_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $ids_raw = $_POST['incident_id'] ?? '';
         $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
         $team_ids = json_decode($_POST['team_ids'], true);
-        $new_team_names = $_POST['team_names'] ?? ''; 
+        $new_team_names = trim($_POST['team_names'] ?? ''); 
         
         if (!empty($ids_array) && is_array($team_ids) && !empty($team_ids)) {
             $id_list = implode(',', $ids_array);
             $primary_id = $ids_array[0]; 
 
-            $stmt_chk = $conn->prepare("SELECT assigned_to, status FROM incidents WHERE id = ?");
+            $stmt_chk = $conn->prepare("SELECT assigned_to, backup_requested, status FROM incidents WHERE id = ?");
             $stmt_chk->bind_param("i", $primary_id);
             $stmt_chk->execute();
             $curr = $stmt_chk->get_result()->fetch_assoc();
-            $existing_assigned = $curr['assigned_to'] ?? '';
-            $current_status = $curr['status'] ?? 'dispatched';
             $stmt_chk->close();
-            
-            // Format unit names cleanly
+
+            $existing_assigned = trim($curr['assigned_to'] ?? '');
+            $is_backup_deploy = ((int)($curr['backup_requested'] ?? 0) === 1);
+
+            // Separate the local unit from the city backup deployment
             if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
-                $merged_teams = $existing_assigned . ", " . $new_team_names;
+                if ($is_backup_deploy) {
+                    $merged_teams = $existing_assigned . " | [City Backup: " . $new_team_names . "]";
+                } else {
+                    $merged_teams = $existing_assigned . ", " . $new_team_names;
+                }
             } else {
                 $merged_teams = $new_team_names;
             }
 
-            // Keep status as on-scene if already on-scene, otherwise set to dispatched
-            $next_status = ($current_status === 'on-scene') ? 'on-scene' : 'dispatched';
-
-            $stmt = $conn->prepare("UPDATE incidents SET status = ?, assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
-            $stmt->bind_param("ss", $next_status, $merged_teams);
+            // Clear backup_requested flag and retain or advance status to dispatched
+            $stmt = $conn->prepare("UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
+            $stmt->bind_param("s", $merged_teams);
             $stmt->execute();
             $stmt->close();
             
@@ -1192,7 +1199,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 MULTI-ID SYNC: Mark On-Scene
+    
     if ($action === 'mark_on_scene') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $ids_raw = $_POST['id'] ?? '';
@@ -1205,7 +1212,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
-    // 🚀 MULTI-ID SYNC: Archive
+   
     if ($action === 'archive') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $ids_raw = $_POST['id'] ?? '';

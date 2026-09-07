@@ -477,7 +477,6 @@ function deleteAnnouncement(id) {
         .catch(err => customAlert("Error", err.message, "bx-error", "#ef4444"));
     });
 }
-// Toggle Backup Sub-Row visibility on click
 function toggleBackupRow(incidentId) {
     const row = document.getElementById('backup-row-' + incidentId);
     if (row) {

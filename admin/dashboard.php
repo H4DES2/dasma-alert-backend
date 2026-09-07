@@ -343,11 +343,12 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <div id="evidenceModal" class="modal" style="z-index: 20000 !important;">
-            <div class="modal-content" style="max-width: 600px; padding: 20px; background: #000; border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-xl); position: relative; box-shadow: var(--shadow-lg);">
-                <div class="close-modal" onclick="closeModal('evidenceModal')" style="top: 15px; right: 15px; background: rgba(255,255,255,0.2); color: #fff; border: none; cursor: pointer;"><i class='bx bx-x'></i></div>
-                <div style="display: flex; align-items: center; justify-content: center; min-height: 250px; max-height: 80vh; overflow: hidden; border-radius: var(--radius-lg);">
-                    <img id="evidenceImageFull" src="" style="max-width: 100%; max-height: 78vh; object-fit: contain; border-radius: var(--radius-md);">
+        <!-- Evidence Modal (Image-Only Viewer) -->
+        <div id="evidenceModal" class="modal" style="display:none; position:fixed; inset:0; width:100vw; height:100dvh; background:rgba(0,0,0,0.85); z-index:20000 !important; align-items:center; justify-content:center; backdrop-filter:blur(8px);">
+            <div class="modal-content" style="max-width: 600px; width: 92%; padding: 16px; background: #121212; border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-xl); position: relative; box-shadow: var(--shadow-lg);">
+                <div class="close-modal" onclick="closeModal('evidenceModal')" style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.15); color: #fff; border: none; cursor: pointer; z-index: 10;"><i class='bx bx-x'></i></div>
+                <div style="display: flex; align-items: center; justify-content: center; min-height: 200px; max-height: 75vh; overflow: hidden; border-radius: var(--radius-lg); margin-top: 20px;">
+                    <img id="evidenceImageFull" src="" alt="Evidence Image" style="max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--radius-md);">
                 </div>
             </div>
         </div>
