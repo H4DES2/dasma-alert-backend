@@ -343,7 +343,7 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <!-- Evidence Modal (Image-Only Viewer) -->
+        <       <!-- Evidence Modal (Image-Only Viewer) -->
         <div id="evidenceModal" class="modal" style="display:none; position:fixed; inset:0; width:100vw; height:100dvh; background:rgba(0,0,0,0.85); z-index:20000 !important; align-items:center; justify-content:center; backdrop-filter:blur(8px);">
             <div class="modal-content" style="max-width: 600px; width: 92%; padding: 16px; background: #121212; border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-xl); position: relative; box-shadow: var(--shadow-lg);">
                 <div class="close-modal" onclick="closeModal('evidenceModal')" style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.15); color: #fff; border: none; cursor: pointer; z-index: 10;"><i class='bx bx-x'></i></div>
@@ -352,12 +352,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                 </div>
             </div>
         </div>
-
-                <div style="padding: 28px; background: var(--surface-card); border-radius: 0 0 var(--radius-xl) var(--radius-xl);" class="ev-body">
-                    <div style="display: flex; gap: 20px; flex-wrap: wrap;">
-                        <div style="flex: 1.5; min-width: 280px; display: flex; align-items: center; justify-content: center; background: #000000; border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-md);">
-                            <img id="evidenceImageFull" src="" style="width: 100%; max-height: 380px; object-fit: contain;">
-                        </div>
                         
                         <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 12px;">
                             <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);" class="ev-box">
