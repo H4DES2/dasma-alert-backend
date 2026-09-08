@@ -598,8 +598,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
                         $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
 
+                        // Check the actual status of the city backup unit
                         global $conn;
-                        $backup_status = 'dispatched';
+                        $backup_status = '';
                         $clean_bname = trim($b_matches[1] ?? '');
                         $stmt_bstatus = $conn->prepare("SELECT status FROM response_teams WHERE team_name = ? AND current_incident_id = ? LIMIT 1");
                         if ($stmt_bstatus) {
@@ -612,28 +613,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             $stmt_bstatus->close();
                         }
 
-                        $is_on_scene = ($backup_status === 'on-scene');
-
-                        $badge_html = $is_on_scene
-                            ? "<span class='badge' style='background: #2e7d32; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bx-check-double'></i> CITY BACKUP: ON SCENE</span>"
-                            : "<span class='badge' style='background: #1976d2; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bxs-truck'></i> CITY BACKUP: EN ROUTE</span>";
+                        // Badge only appears if the responder has actively set their status
+                        $badge_html = "";
+                        if ($backup_status === 'on-scene') {
+                            $badge_html = "<span class='badge' style='background: #2e7d32; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bx-check-double'></i> CITY BACKUP: ON SCENE</span>";
+                        } elseif ($backup_status === 'en route' || $backup_status === 'en_route') {
+                            $badge_html = "<span class='badge' style='background: #1976d2; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bxs-truck'></i> CITY BACKUP: EN ROUTE</span>";
+                        }
 
                         $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
 
+                        // Superadmin only has the Recall button
                         if ($role === 'superadmin') {
-                            $stage_btn = $is_on_scene
-                                ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); updateBackupStatus({$inc['id']}, \"dispatched\")'><i class='bx bxs-truck'></i> Set En Route</button>"
-                                : "<button class='btn-sm' style='background:#2e7d32; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); updateBackupStatus({$inc['id']}, \"on-scene\")'><i class='bx bx-check-circle'></i> Mark On Scene</button>";
-
                             $backup_action = "
                                 <div style='display: flex; gap: 8px; align-items: center;'>
-                                    $stage_btn
                                     <button class='btn-sm' style='background:#d32f2f; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>
                                 </div>";
                         } else {
-                            $backup_action = $is_on_scene
-                                ? "<span style='color:#81c784; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-check-circle'></i> City Backup On Scene</span>"
-                                : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'><i class='bx bxs-truck bx-flashing'></i> City Backup En Route</span>";
+                            $backup_action = !empty($badge_html) 
+                                ? "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>"
+                                : "<span style='color:#888; font-weight:bold; font-size: 0.85rem;'>Awaiting Responder Status...</span>";
                         }
                     } else {
                         $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
