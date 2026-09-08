@@ -613,12 +613,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             $stmt_bstatus->close();
                         }
 
-                        // Badge only appears if the responder has actively set their status
-                        $badge_html = "";
-                        if ($backup_status === 'on-scene') {
-                            $badge_html = "<span class='badge' style='background: #2e7d32; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bx-check-double'></i> CITY BACKUP: ON SCENE</span>";
-                        } elseif ($backup_status === 'en route' || $backup_status === 'en_route') {
-                            $badge_html = "<span class='badge' style='background: #1976d2; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bxs-truck'></i> CITY BACKUP: EN ROUTE</span>";
+                        $sub_status_badge = '';
+                        $current_status = strtolower(trim($inc['status'] ?? ''));
+
+                        if ($current_status === 'en route' || $current_status === 'en_route') {
+                            $sub_status_badge = "<span class='badge' style='background: #1976d2; font-size: 0.65rem; padding: 4px 8px;'><i class='bx bxs-truck'></i> EN ROUTE</span>";
+                        } elseif ($current_status === 'on-scene' || $current_status === 'on scene') {
+                            $sub_status_badge = "<span class='badge' style='background: #2e7d32; font-size: 0.65rem; padding: 4px 8px;'><i class='bx bx-check-double'></i> ON SCENE</span>";
                         }
 
                         $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
