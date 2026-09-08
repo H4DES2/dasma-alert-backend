@@ -286,45 +286,50 @@ function openDeployModal(id, name) {
 }
 
 function submitDispatch() {
-    let ids = document.getElementById('dispatch_incident_id').value;
+    let ids = document.getElementById('dispatch_incident_id').value; 
     let cbs = document.querySelectorAll('.dispatch-team-cb:checked');
-    if (cbs.length === 0) return customAlert("Selection Required", "Select units to deploy.", "bx-error", "#d32f2f");
-    
+    if (cbs.length === 0) return customAlert("Selection Required", "Please select at least one unit to deploy.", "bx-error", "#ef4444");
+
     let teamIds = []; 
     let teamNames = [];
     cbs.forEach(cb => { 
         teamIds.push(cb.value); 
         teamNames.push(cb.getAttribute('data-name')); 
     });
-    
+
     closeModal('dispatchModal');
-    customConfirm("Confirm Dispatch", `Deploy ${teamNames.length} unit(s)?`, "bxs-truck", "#388e3c", function() {
+
+    customConfirm("Confirm Dispatch", `Deploy ${teamNames.length} unit(s) to this incident?`, "bxs-truck", "#10b981", function() {
         let fd = new FormData();
         fd.append('action', 'deploy_team');
         fd.append('incident_id', ids); 
         fd.append('team_ids', JSON.stringify(teamIds));
         fd.append('team_names', teamNames.join(", "));
-        
+
         fetch(API_PATH, { method: 'POST', body: fd })
             .then(async r => {
-                const rawText = await r.text();
+                const raw = await r.text();
                 try {
-                    return JSON.parse(rawText);
-                } catch (e) {
-                    console.error("Server output:", rawText);
-                    throw new Error("Server returned HTML: " + rawText.substring(0, 150));
+                    return JSON.parse(raw);
+                } catch(e) {
+                    throw new Error("Server output was not JSON: " + raw.substring(0, 100));
                 }
             })
-            .then(d => { 
+            .then(d => {
                 if (d.success) {
-                    fetchLocalData(); 
+                    // Safe refresh regardless of whether this is Admin or Barangay dashboard
+                    if (typeof syncDashboard === 'function') {
+                        syncDashboard();
+                    } else if (typeof fetchLocalData === 'function') {
+                        fetchLocalData();
+                    }
                 } else {
-                    customAlert("Error", d.message || "Failed to dispatch.", "bx-error", "#d32f2f"); 
+                    customAlert("Dispatch Failed", d.message || "Could not deploy team.", "bx-error", "#ef4444");
                 }
             })
             .catch(err => {
                 console.error("Dispatch error:", err);
-                customAlert("Server Error", err.message, "bx-error", "#d32f2f");
+                customAlert("Dispatch Error", err.message || "Failed to communicate with server.", "bx-error", "#ef4444");
             });
     });
 }

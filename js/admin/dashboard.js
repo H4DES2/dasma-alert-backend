@@ -336,41 +336,53 @@ function openDeployModal(ids, name) {
 }
 
 function submitDispatch() {
-        let ids = document.getElementById('dispatch_incident_id').value;
-        let cbs = document.querySelectorAll('.dispatch-team-cb:checked');
-        if(cbs.length === 0) return customAlert("Selection Required", "Select units to deploy.", "bx-error", "#d32f2f");
-        
-        let teamIds = []; 
-        let teamNames = [];
-        cbs.forEach(cb => { 
-            teamIds.push(cb.value); 
-            teamNames.push(cb.getAttribute('data-name')); 
-        });
-        
-        closeModal('dispatchModal');
-        
-        customConfirm("Confirm Dispatch", `Deploy ${teamNames.length} unit(s)?`, "bxs-truck", "#388e3c", function() {
-            let fd = new FormData();
-            fd.append('action', 'deploy_team');
-            fd.append('incident_id', ids); 
-            fd.append('team_ids', JSON.stringify(teamIds));
-            fd.append('team_names', teamNames.join(", "));
+    let ids = document.getElementById('dispatch_incident_id').value; 
+    let cbs = document.querySelectorAll('.dispatch-team-cb:checked');
+    if (cbs.length === 0) return customAlert("Selection Required", "Please select at least one unit to deploy.", "bx-error", "#ef4444");
 
-            fetch(API_PATH, { method: 'POST', body: fd })
-                .then(r => r.json())
-                .then(d => { 
-                    if(d.success) {
-                        fetchLocalData(); 
-                    } else {
-                        customAlert("Error", d.message || "Dispatch failed", "bx-error", "#d32f2f"); 
+    let teamIds = []; 
+    let teamNames = [];
+    cbs.forEach(cb => { 
+        teamIds.push(cb.value); 
+        teamNames.push(cb.getAttribute('data-name')); 
+    });
+
+    closeModal('dispatchModal');
+
+    customConfirm("Confirm Dispatch", `Deploy ${teamNames.length} unit(s) to this incident?`, "bxs-truck", "#10b981", function() {
+        let fd = new FormData();
+        fd.append('action', 'deploy_team');
+        fd.append('incident_id', ids); 
+        fd.append('team_ids', JSON.stringify(teamIds));
+        fd.append('team_names', teamNames.join(", "));
+
+        fetch(API_PATH, { method: 'POST', body: fd })
+            .then(async r => {
+                const raw = await r.text();
+                try {
+                    return JSON.parse(raw);
+                } catch(e) {
+                    throw new Error("Server output was not JSON: " + raw.substring(0, 100));
+                }
+            })
+            .then(d => {
+                if (d.success) {
+                    // Safe refresh regardless of whether this is Admin or Barangay dashboard
+                    if (typeof syncDashboard === 'function') {
+                        syncDashboard();
+                    } else if (typeof fetchLocalData === 'function') {
+                        fetchLocalData();
                     }
-                })
-                .catch(err => {
-                    console.error("Dispatch error:", err);
-                    customAlert("Dispatch Error", "Failed to communicate with server.", "bx-error", "#d32f2f");
-                });
-        });
-    }
+                } else {
+                    customAlert("Dispatch Failed", d.message || "Could not deploy team.", "bx-error", "#ef4444");
+                }
+            })
+            .catch(err => {
+                console.error("Dispatch error:", err);
+                customAlert("Dispatch Error", err.message || "Failed to communicate with server.", "bx-error", "#ef4444");
+            });
+    });
+}
 
 function cancelDispatch(ids) {
     customConfirm("Recall Units", "Are you sure you want to recall these units and revert the incident status?", "bx-undo", "#ef4444", function() {
