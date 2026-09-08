@@ -280,28 +280,49 @@ function closeModal(id) {
     if (el) el.style.display = 'none';
 }
 
-function viewLogs(logsData, title) {
-    document.getElementById('logIncidentTitle').innerText = title + " Timeline";
-    let logContainer = document.getElementById('logContainer');
-    logContainer.innerHTML = ''; 
+function viewLogs(logsString, incidentTitle) {
+    const titleEl = document.getElementById('logIncidentTitle');
+    const container = document.getElementById('logContainer');
+    if (titleEl) titleEl.innerText = `${incidentTitle} Timeline`;
+    if (!container) return;
 
-    if (logsData === 'No logs recorded.') { 
-        logContainer.innerHTML = '<p style="text-align:center; color:#777; padding:20px;">No logs found.</p>'; 
+    container.innerHTML = '';
+
+    if (!logsString || logsString === 'No logs recorded.' || logsString.trim() === '') {
+        container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No timeline logs recorded.</div>';
     } else {
-        logsData.split('|||').forEach(line => {
-            let p = line.split('|-|');
-            if (p.length === 3) {
-                logContainer.innerHTML += `
-                    <div class="timeline-log-card">
-                        <small><b class="timeline-log-meta">${p[0]} - ${p[1]}</b></small><br>
-                        <span class="timeline-log-msg">${p[2]}</span>
-                    </div>`;
-            }
-        });
-    }
-    document.getElementById('viewLogsModal').style.display = 'flex';
-}
+        // Split entries
+        const entries = logsString.split('|||').map(e => e.trim()).filter(Boolean);
 
+        // Render each item (newest stays on top)
+        let html = '<div style="display: flex; flex-direction: column; gap: 12px; padding: 10px 0;">';
+        entries.forEach(entry => {
+            const parts = entry.split('|-|');
+            const time = parts[0] || '';
+            const user = parts[1] || 'System';
+            const msg = parts[2] || '';
+
+            html += `
+                <div style="background: rgba(25, 118, 210, 0.08); border-left: 4px solid #1976d2; border-radius: 8px; padding: 12px 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <span style="font-weight: 800; font-size: 0.85rem; color: #1976d2;">${time} - ${user}</span>
+                    </div>
+                    <div style="font-size: 0.9rem; color: var(--text-primary, #222); line-height: 1.4; font-weight: 600;">
+                        ${msg}
+                    </div>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+        
+        // Reset scroll position to top
+        container.scrollTop = 0;
+    }
+
+    const modal = document.getElementById('viewLogsModal');
+    if (modal) modal.style.display = 'flex';
+}
 function viewPhoto(rawPath) {
     let cleanPath = rawPath;
     if (cleanPath.startsWith('/')) { 

@@ -74,8 +74,8 @@ $query = "
            (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as initial_log,
            (SELECT MIN(created_at) FROM incident_logs WHERE incident_id = i.id AND LOWER(log_message) LIKE '%scene%') as arrived_at,
            (SELECT MAX(created_at) FROM incident_logs WHERE incident_id = i.id) as resolved_at,
-           (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) SEPARATOR '|||') 
-            FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id ORDER BY il.created_at DESC) as all_logs
+           (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') 
+            FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id) as all_logs
     FROM incidents i 
     $where_clause
     ORDER BY i.created_at DESC
@@ -93,8 +93,8 @@ $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.status, i.image_path, i.created_at, i.admin_remarks,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
            sr.reason as spam_reason,
-           (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) SEPARATOR '|||') 
-            FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id ORDER BY il.created_at DESC) as all_logs
+           (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') 
+            FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id) as all_logs
     FROM incidents i 
     LEFT JOIN spam_reports sr ON i.id = sr.incident_id
     WHERE i.status IN ('rejected', 'spam', 'out_of_range')
