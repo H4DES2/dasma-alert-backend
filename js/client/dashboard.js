@@ -261,19 +261,35 @@ html += `<label style="display:flex; align-items:center; gap:12px; padding:12px;
     function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs, extra, backupRequested) { 
         const imgEl = document.getElementById('evidenceImageFull');
         if (imagePath && imagePath !== 'NULL' && imagePath !== '') {
-            let cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
-            imgEl.src = '/dasma_api/' + cleanPath;
+            let finalUrl = imagePath;
+            // If it's already a full Cloudinary or external URL, use it directly
+            if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
+                finalUrl = imagePath;
+            } else {
+                let cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
+                finalUrl = '/dasma_api/' + cleanPath;
+            }
+            imgEl.src = finalUrl;
             imgEl.style.display = 'inline-block';
-        } else { imgEl.style.display = 'none'; }
+        } else { 
+            imgEl.style.display = 'none'; 
+        }
         
-        document.getElementById('evidenceCaption').innerHTML = `
-            <div style="font-weight: 900; font-size: 1.1rem; margin-bottom: 5px;">${incidentType} in Brgy. ${brgy}</div>
-            <div style="font-size: 0.85rem; font-weight: 800; margin-bottom: 5px;">Reported by ${reporter} at ${time}</div>
-            <div style="font-style: italic; font-size: 0.95rem;">"${logs}"</div>
-        `;
+        const captionEl = document.getElementById('evidenceCaption');
+        if (captionEl) {
+            captionEl.innerHTML = `
+                <div style="font-weight: 900; font-size: 1.1rem; margin-bottom: 5px;">${incidentType} in Brgy. ${brgy}</div>
+                <div style="font-size: 0.85rem; font-weight: 800; margin-bottom: 5px;">Reported by ${reporter} at ${time}</div>
+                <div style="font-style: italic; font-size: 0.95rem;">"${logs}"</div>
+            `;
+        }
         document.getElementById('evidenceModal').style.display = 'flex'; 
         
-        if (backupRequested == 1) { setTimeout(() => { customAlert("🚨 URGENT: BACKUP REQUESTED 🚨", "Immediate assistance requested!", "bxs-error", "#d32f2f"); }, 300); }
+        if (backupRequested == 1) { 
+            setTimeout(() => { 
+                customAlert("🚨 URGENT: BACKUP REQUESTED 🚨", "Immediate assistance requested!", "bxs-error", "#d32f2f"); 
+            }, 300); 
+        }
     }
 
     function rejectIncident(id) {
