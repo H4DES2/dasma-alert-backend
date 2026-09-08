@@ -1048,31 +1048,29 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             exit();
         }
 
-        // 1. Release the primary assigned response team
         $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
-        $stmt_rt->bind_param("i", $incident_id);
-        $stmt_rt->execute();
-        $stmt_rt->close();
+    $stmt_rt->bind_param("i", $incident_id);
+    $stmt_rt->execute();
+    $stmt_rt->close();
 
-        // 2. Reset incident back to active and remove the assigned unit
-        $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id = ?");
-        $stmt_inc->bind_param("i", $incident_id);
-        $stmt_inc->execute();
-        $stmt_inc->close();
+    // 2. Reset incident back to active and remove the assigned unit
+    $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id = ?");
+    $stmt_inc->bind_param("i", $incident_id);
+    $stmt_inc->execute();
+    $stmt_inc->close();
 
-        // 3. Add audit log
-        $admin_id = $_SESSION['user_id'] ?? 0;
-        $log_msg = "Dispatched unit was recalled by admin.";
-        $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
-        if ($stmt_log) {
-            $stmt_log->bind_param("iis", $incident_id, $admin_id, $log_msg);
-            $stmt_log->execute();
-            $stmt_log->close();
-        }
+    // 3. Optional: Add log entry
+    $admin_id = $_SESSION['user_id'] ?? 0;
+    $log_msg = "Dispatched unit was recalled by admin.";
+    $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+    if ($stmt_log) {
+        $stmt_log->bind_param("iis", $incident_id, $admin_id, $log_msg);
+        $stmt_log->execute();
+        $stmt_log->close();
+    }
 
-        ob_end_clean();
-        echo json_encode(['success' => true]);
-        exit();
+    echo json_encode(['success' => true]);
+    exit();
     }
 
 
