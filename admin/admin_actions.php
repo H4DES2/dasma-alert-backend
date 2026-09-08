@@ -642,18 +642,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
                             : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
                     }
-
                     $rowHtml .= "
-<tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow'>
-    <td colspan='6'>
-        <div style='display: flex; align-items: center; gap: 12px;'>
-            " . $badge_html . "
-            <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
-                " . $desc_html . "
-            </div>
-        </div>
-    </td>
-</tr>";
+                    <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.08);'>
+                        <td colspan='6' style='padding: 10px 18px; border-left: 4px solid #f57c00;'>
+                            <div style='display: flex; align-items: center; justify-content: space-between;'>
+                                <div style='display: flex; align-items: center; gap: 12px;'>
+                                    " . $badge_html . "
+                                    <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
+                                        " . $desc_html . "
+                                    </div>
+                                </div>
+                                <div>
+                                    " . $backup_action . "
+                                </div>
+                            </div>
+                        </td>
+                    </tr>";
                 }
                 return $rowHtml;
             };
