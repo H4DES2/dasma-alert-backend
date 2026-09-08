@@ -2,8 +2,10 @@ const assignedBrgy = window.ASSIGNED_BRGY || "";
 let map, markerLayer;
 let lastTableHTML = "", lastMapHash = "";
 
-// Use root-relative path to ensure consistency regardless of route nesting
-const API_PATH = '../admin/admin_actions.php';
+// Dynamic API path: handles root hosting and subfolder hosting (/alert/)
+const API_PATH = window.location.pathname.includes('/alert/') 
+    ? '/alert/admin/admin_actions.php' 
+    : '/admin/admin_actions.php';
 
 function closeModal(id) { 
     const el = document.getElementById(id);
@@ -200,9 +202,26 @@ document.addEventListener('click', function(event) {
         fd.append('incident_id', ids);
 
         fetch(API_PATH, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(d => { if (d.success) fetchLocalData(); })
-            .catch(e => console.error(e));
+            .then(async r => {
+                const rawText = await r.text();
+                try {
+                    return JSON.parse(rawText);
+                } catch (e) {
+                    console.error("Server output:", rawText);
+                    throw new Error("Server returned HTML: " + rawText.substring(0, 150));
+                }
+            })
+            .then(d => { 
+                if (d.success) {
+                    fetchLocalData(); 
+                } else {
+                    customAlert("Error", d.message || "Failed to verify.", "bx-error", "#d32f2f"); 
+                }
+            })
+            .catch(err => {
+                console.error("Verify error:", err);
+                customAlert("Server Error", err.message, "bx-error", "#d32f2f");
+            });
     }
 });
 
@@ -287,7 +306,15 @@ function submitDispatch() {
         fd.append('team_names', teamNames.join(", "));
         
         fetch(API_PATH, { method: 'POST', body: fd })
-            .then(r => r.json())
+            .then(async r => {
+                const rawText = await r.text();
+                try {
+                    return JSON.parse(rawText);
+                } catch (e) {
+                    console.error("Server output:", rawText);
+                    throw new Error("Server returned HTML: " + rawText.substring(0, 150));
+                }
+            })
             .then(d => { 
                 if (d.success) {
                     fetchLocalData(); 
@@ -297,12 +324,11 @@ function submitDispatch() {
             })
             .catch(err => {
                 console.error("Dispatch error:", err);
-                customAlert("Network Error", "Unable to connect to server.", "bx-error", "#d32f2f");
+                customAlert("Server Error", err.message, "bx-error", "#d32f2f");
             });
     });
 }
 
-// Handles Recall for primary assigned unit
 function cancelDispatch(ids) {
     customConfirm("Recall Units", "Recall units and revert status back to active?", "bx-undo", "#d32f2f", function() {
         let fd = new FormData(); 
@@ -310,7 +336,15 @@ function cancelDispatch(ids) {
         fd.append('incident_id', ids);
 
         fetch(API_PATH, { method: 'POST', body: fd })
-            .then(r => r.json())
+            .then(async r => {
+                const rawText = await r.text();
+                try {
+                    return JSON.parse(rawText);
+                } catch (e) {
+                    console.error("Server output:", rawText);
+                    throw new Error("Server returned HTML: " + rawText.substring(0, 150));
+                }
+            })
             .then(d => {
                 if (d.success) {
                     fetchLocalData();
@@ -329,7 +363,6 @@ function recallIncident(incidentId) {
     cancelDispatch(incidentId);
 }
 
-// Handles Recall for City Backup unit if displayed
 function recallCityBackup(incidentId) {
     customConfirm("Recall City Backup?", "Are you sure you want to recall the City Backup unit?", "bx-undo", "#d32f2f", function() {
         let fd = new FormData();
@@ -467,7 +500,6 @@ function openMobileModal(row) {
     document.getElementById('mobileIncidentModal').style.display = 'flex';
 }
 
-// Expose handlers globally so dynamic table rows and modals can call them
 window.openDeployModal = openDeployModal;
 window.submitDispatch = submitDispatch;
 window.cancelDispatch = cancelDispatch;

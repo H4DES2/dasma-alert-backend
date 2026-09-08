@@ -1161,9 +1161,14 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
     
     if ($action === 'deploy_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
+        
+        // Ensure buffer is clean right at the start
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
+
         $ids_raw = $_POST['incident_id'] ?? '';
         $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
-        $team_ids = json_decode($_POST['team_ids'], true);
+        $team_ids = json_decode($_POST['team_ids'] ?? '[]', true);
         $new_team_names = trim($_POST['team_names'] ?? ''); 
         
         if (!empty($ids_array) && is_array($team_ids) && !empty($team_ids)) {
@@ -1179,7 +1184,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             $existing_assigned = trim($curr['assigned_to'] ?? '');
             $is_backup_deploy = ((int)($curr['backup_requested'] ?? 0) === 1);
 
-            // Separate the local unit from the city backup deployment
+            // Separate local unit from city backup deployment
             if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
                 if ($is_backup_deploy) {
                     $merged_teams = $existing_assigned . " | [City Backup: " . $new_team_names . "]";
@@ -1190,12 +1195,13 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                 $merged_teams = $new_team_names;
             }
 
-            // Clear backup_requested flag and retain or advance status to dispatched
+            // Update incident status and assigned teams
             $stmt = $conn->prepare("UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
             $stmt->bind_param("s", $merged_teams);
             $stmt->execute();
             $stmt->close();
             
+            // Assign units
             $stmt_team = $conn->prepare("UPDATE response_teams SET current_incident_id = ?, status = 'deployed' WHERE id = ?");
             foreach ($team_ids as $tid) {
                 $team_id = (int)$tid;
@@ -1204,9 +1210,11 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             }
             $stmt_team->close();
             
-            ob_end_clean(); echo json_encode(['success' => true]);
+            while (ob_get_level() > 0) { ob_end_clean(); }
+            echo json_encode(['success' => true]);
         } else {
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'No teams selected']);
+            while (ob_get_level() > 0) { ob_end_clean(); }
+            echo json_encode(['success' => false, 'message' => 'No teams selected']);
         }
         exit();
     }
