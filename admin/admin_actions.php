@@ -628,7 +628,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         if ($role === 'superadmin') {
                             $backup_action = "
                                 <div style='display: flex; gap: 8px; align-items: center;'>
-                                    <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallIncident({$inc['id']})'><i class='bx bx-undo'></i> Recall</button>
+                                    <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>
                                 </div>";
                         } else {
                             $backup_action = !empty($badge_html) 
@@ -644,21 +644,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     }
 
                     $rowHtml .= "
-                    <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(25, 118, 210, 0.04); $extraStyle'>
-                        <td colspan='6' style='padding: 10px 18px; border-left: 4px solid " . ($has_city_backup ? '#1976d2' : '#f57c00') . "; border-bottom: 2px solid var(--border-color);'>
-                            <div style='display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;'>
-                                <div style='display: flex; align-items: center; gap: 12px;'>
-                                    $badge_html
-                                    <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
-                                        $desc_html
-                                    </div>
-                                </div>
-                                <div style='display: flex; align-items: center; gap: 10px;'>
-                                    $backup_action
-                                </div>
-                            </div>
-                        </td>
-                    </tr>";
+<tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow'>
+    <td colspan='6'>
+        <div style='display: flex; align-items: center; gap: 12px;'>
+            " . $badge_html . "
+            <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
+                " . $desc_html . "
+            </div>
+        </div>
+    </td>
+</tr>";
                 }
                 return $rowHtml;
             };
@@ -1043,13 +1038,42 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         }
         exit();
     }
-    if ($action === 'recall_team') {
-    $incident_id = isset($_POST['incident_id']) ? (int)$_POST['incident_id'] : 0;
+    if ($action === 'recall_team' || $action === 'cancel_dispatch') {
+    $incident_id = isset($_POST['incident_id']) ? (int)$_POST['incident_id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
 
     if (!$incident_id) {
+        ob_end_clean();
         echo json_encode(['success' => false, 'message' => 'Invalid incident ID']);
         exit();
     }
+
+    // 1. Release the primary assigned response team
+    $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
+    $stmt_rt->bind_param("i", $incident_id);
+    $stmt_rt->execute();
+    $stmt_rt->close();
+
+    // 2. Reset incident back to active and remove the assigned unit
+    $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id = ?");
+    $stmt_inc->bind_param("i", $incident_id);
+    $stmt_inc->execute();
+    $stmt_inc->close();
+
+    // 3. Optional: Add log entry
+    $admin_id = $_SESSION['user_id'] ?? 0;
+    $log_msg = "Dispatched unit was recalled by admin.";
+    $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+    if ($stmt_log) {
+        $stmt_log->bind_param("iis", $incident_id, $admin_id, $log_msg);
+        $stmt_log->execute();
+        $stmt_log->close();
+    }
+
+    ob_end_clean();
+    echo json_encode(['success' => true]);
+    exit();
+}
+
 
     // 1. Release the primary assigned response team
     $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
@@ -1602,5 +1626,5 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         echo json_encode(['count' => $res->fetch_assoc()['c'] ?? 0]);
         exit();
     }
-} 
+ 
 ?>

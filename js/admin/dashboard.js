@@ -360,8 +360,23 @@ function submitDispatch() {
 
 function cancelDispatch(ids) {
     customConfirm("Recall Units", "Are you sure you want to recall these units and revert the incident status?", "bx-undo", "#ef4444", function() {
-        let fd = new FormData(); fd.append('action', 'cancel_dispatch'); fd.append('id', ids);
-        fetch(API_PATH, { method: 'POST', body: fd }).then(r=>r.text()).then(d=>syncDashboard());
+        let fd = new FormData();
+        fd.append('action', 'recall_team');
+        fd.append('incident_id', ids);
+
+        fetch(API_PATH, { method: 'POST', body: fd })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    syncDashboard();
+                } else {
+                    customAlert("Error", d.message || "Failed to recall.", "bx-error", "#ef4444");
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                syncDashboard();
+            });
     });
 }
 
@@ -511,33 +526,7 @@ function recallCityBackup(incidentId) {
     );
 }
 function recallIncident(incidentId) {
-    if (!confirm("Are you sure you want to recall the dispatched unit?")) return;
-
-    const formData = new FormData();
-    formData.append('action', 'recall_team');
-    formData.append('incident_id', incidentId);
-
-    fetch('/admin/admin_actions.php', {
-    method: 'POST',
-    body: formData
-})
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            // Trigger your dashboard refresh function or reload
-            if (typeof fetchLiveIncidents === 'function') {
-                fetchLiveIncidents();
-            } else {
-                location.reload();
-            }
-        } else {
-            alert('Failed to recall: ' + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(err => {
-        console.error(err);
-        alert('Network error while recalling team.');
-    });
+    cancelDispatch(incidentId);
 }
 // Clean Evidence Viewer: Image Only
 function viewEvidence(imagePath) { 
@@ -621,3 +610,6 @@ function resolveIncident(ids) {
         }
     );
 }
+window.cancelDispatch = cancelDispatch;
+window.recallCityBackup = recallCityBackup;
+window.recallIncident = recallIncident;
