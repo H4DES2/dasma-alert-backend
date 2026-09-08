@@ -3,7 +3,7 @@ let map, markerLayer;
 let lastTableHTML = "", lastMapHash = "";
 
 // Use root-relative path to ensure consistency regardless of route nesting
-const API_PATH = '/admin/admin_actions.php';
+const API_PATH = '../admin/admin_actions.php';
 
 function closeModal(id) { 
     const el = document.getElementById(id);
