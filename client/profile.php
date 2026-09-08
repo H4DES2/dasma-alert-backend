@@ -127,8 +127,10 @@ $default_avatar = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http
 
 $profile_img_src = $default_avatar;
 if (!empty($raw_photo) && $raw_photo !== 'NULL') {
-    $clean_path = ltrim($raw_photo, '/');
-    if (file_exists(__DIR__ . '/../' . $clean_path)) {
+    if (str_starts_with($raw_photo, 'http://') || str_starts_with($raw_photo, 'https://')) {
+        $profile_img_src = htmlspecialchars($raw_photo);
+    } else {
+        $clean_path = ltrim($raw_photo, '/');
         $profile_img_src = '../' . htmlspecialchars($clean_path);
     }
 }

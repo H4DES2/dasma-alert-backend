@@ -1308,7 +1308,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             $stmt_p->close();
         }
 
-        // 4. Handle File Upload (Space-free filename & reliable web-root pathing)
+        // 4. Handle File Upload (Ensuring storage in uploads/profiles/)
         if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
             $pp_allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             $pp_ext_ok  = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -1324,12 +1324,13 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                 exit();
             }
 
-            $target_dir = __DIR__ . '/../uploads/';
+            // Target directory: alert/uploads/profiles/
+            $target_dir = __DIR__ . '/../uploads/profiles/';
             if (!is_dir($target_dir)) {
                 mkdir($target_dir, 0777, true);
             }
 
-            $clean_filename = 'uploads/profile_' . (int)$user_id . '_' . time() . '.' . $pp_ext;
+            $clean_filename = 'uploads/profiles/profile_' . (int)$user_id . '_' . time() . '.' . $pp_ext;
             $destination    = __DIR__ . '/../' . $clean_filename;
 
             if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $destination)) {
@@ -1337,12 +1338,13 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                 $stmt_img->bind_param("si", $clean_filename, $user_id);
                 $stmt_img->execute();
                 $stmt_img->close();
+
+                $_SESSION['profile_photo'] = $clean_filename;
             } else {
                 echo json_encode(['success' => false, 'message' => 'Failed to save image file.']);
                 exit();
             }
         }
-
         echo json_encode(['success' => true, 'message' => 'Profile completely updated!']);
         exit();
     }

@@ -25,7 +25,16 @@ $js_font   = json_encode($db_font);
 $default_logo = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="%23d32f2f"><path d="M12 2L1 21h22L12 2zm0 3.45l8.27 14.3H3.73L12 5.45zM11 10h2v4h-2zm0 6h2v2h-2z"/></svg>');
 $default_avatar = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>');
 
-$profile_photo = (!empty($s_prefs['profile_photo'])) ? htmlspecialchars('../' . ltrim($s_prefs['profile_photo'], '/'), ENT_QUOTES, 'UTF-8') : $default_avatar;
+$raw_photo = trim($s_prefs['profile_photo'] ?? '');
+if (!empty($raw_photo) && $raw_photo !== 'NULL') {
+    if (str_starts_with($raw_photo, 'http://') || str_starts_with($raw_photo, 'https://')) {
+        $profile_photo = htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
+    } else {
+        $profile_photo = htmlspecialchars('../' . ltrim($raw_photo, '/'), ENT_QUOTES, 'UTF-8');
+    }
+} else {
+    $profile_photo = $default_avatar;
+}
 
 $raw_name = !empty($s_prefs['first_name']) ? $s_prefs['first_name'] : ($s_prefs['username'] ?? 'User');
 $display_name = htmlspecialchars($raw_name); 
