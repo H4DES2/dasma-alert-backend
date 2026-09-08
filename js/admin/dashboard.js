@@ -510,7 +510,35 @@ function recallCityBackup(incidentId) {
         }
     );
 }
+function recallIncident(incidentId) {
+    if (!confirm("Are you sure you want to recall the dispatched unit?")) return;
 
+    const formData = new FormData();
+    formData.append('action', 'recall_team');
+    formData.append('incident_id', incidentId);
+
+    fetch('admin_actions.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            // Trigger your dashboard refresh function or reload
+            if (typeof fetchLiveIncidents === 'function') {
+                fetchLiveIncidents();
+            } else {
+                location.reload();
+            }
+        } else {
+            alert('Failed to recall: ' + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(err => {
+        console.error(err);
+        alert('Network error while recalling team.');
+    });
+}
 // Clean Evidence Viewer: Image Only
 function viewEvidence(imagePath) { 
     const imgEl = document.getElementById('evidenceImageFull');
