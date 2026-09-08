@@ -291,10 +291,8 @@ function viewLogs(logsString, incidentTitle) {
     if (!logsString || logsString === 'No logs recorded.' || logsString.trim() === '') {
         container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No timeline logs recorded.</div>';
     } else {
-        // Split entries
         const entries = logsString.split('|||').map(e => e.trim()).filter(Boolean);
 
-        // Render each item (newest stays on top)
         let html = '<div style="display: flex; flex-direction: column; gap: 12px; padding: 10px 0;">';
         entries.forEach(entry => {
             const parts = entry.split('|-|');
@@ -303,11 +301,11 @@ function viewLogs(logsString, incidentTitle) {
             const msg = parts[2] || '';
 
             html += `
-                <div style="background: rgba(25, 118, 210, 0.08); border-left: 4px solid #1976d2; border-radius: 8px; padding: 12px 14px;">
+                <div class="timeline-log-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span style="font-weight: 800; font-size: 0.85rem; color: #1976d2;">${time} - ${user}</span>
+                        <span class="timeline-log-meta">${time} - ${user}</span>
                     </div>
-                    <div style="font-size: 0.9rem; color: var(--text-primary, #222); line-height: 1.4; font-weight: 600;">
+                    <div class="timeline-log-msg">
                         ${msg}
                     </div>
                 </div>
@@ -315,8 +313,6 @@ function viewLogs(logsString, incidentTitle) {
         });
         html += '</div>';
         container.innerHTML = html;
-        
-        // Reset scroll position to top
         container.scrollTop = 0;
     }
 

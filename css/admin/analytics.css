@@ -63,10 +63,28 @@
         .timeline-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
         .timeline-row strong { color: #555; font-weight: 800; width: 75px; flex-shrink: 0; }
         
-        /* TIMELINE LOG CARDS (LIGHT MODE) */
-        .timeline-log-card { background: #f8f9fa; border: 1px solid #edf2f7; padding: 15px; border-radius: 15px; margin-bottom: 12px; border-left: 6px solid #1976d2; }
-        .timeline-log-meta { color: #1976d2; font-weight: 900; }
-        .timeline-log-msg { font-weight: 700; color: #333; }
+        .timeline-log-card {
+    background: #f8f9fa;
+    border: 1px solid #edf2f7;
+    padding: 14px 16px;
+    border-radius: 12px;
+    border-left: 5px solid #1976d2;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.timeline-log-meta {
+    color: #1976d2;
+    font-weight: 800;
+    font-size: 0.85rem;
+}
+
+.timeline-log-msg {
+    color: #222222;
+    font-weight: 600;
+    font-size: 0.9rem;
+    line-height: 1.4;
+    word-break: break-word;
+}
 
         /* MODALS */
         .modal { display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.5); align-items: center; justify-content: center; backdrop-filter: blur(8px); }
@@ -85,9 +103,31 @@
         html.global-dark-mode .timeline-row strong { color: #8b949e; }
         html.global-dark-mode .duration-text { color: #ff8a80 !important; border-top-color: #30363d !important; }
         html.global-dark-mode .empty-overlay { background: rgba(22, 27, 34, 0.85); color: #8b949e; }
-        html.global-dark-mode .timeline-log-card { background: #0d1117 !important; border-color: #30363d !important; border-left-color: #58a6ff !important; }
-        html.global-dark-mode .timeline-log-meta { color: #58a6ff !important; }
-        html.global-dark-mode .timeline-log-msg { color: #f0f6fc !important; }
+        html.global-dark-mode .timeline-log-card {
+    background: #0d1117 !important;
+    border-color: #30363d !important;
+    border-left-color: #58a6ff !important;
+}
+
+html.global-dark-mode .timeline-log-meta {
+    color: #58a6ff !important;
+}
+
+html.global-dark-mode .timeline-log-msg {
+    color: #f0f6fc !important;
+}
+html.global-dark-mode #viewLogsModal .modal-content {
+    background: #161b22 !important;
+    border: 1px solid #30363d !important;
+}
+
+html.global-dark-mode #viewLogsModal h3 {
+    color: #58a6ff !important;
+}
+
+html.global-dark-mode #viewLogsModal span[onclick*="closeModal"] {
+    color: #8b949e !important;
+}
         html.global-dark-mode b { color: #f0f6fc !important; }
 
         @media (max-width: 1200px) { .dashboard-grid { grid-template-columns: 1fr; } }
