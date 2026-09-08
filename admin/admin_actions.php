@@ -598,11 +598,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
                         $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
 
-                        $badge_html = "<span class='badge' style='background: #1976d2; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bxs-truck'></i> CITY BACKUP DEPLOYED</span>";
+                        global $conn;
+                        $backup_status = 'dispatched';
+                        $clean_bname = trim($b_matches[1] ?? '');
+                        $stmt_bstatus = $conn->prepare("SELECT status FROM response_teams WHERE team_name = ? AND current_incident_id = ? LIMIT 1");
+                        if ($stmt_bstatus) {
+                            $stmt_bstatus->bind_param("si", $clean_bname, $inc['id']);
+                            $stmt_bstatus->execute();
+                            $b_res = $stmt_bstatus->get_result()->fetch_assoc();
+                            if ($b_res && !empty($b_res['status'])) {
+                                $backup_status = strtolower(trim($b_res['status']));
+                            }
+                            $stmt_bstatus->close();
+                        }
+
+                        $is_on_scene = ($backup_status === 'on-scene');
+
+                        $badge_html = $is_on_scene
+                            ? "<span class='badge' style='background: #2e7d32; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bx-check-double'></i> CITY BACKUP: ON SCENE</span>"
+                            : "<span class='badge' style='background: #1976d2; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bxs-truck'></i> CITY BACKUP: EN ROUTE</span>";
+
                         $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
-                        $backup_action = ($role === 'superadmin') 
-                            ? "<button class='btn-sm' style='background:#d32f2f; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>"
-                            : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup En Route</span>";
+
+                        if ($role === 'superadmin') {
+                            $stage_btn = $is_on_scene
+                                ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); updateBackupStatus({$inc['id']}, \"dispatched\")'><i class='bx bxs-truck'></i> Set En Route</button>"
+                                : "<button class='btn-sm' style='background:#2e7d32; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); updateBackupStatus({$inc['id']}, \"on-scene\")'><i class='bx bx-check-circle'></i> Mark On Scene</button>";
+
+                            $backup_action = "
+                                <div style='display: flex; gap: 8px; align-items: center;'>
+                                    $stage_btn
+                                    <button class='btn-sm' style='background:#d32f2f; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>
+                                </div>";
+                        } else {
+                            $backup_action = $is_on_scene
+                                ? "<span style='color:#81c784; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-check-circle'></i> City Backup On Scene</span>"
+                                : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'><i class='bx bxs-truck bx-flashing'></i> City Backup En Route</span>";
+                        }
                     } else {
                         $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
                         $desc_html = "<b style='color: #ff9800;'>Local responders requested additional support.</b>";
@@ -610,6 +642,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
                             : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
                     }
+
                     $rowHtml .= "
                     <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(25, 118, 210, 0.04); $extraStyle'>
                         <td colspan='6' style='padding: 10px 18px; border-left: 4px solid " . ($has_city_backup ? '#1976d2' : '#f57c00') . "; border-bottom: 2px solid var(--border-color);'>
@@ -629,7 +662,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 }
                 return $rowHtml;
             };
-
             foreach ($clustered_data as $key => $group) {
                 $count = count($group);
                 if ($count > 1) {
