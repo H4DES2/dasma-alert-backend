@@ -4,8 +4,7 @@ let evacsVisible = false;
 let previousIncidentCount = -1; 
 let audioCtx = null;
 let soundEnabled = window.soundEnabled ?? false;
-const API_PATH = 'admin_actions.php';
-
+const API_PATH = '../admin/admin_actions.php';
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
