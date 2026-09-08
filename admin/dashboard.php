@@ -343,39 +343,12 @@ function getReadableLocation($lat, $lng, $fallbackText) {
             </div>
         </div>
 
-        <       <!-- Evidence Modal (Image-Only Viewer) -->
+        <!-- Evidence Modal (Image-Only Viewer) -->
         <div id="evidenceModal" class="modal" style="display:none; position:fixed; inset:0; width:100vw; height:100dvh; background:rgba(0,0,0,0.85); z-index:20000 !important; align-items:center; justify-content:center; backdrop-filter:blur(8px);">
             <div class="modal-content" style="max-width: 600px; width: 92%; padding: 16px; background: #121212; border: 1px solid rgba(255,255,255,0.15); border-radius: var(--radius-xl); position: relative; box-shadow: var(--shadow-lg);">
                 <div class="close-modal" onclick="closeModal('evidenceModal')" style="position: absolute; top: 12px; right: 12px; background: rgba(255,255,255,0.15); color: #fff; border: none; cursor: pointer; z-index: 10;"><i class='bx bx-x'></i></div>
                 <div style="display: flex; align-items: center; justify-content: center; min-height: 200px; max-height: 75vh; overflow: hidden; border-radius: var(--radius-lg); margin-top: 20px;">
                     <img id="evidenceImageFull" src="" alt="Evidence Image" style="max-width: 100%; max-height: 70vh; object-fit: contain; border-radius: var(--radius-md);">
-                </div>
-            </div>
-        </div>
-                        
-                        <div style="flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 12px;">
-                            <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);" class="ev-box">
-                                <small style="color: var(--text-muted); font-weight: 800; text-transform: uppercase; font-size: 0.68rem; letter-spacing:0.04em;">Reported By</small>
-                                <div id="evReporter" class="val" style="font-weight: 800; font-size: 1.05rem; color: var(--color-info);"></div>
-                            </div>
-                            <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);" class="ev-box">
-                                <small style="color: var(--text-muted); font-weight: 800; text-transform: uppercase; font-size: 0.68rem; letter-spacing:0.04em;">Date & Time</small>
-                                <div id="evDateTime" class="val" style="font-weight: 800; font-size: 0.95rem; color: var(--text-primary);"></div>
-                            </div>
-                            <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);" class="ev-box">
-                                <small style="color: var(--text-muted); font-weight: 800; text-transform: uppercase; font-size: 0.68rem; letter-spacing:0.04em;">Incident Type</small>
-                                <div id="evType" class="val" style="font-weight: 800; font-size: 1.05rem; color: var(--text-primary);"></div>
-                            </div>
-                            <div style="background: var(--surface-subtle); padding: 14px; border-radius: var(--radius-md); border: 1px solid var(--border-color);" class="ev-box">
-                                <small style="color: var(--text-muted); font-weight: 800; text-transform: uppercase; font-size: 0.68rem; letter-spacing:0.04em;">Location</small>
-                                <div id="evBrgy" style="font-weight: 800; font-size: 0.95rem; color: var(--color-critical);"></div>
-                            </div>
-                            <div style="background: rgba(245, 158, 11, 0.12); padding: 14px; border-radius: var(--radius-md); border: 1px solid rgba(245, 158, 11, 0.3); margin-top: 4px;">
-                                <small style="color: var(--color-warning); font-weight: 800; text-transform: uppercase; font-size: 0.68rem; letter-spacing:0.04em;">Reporter Logs & Details</small>
-                                <div id="evLogs" style="font-weight: 600; font-size: 0.9rem; color: var(--text-primary); margin-top: 4px; font-style: italic;"></div>
-                            </div>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
