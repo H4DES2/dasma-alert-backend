@@ -84,6 +84,10 @@
         map = L.map('dasma-map', { maxBounds: dasmaBounds, maxBoundsViscosity: 1.0, minZoom: 13 }).setView([14.3294, 120.9368], 13);
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         markerLayer = L.layerGroup().addTo(map);
+        
+        // Ensure tiles re-fill if CSS flex resized the container
+        setTimeout(() => { map.invalidateSize(); }, 200);
+
         fetchWeather();
         fetchLocalData(); 
         setInterval(fetchLocalData, 5000); 
