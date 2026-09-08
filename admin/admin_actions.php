@@ -628,7 +628,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         if ($role === 'superadmin') {
                             $backup_action = "
                                 <div style='display: flex; gap: 8px; align-items: center;'>
-                                    <button class='btn-sm' style='background:#d32f2f; padding: 8px 14px; font-weight: 800; border-radius: 8px; width: auto;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>
+                                    <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallIncident({$inc['id']})'><i class='bx bx-undo'></i> Recall</button>
                                 </div>";
                         } else {
                             $backup_action = !empty($badge_html) 
@@ -1043,7 +1043,38 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         }
         exit();
     }
-    
+    // ACTION: RECALL PRIMARY DISPATCHED UNIT
+    if ($action === 'recall_team') {
+        $incident_id = isset($_POST['incident_id']) ? (int)$_POST['incident_id'] : 0;
+
+        if (!$incident_id) {
+            echo json_encode(['success' => false, 'message' => 'Invalid incident ID']);
+            exit();
+        }
+
+        // 1. Reset the response team assigned to this incident back to available
+        $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
+        $stmt_rt->bind_param("i", $incident_id);
+        $stmt_rt->execute();
+        $stmt_rt->close();
+
+        // 2. Clear assignment on the incident and revert status back to active/pending
+        $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id = ?");
+        $stmt_inc->bind_param("i", $incident_id);
+        $stmt_inc->execute();
+        $stmt_inc->close();
+
+        // 3. Add to audit trail log
+        $admin_id = $_SESSION['user_id'] ?? 0;
+        $log_msg = "Dispatched unit was recalled by admin.";
+        $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+        $stmt_log->bind_param("iis", $incident_id, $admin_id, $log_msg);
+        $stmt_log->execute();
+        $stmt_log->close();
+
+        echo json_encode(['success' => true]);
+        exit();
+    }
     if ($action === 'update_team_status') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
