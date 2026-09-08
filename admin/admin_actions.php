@@ -628,21 +628,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     <td class='mobile-hide' style='text-align:center; vertical-align: middle;'><span class='badge $sev_badge' style='width:100%; justify-content:center;'>$display_sev</span><br>$status_html</td>
                     <td class='mobile-hide' style='vertical-align: middle; width: 150px; padding-right: 25px;'>$action_btns</td>
                 </tr>";
-
-                if ($inc['backup_requested'] == 1 && (!strpos($extraClass, 'cluster-row'))) {
+                $assigned_text = (string)($inc['assigned_to'] ?? '');
+                $has_city_backup = (strpos($assigned_text, '[City Backup:') !== false);
+                $is_backup_requested = ((int)$inc['backup_requested'] === 1);
+                
+                if (($is_backup_requested || $has_city_backup) && (!strpos($extraClass, 'cluster-row'))) {
                     $safe_type_backup = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
-                    $backup_action = ($role === 'superadmin') 
-                        ? "<button class='btn-sm' style='background:#1976d2; padding: 10px 16px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
-                        : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
 
+                    if ($has_city_backup) {
+                        preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
+                        $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
+
+                        $badge_html = "<span class='badge' style='background: #1976d2; font-size: 0.75rem; padding: 6px 10px;'><i class='bx bxs-truck'></i> CITY BACKUP DEPLOYED</span>";
+                        $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
+                        $backup_action = ($role === 'superadmin') 
+                            ? "<button class='btn-sm' style='background:#d32f2f; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>"
+                            : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup En Route</span>";
+                    } else {
+                        $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
+                        $desc_html = "<b style='color: #ff9800;'>Local responders requested additional support.</b>";
+                        $backup_action = ($role === 'superadmin') 
+                            ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
+                            : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
+                    }
                     $rowHtml .= "
-                    <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(245, 124, 0, 0.05); $extraStyle'>
-                        <td colspan='6' style='padding: 12px 18px; border-left: 4px solid #f57c00; border-bottom: 2px solid var(--border-color);'>
+                    <tr id='backup-row-{$inc['id']}' class='$extraClass backup-subrow' style='background: rgba(25, 118, 210, 0.04); $extraStyle'>
+                        <td colspan='6' style='padding: 10px 18px; border-left: 4px solid " . ($has_city_backup ? '#1976d2' : '#f57c00') . "; border-bottom: 2px solid var(--border-color);'>
                             <div style='display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;'>
                                 <div style='display: flex; align-items: center; gap: 12px;'>
-                                    <span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>
+                                    $badge_html
                                     <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
-                                        <b style='color: #ff9800;'>Local responders requested additional support.</b>
+                                        $desc_html
                                     </div>
                                 </div>
                                 <div style='display: flex; align-items: center; gap: 10px;'>
@@ -1225,17 +1241,54 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
-    // 🚀 MULTI-ID SYNC: Recall / Cancel Dispatch
-    if ($action === 'cancel_dispatch') {
+    if ($action === 'cancel_backup_dispatch') {
         requireRole($ADMIN_TIER_ROLES, $role);
-        $ids_raw = $_POST['id'] ?? '';
-        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
-        if (!empty($ids_array)) {
-            $id_list = implode(',', $ids_array);
-            $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'available' WHERE current_incident_id IN ($id_list)");
-            $conn->query("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id IN ($id_list)");
+        $incident_id = (int)($_POST['incident_id'] ?? 0);
+
+        if ($incident_id > 0) {
+            $stmt = $conn->prepare("SELECT assigned_to FROM incidents WHERE id = ?");
+            $stmt->bind_param("i", $incident_id);
+            $stmt->execute();
+            $inc = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if ($inc && !empty($inc['assigned_to'])) {
+                $assigned_str = $inc['assigned_to'];
+
+                // Check if a city backup is assigned
+                if (preg_match('/\|\s*\[City Backup:\s*([^\]]+)\]/', $assigned_str, $matches)) {
+                    $backup_teams_str = $matches[1];
+                    $backup_team_names = array_map('trim', explode(',', $backup_teams_str));
+
+                    // Strip city backup portion from assigned_to string
+                    $clean_assigned = trim(preg_replace('/\|\s*\[City Backup:\s*[^\]]+\]/', '', $assigned_str));
+                    $clean_assigned = rtrim($clean_assigned, " ,|");
+
+                    // Release only the city backup response team(s)
+                    if (!empty($backup_team_names)) {
+                        $placeholders = implode(',', array_fill(0, count($backup_team_names), '?'));
+                        $types = str_repeat('s', count($backup_team_names));
+                        
+                        $rt_sql = "UPDATE response_teams SET current_incident_id = NULL, status = 'available' 
+                                   WHERE current_incident_id = ? AND team_name IN ($placeholders)";
+                        $stmt_rt = $conn->prepare($rt_sql);
+                        $bind_params = array_merge([$incident_id], $backup_team_names);
+                        $stmt_rt->bind_param("i" . $types, ...$bind_params);
+                        $stmt_rt->execute();
+                        $stmt_rt->close();
+                    }
+
+                    // Update incident: re-flag backup_requested = 1 so the prompt re-opens if needed, or leave it pending
+                    $upd_stmt = $conn->prepare("UPDATE incidents SET assigned_to = ?, backup_requested = 1 WHERE id = ?");
+                    $upd_stmt->bind_param("si", $clean_assigned, $incident_id);
+                    $upd_stmt->execute();
+                    $upd_stmt->close();
+                }
+            }
         }
-        ob_end_clean(); echo "success"; exit();
+        ob_end_clean();
+        echo json_encode(['success' => true]);
+        exit();
     }
 
     // 🚀 SECURED: Add Log

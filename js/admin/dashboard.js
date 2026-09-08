@@ -483,6 +483,33 @@ function toggleBackupRow(incidentId) {
         row.style.display = (row.style.display === 'none') ? 'table-row' : 'none';
     }
 }
+function recallCityBackup(incidentId) {
+    customConfirm(
+        "Recall City Backup?",
+        "Are you sure you want to recall only the City Backup unit? The primary local responder will remain on-scene.",
+        "bx-undo",
+        "#d32f2f",
+        function() {
+            let fd = new FormData();
+            fd.append('action', 'cancel_backup_dispatch');
+            fd.append('incident_id', incidentId);
+
+            fetch(API_PATH, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        syncDashboard();
+                    } else {
+                        customAlert("Error", d.message || "Could not recall backup unit.", "bx-error", "#ef4444");
+                    }
+                })
+                .catch(err => {
+                    console.error("Recall error:", err);
+                    syncDashboard();
+                });
+        }
+    );
+}
 
 // Clean Evidence Viewer: Image Only
 function viewEvidence(imagePath) { 
