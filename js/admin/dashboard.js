@@ -517,10 +517,10 @@ function recallIncident(incidentId) {
     formData.append('action', 'recall_team');
     formData.append('incident_id', incidentId);
 
-    fetch('admin_actions.php', {
-        method: 'POST',
-        body: formData
-    })
+    fetch('/admin/admin_actions.php', {
+    method: 'POST',
+    body: formData
+})
     .then(res => res.json())
     .then(data => {
         if (data.success) {
