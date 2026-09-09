@@ -22,7 +22,10 @@ if (!$auth->isAdmin()) {
     header("Location: ../php/login.php");
     exit();
 }
-
+$chk_b = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'dismissed_broadcast_id'");
+if ($chk_b && $chk_b->num_rows === 0) {
+    $conn->query("ALTER TABLE user_profiles ADD COLUMN dismissed_broadcast_id INT DEFAULT 0");
+}
 session_write_close();
 // 🚀 LIVE KPI API ENDPOINT
 if (isset($_GET['ajax_kpi'])) {
@@ -106,15 +109,18 @@ if (array_key_exists(strtoupper($raw_assigned_brgy), $locationAliases)) {
 $broadcast_result = $conn->query("SELECT * FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
 $active_broadcast = ($broadcast_result && $broadcast_result->num_rows > 0) ? $broadcast_result->fetch_assoc() : null;
 
-// Check database profile first, then fallback to cookie
 $db_dismissed = 0;
-$stmt_d = $conn->prepare("SELECT dismissed_broadcast_id FROM user_profiles WHERE user_id = ?");
-if ($stmt_d) {
-    $stmt_d->bind_param("i", $user_id);
-    $stmt_d->execute();
-    $d_res = $stmt_d->get_result()->fetch_assoc();
-    $db_dismissed = (int)($d_res['dismissed_broadcast_id'] ?? 0);
-    $stmt_d->close();
+try {
+    $stmt_d = $conn->prepare("SELECT dismissed_broadcast_id FROM user_profiles WHERE user_id = ?");
+    if ($stmt_d) {
+        $stmt_d->bind_param("i", $user_id);
+        $stmt_d->execute();
+        $d_res = $stmt_d->get_result()->fetch_assoc();
+        $db_dismissed = (int)($d_res['dismissed_broadcast_id'] ?? 0);
+        $stmt_d->close();
+    }
+} catch (Throwable $e) {
+    $db_dismissed = 0;
 }
 
 $cookie_dismissed = (int)($_COOKIE['dismissed_broadcast_id'] ?? 0);
