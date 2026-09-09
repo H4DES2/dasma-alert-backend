@@ -1359,6 +1359,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             $post_fields = [
                 'file'          => $cfile,
                 'upload_preset' => $upload_preset,
+                'folder'        => 'dasma_profiles'
             ];
 
             $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
