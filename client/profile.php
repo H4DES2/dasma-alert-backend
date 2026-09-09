@@ -48,6 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_photo'])) {
     $post_fields = [
         'file'          => $cfile,
         'upload_preset' => $upload_preset,
+        'folder'        => 'dasma_profiles'
     ];
 
     $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");

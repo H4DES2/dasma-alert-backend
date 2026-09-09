@@ -112,8 +112,8 @@ if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
         $post_fields = [
             'file'          => $cfile,
             'upload_preset' => $upload_preset,
+            'folder'        => 'dasma_evidence'
         ];
-
         $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
         curl_setopt($ch, CURLOPT_POST, true);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
@@ -1336,68 +1336,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Update Admin Account
-    if ($action === 'update_admin_account') {
-        ob_end_clean();
-        header('Content-Type: application/json');
-
-       $user_id        = (int)($_SESSION['user_id'] ?? 0);
-        $first_name     = trim($_POST['first_name'] ?? '');
-        $last_name      = trim($_POST['last_name'] ?? '');
-        $phone_number   = trim($_POST['phone_number'] ?? '');
-        $position       = trim($_POST['position'] ?? '');
-        $radio_callsign = trim($_POST['radio_callsign'] ?? '');
-        $department     = trim($_POST['department'] ?? '');
-        $barangay_raw   = trim($_POST['barangay'] ?? '');
-        $current_pwd    = $_POST['current_password'] ?? '';
-        $new_pwd        = $_POST['new_password'] ?? '';
-
-        // 1. Verify password & fetch existing user data
-        $stmt = $conn->prepare("SELECT password, barangay FROM users WHERE id = ?");
-        $stmt->bind_param("i", $user_id);
-        $stmt->execute();
-        $user = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        if (!$user || !password_verify($current_pwd, $user['password'])) {
-            echo json_encode(['success' => false, 'message' => 'Incorrect current password!']);
-            exit();
-        }
-
-        // Use the newly submitted barangay if provided, otherwise preserve existing
-        $barangay = (!empty($barangay_raw)) ? $barangay_raw : ($user['barangay'] ?? null);
-
-        if (!empty($new_pwd)) {
-            $hashed_pwd = password_hash($new_pwd, PASSWORD_DEFAULT);
-            $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=?, password=? WHERE id=?");
-            $stmt_u->bind_param("sssssi", $first_name, $last_name, $barangay, $department, $hashed_pwd, $user_id);
-        } else {
-            $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=? WHERE id=?");
-            $stmt_u->bind_param("ssssi", $first_name, $last_name, $barangay, $department, $user_id);
-        }
-        $stmt_u->execute();
-        $stmt_u->close();
-
-        if (!empty($barangay)) { 
-            $_SESSION['barangay'] = $barangay; 
-        }
-        $_SESSION['first_name'] = $first_name;
-        $_SESSION['last_name']  = $last_name;
-        // 3. Upsert user_profiles record
-        $chk_prof = $conn->query("SELECT user_id FROM user_profiles WHERE user_id = " . (int)$user_id);
-        if ($chk_prof && $chk_prof->num_rows === 0) {
-            $stmt_ins = $conn->prepare("INSERT INTO user_profiles (user_id, phone_number, position, radio_callsign) VALUES (?, ?, ?, ?)");
-            $stmt_ins->bind_param("isss", $user_id, $phone_number, $position, $radio_callsign);
-            $stmt_ins->execute();
-            $stmt_ins->close();
-        } else {
-            $stmt_p = $conn->prepare("UPDATE user_profiles SET phone_number=?, position=?, radio_callsign=? WHERE user_id=?");
-            $stmt_p->bind_param("sssi", $phone_number, $position, $radio_callsign, $user_id);
-            $stmt_p->execute();
-            $stmt_p->close();
-        }
-
-        // 4. Handle File Upload (Ensuring storage in uploads/profiles/)
+    // 4. Handle File Upload via Cloudinary
         if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
             $pp_allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
             $pp_ext_ok  = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -1413,30 +1352,40 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                 exit();
             }
 
-            // Target directory: alert/uploads/profiles/
-            $target_dir = __DIR__ . '/../uploads/profiles/';
-            if (!is_dir($target_dir)) {
-                mkdir($target_dir, 0777, true);
-            }
+            $cloud_name    = 'wyxsiraw';
+            $upload_preset = 'dasma_preset';
 
-            $clean_filename = 'uploads/profiles/profile_' . (int)$user_id . '_' . time() . '.' . $pp_ext;
-            $destination    = __DIR__ . '/../' . $clean_filename;
+            $cfile = new CURLFile($_FILES['profile_picture']['tmp_name'], $pp_mime, $_FILES['profile_picture']['name']);
+            $post_fields = [
+                'file'          => $cfile,
+                'upload_preset' => $upload_preset,
+            ];
 
-            if (move_uploaded_file($_FILES['profile_picture']['tmp_name'], $destination)) {
+            $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+            $response  = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
+
+            $json_res = json_decode($response, true);
+            if ($http_code === 200 && !empty($json_res['secure_url'])) {
+                $cloud_photo_url = $json_res['secure_url'];
+
                 $stmt_img = $conn->prepare("UPDATE user_profiles SET profile_photo=? WHERE user_id=?");
-                $stmt_img->bind_param("si", $clean_filename, $user_id);
+                $stmt_img->bind_param("si", $cloud_photo_url, $user_id);
                 $stmt_img->execute();
                 $stmt_img->close();
 
-                $_SESSION['profile_photo'] = $clean_filename;
+                $_SESSION['profile_photo'] = $cloud_photo_url;
             } else {
-                echo json_encode(['success' => false, 'message' => 'Failed to save image file.']);
+                echo json_encode(['success' => false, 'message' => 'Cloudinary upload failed: ' . ($response ?: 'HTTP ' . $http_code)]);
                 exit();
             }
         }
-        echo json_encode(['success' => true, 'message' => 'Profile completely updated!']);
-        exit();
-    }
 
     // 🚀 SECURED: Add Center
     if ($action === 'add_center') { 
