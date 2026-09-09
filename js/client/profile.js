@@ -141,3 +141,58 @@
                 saveBtn.disabled = false;
             });
         }
+        function uploadProfilePhoto(input) {
+    if (!input.files || !input.files[0]) return;
+    const file = input.files[0];
+    const label = document.getElementById('changePhotoLabel');
+    const alertBox = document.getElementById('profile-alert-box');
+    
+    if (label) label.textContent = 'UPLOADING...';
+
+    const formData = new FormData();
+    formData.append('profile_photo', file);
+
+    fetch('profile.php', {
+        method: 'POST',
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (label) label.textContent = 'CHANGE PHOTO';
+        if (data.success) {
+            // Update profile card image
+            const img = document.getElementById('imgDisplay');
+            if (img) img.src = data.photo_url;
+
+            // Update navbar avatar
+            const navAvatar = document.querySelector('.profile-toggle img');
+            if (navAvatar) navAvatar.src = data.photo_url;
+
+            if (alertBox) {
+                alertBox.textContent = 'Profile photo updated successfully!';
+                alertBox.style.background = '#d4edda';
+                alertBox.style.color = '#155724';
+                alertBox.style.display = 'block';
+            }
+        } else {
+            if (alertBox) {
+                alertBox.textContent = data.message || 'Error updating photo.';
+                alertBox.style.background = '#f8d7da';
+                alertBox.style.color = '#721c24';
+                alertBox.style.display = 'block';
+            }
+        }
+    })
+    .catch(err => {
+        if (label) label.textContent = 'CHANGE PHOTO';
+        if (alertBox) {
+            alertBox.textContent = 'Network error during upload.';
+            alertBox.style.background = '#f8d7da';
+            alertBox.style.color = '#721c24';
+            alertBox.style.display = 'block';
+        }
+    });
+}
+
+// Expose globally so inline onchange="uploadProfilePhoto(this)" works reliably
+window.uploadProfilePhoto = uploadProfilePhoto;

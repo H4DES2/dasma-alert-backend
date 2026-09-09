@@ -19,8 +19,9 @@ if (empty($_SESSION['user_id']) || (!in_array($current_role, $allowed_roles) && 
 
 $user_id = (int)$_SESSION['user_id'];
 
-// 🚀 AJAX PHOTO UPLOAD HANDLER
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_photo'])) {
+    while (ob_get_level() > 0) { ob_end_clean(); }
     header('Content-Type: application/json');
     
     if ($_FILES['profile_photo']['error'] !== UPLOAD_ERR_OK) {
@@ -34,23 +35,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_photo'])) {
     $mime = finfo_file($finfo, $file['tmp_name']);
     finfo_close($finfo);
 
-    if (!in_array($mime, $allowed_types)) {
+    if (!in_array($mime, $allowed_types) || !@getimagesize($file['tmp_name'])) {
         echo json_encode(['success' => false, 'message' => 'Only JPG, PNG, WEBP, and GIF images are allowed.']);
         exit();
     }
 
-    // Target upload directory
-    $upload_dir = __DIR__ . '/../uploads/profiles/';
-    if (!is_dir($upload_dir)) {
-        mkdir($upload_dir, 0755, true);
-    }
+    // Cloudinary details (matching env / admin_actions preset)
+    $cloud_name    = 'wyxsiraw';
+    $upload_preset = 'dasma_preset';
 
-    $ext = pathinfo($file['name'], PATHINFO_EXTENSION);
-    $filename = 'profile_' . $user_id . '_' . time() . '.' . strtolower($ext);
-    $target_file = $upload_dir . $filename;
-    $db_path = 'uploads/profiles/' . $filename;
+    $cfile = new CURLFile($file['tmp_name'], $mime, $file['name']);
+    $post_fields = [
+        'file'          => $cfile,
+        'upload_preset' => $upload_preset,
+    ];
 
-    if (move_uploaded_file($file['tmp_name'], $target_file)) {
+    $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $json_res = json_decode($response, true);
+    if ($http_code === 200 && !empty($json_res['secure_url'])) {
+        $secure_url = $json_res['secure_url'];
+
         // Upsert user_profiles record
         $check = $conn->prepare("SELECT user_id FROM user_profiles WHERE user_id = ?");
         $check->bind_param("i", $user_id);
@@ -60,20 +73,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_photo'])) {
 
         if ($has_profile) {
             $up = $conn->prepare("UPDATE user_profiles SET profile_photo = ? WHERE user_id = ?");
-            $up->bind_param("si", $db_path, $user_id);
+            $up->bind_param("si", $secure_url, $user_id);
             $up->execute();
             $up->close();
         } else {
             $ins = $conn->prepare("INSERT INTO user_profiles (user_id, profile_photo) VALUES (?, ?)");
-            $ins->bind_param("is", $user_id, $db_path);
+            $ins->bind_param("is", $user_id, $secure_url);
             $ins->execute();
             $ins->close();
         }
 
-        $_SESSION['profile_photo'] = $db_path;
-        echo json_encode(['success' => true, 'photo_url' => '../' . $db_path]);
+        $_SESSION['profile_photo'] = $secure_url;
+        echo json_encode(['success' => true, 'photo_url' => $secure_url]);
     } else {
-        echo json_encode(['success' => false, 'message' => 'Failed to save uploaded file.']);
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Cloudinary upload failed (HTTP ' . $http_code . '): ' . ($response ?: 'No response from Cloudinary')
+        ]);
     }
     exit();
 }
@@ -244,55 +260,6 @@ if (!empty($raw_photo) && $raw_photo !== 'NULL') {
             </div>
         </main>
     </div>
-
-    <script>
-    function uploadProfilePhoto(input) {
-        if (!input.files || !input.files[0]) return;
-        const file = input.files[0];
-        const label = document.getElementById('changePhotoLabel');
-        const alertBox = document.getElementById('profile-alert-box');
-        
-        label.textContent = 'UPLOADING...';
-
-        const formData = new FormData();
-        formData.append('profile_photo', file);
-
-        fetch('profile.php', {
-            method: 'POST',
-            body: formData
-        })
-        .then(res => res.json())
-        .then(data => {
-            label.textContent = 'CHANGE PHOTO';
-            if (data.success) {
-                // Update profile card image
-                const img = document.getElementById('imgDisplay');
-                if (img) img.src = data.photo_url + '?v=' + new Date().getTime();
-
-                // Update navbar avatar
-                const navAvatar = document.querySelector('.profile-toggle img');
-                if (navAvatar) navAvatar.src = data.photo_url + '?v=' + new Date().getTime();
-
-                alertBox.textContent = 'Profile photo updated successfully!';
-                alertBox.style.background = '#d4edda';
-                alertBox.style.color = '#155724';
-                alertBox.style.display = 'block';
-            } else {
-                alertBox.textContent = data.message || 'Error updating photo.';
-                alertBox.style.background = '#f8d7da';
-                alertBox.style.color = '#721c24';
-                alertBox.style.display = 'block';
-            }
-        })
-        .catch(err => {
-            label.textContent = 'CHANGE PHOTO';
-            alertBox.textContent = 'Network error during upload.';
-            alertBox.style.background = '#f8d7da';
-            alertBox.style.color = '#721c24';
-            alertBox.style.display = 'block';
-        });
-    }
-    </script>
     <script src="../js/client/profile.js?v=<?= filemtime('../js/client/profile.js') ?>"></script>
 </body>
 </html>
