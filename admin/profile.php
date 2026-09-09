@@ -27,16 +27,100 @@ $stmt->close();
 $themeClass = ($user['theme'] ?? 'light') === 'dark' ? 'global-dark-mode' : '';
 $fontSize = !empty($user['font_size']) ? $user['font_size'] : '16px';
 
-// Robust Path Resolution for Profile Picture
-$raw_photo = $user['profile_photo'] ?? '';
+$raw_photo = trim($user['profile_photo'] ?? '');
 $display_photo = '';
 
-if (!empty($raw_photo)) {
-    if (file_exists(__DIR__ . '/../' . $raw_photo)) {
+if (!empty($raw_photo) && $raw_photo !== 'NULL') {
+    if (str_starts_with($raw_photo, 'http://') || str_starts_with($raw_photo, 'https://')) {
+        $display_photo = htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
+    } elseif (file_exists(__DIR__ . '/../' . $raw_photo)) {
         $display_photo = '../' . htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
     } elseif (file_exists(__DIR__ . '/../../dasma_api/' . $raw_photo)) {
         $display_photo = '../../dasma_api/' . htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
     }
+}
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['profile_photo'])) {
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header('Content-Type: application/json');
+    
+    if ($_FILES['profile_photo']['error'] !== UPLOAD_ERR_OK) {
+        echo json_encode(['success' => false, 'message' => 'Upload error code: ' . $_FILES['profile_photo']['error']]);
+        exit();
+    }
+
+    $tmp_path  = $_FILES['profile_photo']['tmp_name'];
+    $orig_name = $_FILES['profile_photo']['name'];
+
+    $finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $mime  = finfo_file($finfo, $tmp_path);
+    finfo_close($finfo);
+
+    $allowed_mimes = ['image/jpeg', 'image/pjpeg', 'image/png', 'image/webp', 'image/gif'];
+    $ext = strtolower(pathinfo($orig_name, PATHINFO_EXTENSION));
+    $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'jfif'];
+
+    if (!in_array($mime, $allowed_mimes, true) || !in_array($ext, $allowed_exts, true) || !@getimagesize($tmp_path)) {
+        echo json_encode(['success' => false, 'message' => 'Security Error: Only valid JPG, PNG, WEBP, GIF, and JFIF images are allowed.']);
+        exit();
+    }
+
+    $clean_ext  = ($ext === 'jfif') ? 'jpg' : $ext;
+    $clean_mime = ($ext === 'jfif') ? 'image/jpeg' : $mime;
+    $file_id    = 'profile_' . (int)$user_id . '_' . time();
+
+    $cloud_name    = 'wyxsiraw';
+    $upload_preset = 'dasma_preset';
+
+    $cfile = new CURLFile($tmp_path, $clean_mime, $file_id . '.' . $clean_ext);
+    $post_fields = [
+        'file'          => $cfile,
+        'upload_preset' => $upload_preset,
+        'folder'        => 'dasma_profiles',
+        'asset_folder'  => 'dasma_profiles',
+        'public_id'     => 'dasma_profiles/' . $file_id
+    ];
+
+    $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $json_res = json_decode($response, true);
+    if ($http_code === 200 && !empty($json_res['secure_url'])) {
+        $secure_url = $json_res['secure_url'];
+
+        $check = $conn->prepare("SELECT user_id FROM user_profiles WHERE user_id = ?");
+        $check->bind_param("i", $user_id);
+        $check->execute();
+        $has_profile = $check->get_result()->num_rows > 0;
+        $check->close();
+
+        if ($has_profile) {
+            $up = $conn->prepare("UPDATE user_profiles SET profile_photo = ? WHERE user_id = ?");
+            $up->bind_param("si", $secure_url, $user_id);
+            $up->execute();
+            $up->close();
+        } else {
+            $ins = $conn->prepare("INSERT INTO user_profiles (user_id, profile_photo) VALUES (?, ?)");
+            $ins->bind_param("is", $user_id, $secure_url);
+            $ins->execute();
+            $ins->close();
+        }
+
+        $_SESSION['profile_photo'] = $secure_url;
+        echo json_encode(['success' => true, 'photo_url' => $secure_url]);
+    } else {
+        echo json_encode([
+            'success' => false, 
+            'message' => 'Cloudinary upload failed: ' . ($response ?: 'HTTP ' . $http_code)
+        ]);
+    }
+    exit();
 }
 ?>
 <!DOCTYPE html>

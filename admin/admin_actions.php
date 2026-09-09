@@ -33,6 +33,7 @@ function requireRole(array $allowedRoles, $role) {
         exit();
     }
 }
+
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
     if ($lat == 0.0 || $lng == 0.0) {
         return $fallback;
@@ -48,7 +49,6 @@ function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fal
 
     $stmt = $conn->prepare($sql);
     if ($stmt) {
-        // Point is (Longitude, Latitude)
         $stmt->bind_param("dd", $lng, $lat);
         $stmt->execute();
         $result = $stmt->get_result();
@@ -86,59 +86,52 @@ $conn->query("CREATE TABLE IF NOT EXISTS incident_logs (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )");
 
-// 🚀 NEW: Ensure is_online column exists for responders
 $check_col_up = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'is_online'");
 if ($check_col_up && $check_col_up->num_rows === 0) {
     $conn->query("ALTER TABLE user_profiles ADD COLUMN is_online TINYINT(1) DEFAULT 0");
 }
 // =========================================================================================
 
+// Evidence Image Upload (Public Reports)
 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
-        $a_allowed_mime = ["image/jpeg", "image/png", "image/gif", "image/webp"];
-        $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
-        finfo_close($a_finfo);
+    $a_allowed_mime = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+    $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
+    $a_mime  = finfo_file($a_finfo, $_FILES["image"]["tmp_name"]);
+    finfo_close($a_finfo);
 
-        if (!in_array($a_mime, $a_allowed_mime) || !@getimagesize($_FILES["image"]["tmp_name"])) {
-            echo "invalid_file_type"; 
-            exit();
-        }
-
-        // Upload to Cloudinary
-        $cloud_name    = 'wyxsiraw';
-        $upload_preset = 'dasma_preset';
-
-        $cfile = new CURLFile($_FILES['image']['tmp_name'], $a_mime, $_FILES['image']['name']);
-        $post_fields = [
-            'file'          => $cfile,
-            'upload_preset' => $upload_preset,
-            'folder'        => 'dasma_evidence'
-        ];
-       $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
-            curl_setopt($ch, CURLOPT_POST, true);
-            curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
-            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
-
-            $response  = curl_exec($ch);
-            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-            curl_close($ch);
-
-            $json_res = json_decode($response, true);
-            if ($http_code === 200 && !empty($json_res['secure_url'])) {
-                $cloud_photo_url = $json_res['secure_url'];
-
-                $stmt_img = $conn->prepare("UPDATE user_profiles SET profile_photo=? WHERE user_id=?");
-                $stmt_img->bind_param("si", $cloud_photo_url, $user_id);
-                $stmt_img->execute();
-                $stmt_img->close();
-
-                $_SESSION['profile_photo'] = $cloud_photo_url;
-            } else {
-                echo json_encode(['success' => false, 'message' => 'Cloudinary upload failed: ' . ($response ?: 'HTTP ' . $http_code)]);
-                exit();
-            }
+    if (!in_array($a_mime, $a_allowed_mime) || !@getimagesize($_FILES["image"]["tmp_name"])) {
+        echo "invalid_file_type"; 
+        exit();
     }
+
+    $cloud_name    = 'wyxsiraw';
+    $upload_preset = 'dasma_preset';
+
+    $cfile = new CURLFile($_FILES['image']['tmp_name'], $a_mime, $_FILES['image']['name']);
+    $post_fields = [
+        'file'          => $cfile,
+        'upload_preset' => $upload_preset,
+        'folder'        => 'dasma_evidence'
+    ];
+
+    $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+    curl_setopt($ch, CURLOPT_POST, true);
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+
+    $response  = curl_exec($ch);
+    $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+
+    $json_res = json_decode($response, true);
+    if ($http_code === 200 && !empty($json_res['secure_url'])) {
+        $image_path = $json_res['secure_url'];
+    } else {
+        echo "Cloudinary Upload Failed (HTTP " . $http_code . "): " . ($response ?: 'Empty response');
+        exit();
+    }
+}
 
 if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
     requireRole($ADMIN_TIER_ROLES, $role);
@@ -152,13 +145,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
     exit();
 }
 
-// 🚀 SECURED: Save Announcement
 if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
     requireRole($ADMIN_TIER_ROLES, $role);
     while (ob_get_level() > 0) { ob_end_clean(); }
 
     try {
-        // Auto-Repair schema: ensure required columns exist
         $cols = [];
         $col_res = $conn->query("SHOW COLUMNS FROM announcements");
         if ($col_res) {
@@ -180,7 +171,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
         $author_id = !empty($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 1;
         $image_path = null;
 
-        // Cloudinary upload
         if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $a_allowed_mime = ["image/jpeg", "image/pjpeg", "image/png", "image/gif", "image/webp"];
             $a_finfo = finfo_open(FILEINFO_MIME_TYPE);
@@ -226,7 +216,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
             }
         }
 
-        // Database insert / update
         if ($id) {
             if ($image_path) {
                 $stmt = $conn->prepare("UPDATE announcements SET title=?, message=?, image_path=? WHERE id=?");
@@ -257,7 +246,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'request_backup') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
     $ids_raw = $_POST['incident_id'] ?? '';
-    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
+    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
         $conn->query("UPDATE incidents SET backup_requested = 1 WHERE id IN ($id_list)");
@@ -270,7 +259,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_resolve_incident') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
     $ids_raw = $_POST['incident_id'] ?? '';
-    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
+    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
         $conn->query("UPDATE incidents SET status = 'resolved', backup_requested = 0 WHERE id IN ($id_list)");
@@ -284,7 +273,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_verify') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
     $ids_raw = $_POST['incident_id'] ?? '';
-    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
+    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
         $v_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
@@ -298,14 +287,12 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_verify') {
     echo json_encode(['success' => true]);
     exit();
 }
+
 if (isset($_POST['action']) && $_POST['action'] === 'verify_incident') {
     requireRole($ADMIN_TIER_ROLES, $role);
     ob_end_clean();
     $ids_raw = $_POST['incident_id'] ?? '';
-    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
-    // PATCH VULN-A14: severity is rendered as HTML elsewhere via htmlspecialchars(),
-    // but whitelisting it here also stops garbage/oversized values from ever
-    // reaching the incidents table in the first place.
+    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
     $ALLOWED_SEVERITIES = ['Critical', 'Major', 'Minor', 'Info', 'Pending'];
     $posted_severity = $_POST['severity'] ?? '';
     $new_severity = in_array($posted_severity, $ALLOWED_SEVERITIES, true) ? $posted_severity : 'Pending';
@@ -322,9 +309,11 @@ if (isset($_POST['action']) && $_POST['action'] === 'verify_incident') {
     exit();
 }
 
+// =========================================================================================
+// 🚀 GET REQUESTS
+// =========================================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
-    // 🚀 SECURED: Get Active Incidents
     if ($action === 'get_active_incidents') {
         requireRole($ADMIN_TIER_ROLES, $role);
         ob_end_clean();
@@ -361,12 +350,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         session_write_close(); 
         header('Content-Type: application/json');
 
-    if (!function_exists('getStrictBarangay')) {
-    function getStrictBarangay($lat, $lng, $fallbackText = '') {
-        global $conn;
-        return resolveBarangaySector($conn, (float)$lat, (float)$lng, $fallbackText ?: 'Unassigned Sector');
-    }
-}
+        if (!function_exists('getStrictBarangay')) {
+            function getStrictBarangay($lat, $lng, $fallbackText = '') {
+                global $conn;
+                return resolveBarangaySector($conn, (float)$lat, (float)$lng, $fallbackText ?: 'Unassigned Sector');
+            }
+        }
 
         if (!function_exists('getDistanceMeters')) {
             function getDistanceMeters($lat1, $lon1, $lat2, $lon2) {
@@ -402,8 +391,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $types .= "ss"; $params[] = $target_brgy; $params[] = "%" . $target_brgy . "%";
             $evac_types .= "ss"; $evac_params[] = $target_brgy; $evac_params[] = "%" . $target_brgy . "%";
         }
-        
-        // Helper for Master Sync prepared statements
+
         if (!function_exists('executeSyncQuery')) {
             function executeSyncQuery($conn, $sql, $types, $params) {
                 $stmt = $conn->prepare($sql);
@@ -415,15 +403,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             }
         }
         
-        // Active KPI
+        // KPIs
         $res1 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
         $response['kpi']['active'] = $res1 ? (int)$res1->fetch_assoc()['c'] : 0;
 
-        // Deployed KPI
         $res2 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
         $response['kpi']['deployed'] = $res2 ? (int)$res2->fetch_assoc()['c'] : 0;
 
-        // Evacuees KPI
         $res3 = executeSyncQuery($conn, "SELECT SUM(current_occupants) as total FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
         $response['kpi']['evacuees'] = $res3 ? (int)($res3->fetch_assoc()['total'] ?? 0) : 0;
 
@@ -500,10 +486,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $reporter_display = !empty($full_name) ? $full_name : ($inc['username'] ?? 'Anonymous');
                 $extra_info = (!empty($inc['reporter_pos']) ? $inc['reporter_pos'] . " | " : "") . ($inc['reporter_phone'] ?? "No Contact");
 
-                // PATCH VULN-A14: addslashes() alone only escapes for the JS-string
-                // context; it does nothing to stop a raw ' or " from breaking out of
-                // the surrounding HTML attribute (HTML doesn't honor backslash escapes).
-                // Wrapping with htmlspecialchars(..., ENT_QUOTES) closes that gap.
                 $safe_img = htmlspecialchars(addslashes($inc['image_path'] ?? ''), ENT_QUOTES);
                 $safe_type = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
                 $safe_brgy = htmlspecialchars(addslashes($inc['display_brgy']), ENT_QUOTES);
@@ -573,8 +555,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     $action_btns = "<span style='color: #888; font-size: 0.8rem; font-weight: bold; background: #eee; padding: 5px 10px; border-radius: 8px;'><i class='bx bx-link'></i> Merged to Primary</span>";
                 }
 
-                $action_td = "<td class='mobile-hidden action-td' style='vertical-align: middle; width: 150px; padding-right: 25px;'><small class='mobile-label'>ACTIONS</small>$action_btns</td>";
-
                 $incident_info = "<span style='font-weight:700;'>".htmlspecialchars($inc['incident_type'])."</span><br>
                                   <small style='color:#666; font-style:italic;'>\"".htmlspecialchars(substr($user_logs, 0, 45))."...\"</small>";
                 
@@ -605,42 +585,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
                         $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
 
-                        // Check the actual status of the city backup unit
                         global $conn;
-                        $backup_status = '';
                         $clean_bname = trim($b_matches[1] ?? '');
                         $stmt_bstatus = $conn->prepare("SELECT status FROM response_teams WHERE team_name = ? AND current_incident_id = ? LIMIT 1");
                         if ($stmt_bstatus) {
                             $stmt_bstatus->bind_param("si", $clean_bname, $inc['id']);
                             $stmt_bstatus->execute();
-                            $b_res = $stmt_bstatus->get_result()->fetch_assoc();
-                            if ($b_res && !empty($b_res['status'])) {
-                                $backup_status = strtolower(trim($b_res['status']));
-                            }
                             $stmt_bstatus->close();
-                        }
-
-                        $sub_status_badge = '';
-                        $current_status = strtolower(trim($inc['status'] ?? ''));
-
-                        if ($current_status === 'en route' || $current_status === 'en_route') {
-                            $sub_status_badge = "<span class='badge' style='background: #1976d2; font-size: 0.65rem; padding: 4px 8px;'><i class='bx bxs-truck'></i> EN ROUTE</span>";
-                        } elseif ($current_status === 'on-scene' || $current_status === 'on scene') {
-                            $sub_status_badge = "<span class='badge' style='background: #2e7d32; font-size: 0.65rem; padding: 4px 8px;'><i class='bx bx-check-double'></i> ON SCENE</span>";
                         }
 
                         $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
 
-                        // Superadmin only has the Recall button
                         if ($role === 'superadmin') {
                             $backup_action = "
                                 <div style='display: flex; gap: 8px; align-items: center;'>
                                     <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button>
                                 </div>";
                         } else {
-                            $backup_action = !empty($badge_html) 
-                                ? "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>"
-                                : "<span style='color:#888; font-weight:bold; font-size: 0.85rem;'>Awaiting Responder Status...</span>";
+                            $backup_action = "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>";
                         }
                     } else {
                         $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
@@ -649,6 +611,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
                             : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
                     }
+
                     $rowHtml .= "
                     <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.08);'>
                         <td colspan='6' style='padding: 10px 18px; border-left: 4px solid #f57c00;'>
@@ -668,6 +631,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 }
                 return $rowHtml;
             };
+
             foreach ($clustered_data as $key => $group) {
                 $count = count($group);
                 if ($count > 1) {
@@ -692,203 +656,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         exit();
     }
     
-    if ($action === 'stream_sync') {
-        requireRole($ADMIN_TIER_ROLES, $role);
-        header('Content-Type: text/event-stream');
-        header('Cache-Control: no-cache');
-        header('Connection: keep-alive');
-        
-        session_write_close();
-
-        if (!function_exists('getStrictBarangay')) {
-            function getStrictBarangay($lat, $lng, $fallbackText) {
-                global $conn;
-                $lat = (float)$lat;
-                $lng = (float)$lng;
-
-            }
-        }
-
-        if (!function_exists('getDistanceMeters')) {
-            function getDistanceMeters($lat1, $lon1, $lat2, $lon2) {
-                $dLat = deg2rad($lat2 - $lat1); $dLon = deg2rad($lon2 - $lon1);
-                $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon/2) * sin($dLon/2);
-                return 6371000 * (2 * asin(sqrt($a)));
-            }
-        }
-
-        if (!function_exists('executeSyncQuery')) {
-            function executeSyncQuery($conn, $sql, $types, $params) {
-                $stmt = $conn->prepare($sql);
-                if (!empty($params)) { $stmt->bind_param($types, ...$params); }
-                $stmt->execute();
-                $res = $stmt->get_result();
-                $stmt->close();
-                return $res;
-            }
-        }
-
-        $renderRow = function($inc, $role, $extraClass, $extraStyle, $targetIds = null, $isParent = false, $duplicateCount = 0, $clusterKey = '') {
-            $status = $inc['status'] ?? 'active';
-            $coords = $inc['latitude'] . ", " . $inc['longitude'];
-            $exact_time = date('h:i A', strtotime($inc['created_at']));
-            $exact_date = date('M d, Y', strtotime($inc['created_at']));
-            $user_logs = $inc['user_logs'] ?? 'No additional details provided by the reporter.';
-            $reporter_display = !empty(trim(($inc['first_name'] ?? '') . ' ' . ($inc['last_name'] ?? ''))) ? trim(($inc['first_name'] ?? '') . ' ' . ($inc['last_name'] ?? '')) : ($inc['username'] ?? 'Anonymous');
-            $extra_info = (!empty($inc['reporter_pos']) ? $inc['reporter_pos'] . " | " : "") . ($inc['reporter_phone'] ?? "No Contact");
-
-            // PATCH VULN-A14: see comment on the equivalent block in the master_sync renderRow above.
-            $safe_img = htmlspecialchars(addslashes($inc['image_path'] ?? ''), ENT_QUOTES); $safe_type = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES); $safe_brgy = htmlspecialchars(addslashes($inc['display_brgy']), ENT_QUOTES); $safe_rep = htmlspecialchars(addslashes($reporter_display), ENT_QUOTES); $safe_logs = htmlspecialchars(addslashes(preg_replace('/\s+/', ' ', $user_logs)), ENT_QUOTES); $safe_extra = htmlspecialchars(addslashes($extra_info), ENT_QUOTES); $safe_backup = (int)$inc['backup_requested'];
-            $dispatch_id = $targetIds ?: $inc['id'];
-
-            $btn_color = (!empty($safe_img) && $safe_img !== 'NULL') ? '#424242' : '#999999';
-            $btn_icon = (!empty($safe_img) && $safe_img !== 'NULL') ? 'bx-camera' : 'bx-info-circle';
-            $evidence_btn = "<button class='btn-sm' style='background:$btn_color; margin: 0 auto;' onclick='event.stopPropagation(); viewEvidence(\"$safe_img\", \"$safe_type\", \"$safe_brgy\", \"$exact_date\", \"$exact_time\", \"$safe_rep\", \"$safe_logs\", \"$safe_extra\", $safe_backup)'><i class='bx $btn_icon'></i></button>";
-                
-            $sev_badge = ($inc['severity'] === 'Critical') ? 'critical' : (($inc['severity'] === 'Major') ? 'major' : 'warning');
-            $status_html = "";
-            if ($inc['backup_requested'] == 1) { $status_html .= "<span class='badge' style='background:#b10000; animation: blink 1s infinite; width:100%; justify-content:center; margin-top:5px;'>🚨 BACKUP NEEDED</span><style>@keyframes blink { 50% { opacity: 0; } }</style>"; }
-            
-            $status_lower = strtolower($status);
-            if ($status_lower === 'on-scene') { $status_html .= "<span class='badge on-scene' style='margin-top:6px; font-size:9px; width:100%; justify-content:center;'><i class='bx bx-check-circle'></i> ON SCENE</span>"; } 
-            elseif ($status_lower === 'dispatched') { $status_html .= "<span class='badge info' style='margin-top:6px; font-size:9px; width:100%; justify-content:center;'><i class='bx bxs-truck'></i> EN ROUTE</span>"; } 
-            else { $status_html .= "<small style='font-size:10px; display:block; margin-top:6px; font-weight:800; color:#666;'>Status: ".strtoupper($status)."</small>"; }
-
-            $action_btns = "<div class='action-btn-container' data-incident-ids='$dispatch_id' style='display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center;'>";
-            if ($status_lower === 'active' || $status_lower === 'pending') {
-                if ($role === 'superadmin') {
-                    $action_btns .= ($inc['backup_requested'] == 0) ? "<span style='color:#f57c00; font-size:0.75rem; font-weight:bold; font-style:italic;'><i class='bx bx-radar bx-burst'></i> Awaiting Local</span>" : "<span style='color:#d32f2f; font-size:0.75rem; font-weight:bold; font-style:italic;'><i class='bx bxs-error bx-flashing'></i> Backup Needed</span>";
-                    if ($inc['is_verified'] != 0) $action_btns .= "<div style='color: #666; font-size: 0.75rem; font-weight: 700;'>Verified by:<br><span style='color: #8e24aa;'>".htmlspecialchars($inc['verified_by'] ?? 'N/A')."</span></div>";
-                } else {
-                    if ($inc['is_verified'] == 0) {
-                        $action_btns .= "<div class='verify-btn-wrapper' style='width:100%; position: relative;'><button class='btn-sm verify-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); toggleVerifyDropdown(this)'><i class='bx bx-check-shield'></i> Verify</button><div class='verify-dropdown' style='display:none; position: absolute; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 100; width:150px; left:50%; transform:translateX(-50%); padding:5px;'><button class='btn-sm confirm-verify-btn' style='background:#388e3c; color: white !important; width: 100%; margin-bottom: 5px;' data-confirm-ids='$dispatch_id'>Confirm</button><button class='btn-sm cancel-verify-btn' style='background:#555555; color: white !important; width: 100%;' onclick='event.stopPropagation(); hideVerifyDropdown(this)'>Cancel</button></div></div>";
-                        $action_btns .= "<button class='btn-sm reject-btn' style='background:#555555; width: 100%; justify-content: center;' onclick='event.stopPropagation(); rejectIncident(\"$dispatch_id\")'><i class='bx bx-x-circle'></i> Reject</button>";
-                    } else {
-                        $action_btns .= "<button class='btn-sm sev-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openVerifyModal(\"$dispatch_id\")'><i class='bx bx-slider'></i> Change Severity</button>";
-                        $action_btns .= "<button class='btn-sm dispatch-btn' style='background:#388e3c; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type\")'><i class='bx bxs-truck'></i> Dispatch</button>";
-                    }
-                }
-            } elseif (in_array($status_lower, ['dispatched', 'en route', 'en_route', 'on-scene'])) {
-                $action_btns .= "<button class='btn-sm' style='background:#d32f2f; padding: 10px 15px; font-size: 0.9rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); cancelDispatch(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall</button>";
-                if ($role !== 'superadmin' && $inc['backup_requested'] == 0) { $action_btns .= "<button class='btn-sm' style='background:#f57c00; padding: 10px 15px; width: 100%; justify-content: center;' onclick='event.stopPropagation(); requestBackup(\"$dispatch_id\")'><i class='bx bxs-error-circle'></i> Need Backup</button>"; }
-            } else { $action_btns .= "<span style='color:#888; font-size:0.85rem; font-weight:bold; font-style:italic;'>No Actions</span>"; }
-            $action_btns .= "</div>";
-
-            if (strpos($extraClass, 'cluster-row') !== false) { $action_btns = "<span style='color: #888; font-size: 0.8rem; font-weight: bold; background: #eee; padding: 5px 10px; border-radius: 8px;'><i class='bx bx-link'></i> Merged</span>"; }
-            
-            $incident_info = "<span style='font-weight:700;'>".htmlspecialchars($inc['incident_type'])."</span><br><small style='color:#666; font-style:italic;'>\"".htmlspecialchars(substr($user_logs, 0, 45))."...\"</small>";
-            if ($isParent && $duplicateCount > 0) { $incident_info .= "<div style='margin-top: 8px;'><span style='background: rgba(25,118,210,0.1); color: #1976d2; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; border: 1px solid rgba(255,255,255,0.3);'><i class='bx bx-folder-plus'></i> +$duplicateCount DUPLICATE</span></div>"; }
-
-            $clusterCall = ($isParent && $duplicateCount > 0) ? "toggleCluster(\"$clusterKey\");" : "";
-            $onclick = "onclick='openMobileModal(this); $clusterCall'";
-            $hover = ($isParent && $duplicateCount > 0) ? "onmouseover='this.style.background=\"#e2e8f0\"' onmouseout='this.style.background=\"transparent\"'" : "";
-            
-            $display_sev = htmlspecialchars(strtoupper($inc['severity'] ?? 'PENDING'));
-
-            $rowHtml = "<tr class='$extraClass' style='cursor: pointer; $extraStyle' $onclick $hover>
-                <td style='vertical-align: middle;'><div style='font-weight: 800; font-size: 1.1rem; color: #d32f2f;'>{$exact_time}</div><div style='font-size: 0.85rem; color: #888; font-weight: 600;'>{$exact_date}</div></td>
-                <td style='vertical-align: middle;'><div><b>".htmlspecialchars($inc['display_brgy'])."</b><br><small style='color:#d32f2f; font-weight:700;'>$coords</small><br><small style='color:#555;'>Rep: ".htmlspecialchars($reporter_display)."</small></div></td>
-                <td class='mobile-hide' style='vertical-align: middle;'>$incident_info</td>
-                <td class='mobile-hide' style='text-align:center; vertical-align: middle;'>$evidence_btn</td>
-                <td class='mobile-hide' style='text-align:center; vertical-align: middle;'><span class='badge $sev_badge' style='width:100%; justify-content:center;'>$display_sev</span><br>$status_html</td>
-                <td class='mobile-hide' style='vertical-align: middle; width: 150px; padding-right: 25px;'>$action_btns</td>
-            </tr>";
-            return $rowHtml;
-        };
-
-        while (true) {
-            if (connection_aborted()) { break; }
-
-            $response = ['kpi' => [], 'kpi_details' => [], 'map' => [], 'evac_centers' => [], 'table' => ''];
-            $params = []; $types = ""; $evac_params = []; $evac_types = "";
-            $brgy_filter = ""; $evac_brgy_filter = ""; $type_clause = "";
-
-            $type = isset($_GET['type']) ? $_GET['type'] : 'all';
-            if ($type !== 'all') { $type_clause = " AND i.incident_type LIKE ? "; $types .= "s"; $params[] = "%" . $type . "%"; }
-
-            // 🚀 THE FIX: Enforce a strict City Geofence for the live stream
-            $type_clause .= " AND (i.latitude BETWEEN 14.2500 AND 14.3900 AND i.longitude BETWEEN 120.8900 AND 121.0200) ";
-
-            if ($role === 'superadmin') {
-                if (!empty($_GET['brgy'])) {
-                    $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) "; $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-                    $types .= "ss"; $params[] = $_GET['brgy']; $params[] = "%" . $_GET['brgy'] . "%";
-                    $evac_types .= "ss"; $evac_params[] = $_GET['brgy']; $evac_params[] = "%" . $_GET['brgy'] . "%";
-                }
-            } elseif ($role === 'admin' || $role === 'barangay_admin') {
-                $target_brgy = !empty($_GET['brgy']) ? $_GET['brgy'] : $admin_brgy;
-                if (!empty($target_brgy)) {
-                    $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) "; $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-                    $types .= "ss"; $params[] = $target_brgy; $params[] = "%" . $target_brgy . "%";
-                    $evac_types .= "ss"; $evac_params[] = $target_brgy; $evac_params[] = "%" . $target_brgy . "%";
-                }
-            }
-
-            $res1 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
-            $response['kpi']['active'] = $res1 ? (int)$res1->fetch_assoc()['c'] : 0;
-
-            $res2 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
-            $response['kpi']['deployed'] = $res2 ? (int)$res2->fetch_assoc()['c'] : 0;
-            
-            $res3 = executeSyncQuery($conn, "SELECT SUM(current_occupants) as total FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
-            $response['kpi']['evacuees'] = $res3 ? (int)($res3->fetch_assoc()['total'] ?? 0) : 0;
-
-            $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
-            if ($resMap) { while ($row = $resMap->fetch_assoc()) { $response['map'][] = $row; } }
-
-            $resEvac = executeSyncQuery($conn, "SELECT id, name, barangay, latitude, longitude, capacity, current_occupants, status FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
-            if ($resEvac) { while ($row = $resEvac->fetch_assoc()) { $response['evac_centers'][] = $row; } }
-
-            $query = "SELECT i.*, i.backup_requested, i.is_verified, i.verified_by, u.username, u.first_name, u.last_name, u.barangay as reporter_home,
-                            (SELECT position FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_pos, 
-                            (SELECT phone_number FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_phone,
-                            (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as user_logs
-                    FROM incidents i LEFT JOIN users u ON i.reported_by = u.id 
-                    WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause
-                    ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 50"; 
-            
-            $resTab = executeSyncQuery($conn, $query, $types, $params);
-            $html = "";
-            
-            if ($resTab && $resTab->num_rows > 0) {
-                $clustered_data = [];
-                while ($inc = $resTab->fetch_assoc()) {
-                    $raw_brgy = trim((string)($inc['barangay'] ?? ''));
-                    $inc['display_brgy'] = getStrictBarangay($inc['latitude'], $inc['longitude'], !empty($raw_brgy) ? $raw_brgy : ($inc['reporter_home'] ?? 'Unknown Location'));
-                    $found_cluster = false;
-                    foreach ($clustered_data as $key => $group) {
-                        if (trim($group[0]['incident_type']) === trim($inc['incident_type'])) {
-                            if (getDistanceMeters((float)$inc['latitude'], (float)$inc['longitude'], (float)$group[0]['latitude'], (float)$group[0]['longitude']) <= 100) {
-                                $clustered_data[$key][] = $inc; $found_cluster = true; break;
-                            }
-                        }
-                    }
-                    if (!$found_cluster) { $clustered_data["cluster_" . $inc['id']] = [$inc]; }
-                }
-
-                foreach ($clustered_data as $key => $group) {
-                    $count = count($group);
-                    if ($count > 1) {
-                        $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", implode(",", array_map(function($i){return $i['id'];}, $group)), true, $count - 1, $key);
-                        for ($i = 1; $i < $count; $i++) { $html .= $renderRow($group[$i], $role, "cluster-row-$key", "display: none; background: #fafafa; border-left: 4px solid #1976d2;", null, false, 0, ""); }
-                    } else {
-                        $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");
-                    }
-                }
-            } else {
-                $html = "<tr><td colspan='6' style='text-align:center; padding:40px; color:#888; font-weight:600;'>No active reports.</td></tr>";
-            }
-            $response['table'] = $html;
-
-            echo "data: " . json_encode($response) . "\n\n";
-            if (ob_get_level() > 0) { ob_flush(); }
-            flush();
-            
-            sleep(2);
-        }
-    }
-
-    // 🚀 SECURED: Get Available Teams
     if ($action === 'get_available_teams') {
         requireRole($ADMIN_TIER_ROLES, $role);
         ob_end_clean();
@@ -947,7 +714,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         exit();
     }
 
-    // 🚀 SECURED: Get Team Members (Strict Assignment Only - No Fallback)
     if ($action === 'get_team_members') {
         requireRole($ADMIN_TIER_ROLES, $role);
         while (ob_get_level() > 0) { ob_end_clean(); }
@@ -964,10 +730,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         if ($teamData) {
             $team_name = trim($teamData['team_name']);
-            $team_type = trim($teamData['team_type']);
             $assigned_brgy = trim($teamData['assigned_barangay'] ?? '');
 
-            // Strict matching by explicit unit assignment or unit sector
             $stmt = $conn->prepare("
                 SELECT 
                     u.id, 
@@ -1002,31 +766,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         echo json_encode($members);
         exit();
     }
+
+    if ($action === 'get_active_count') {
+        requireRole($ADMIN_TIER_ROLES, $role);
+        ob_end_clean();
+        header('Content-Type: application/json');
+        $res = $conn->query("SELECT COUNT(*) as c FROM incidents WHERE status NOT IN ('archived', 'rejected') AND (latitude BETWEEN 14.2500 AND 14.3900 AND longitude BETWEEN 120.8900 AND 121.0200)");
+        echo json_encode(['count' => $res->fetch_assoc()['c'] ?? 0]);
+        exit();
+    }
 }
 
+// =========================================================================================
+// 🚀 POST REQUESTS
+// =========================================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
-if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] === 'delete_team')) {
+    if ($action === 'delete_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
         while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json');
 
         $team_id = (int)($_POST['id'] ?? $_GET['id'] ?? 0);
-
         if ($team_id <= 0) {
             echo json_encode(['success' => false, 'message' => 'Invalid unit ID.']);
             exit();
         }
 
-        // 1. Check if unit exists and is not currently deployed
-        $checkStmt = $conn->prepare("SELECT team_name, current_incident_id, status FROM response_teams WHERE id = ?");
+        $checkStmt = $conn->prepare("SELECT current_incident_id, status FROM response_teams WHERE id = ?");
         $checkStmt->bind_param("i", $team_id);
         $checkStmt->execute();
         $team = $checkStmt->get_result()->fetch_assoc();
         $checkStmt->close();
 
         if (!$team) {
-            echo json_encode(['success' => false, 'message' => 'Unit not found in database.']);
+            echo json_encode(['success' => false, 'message' => 'Unit not found.']);
             exit();
         }
 
@@ -1035,20 +809,19 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             exit();
         }
 
-        // 2. Perform deletion
         $delStmt = $conn->prepare("DELETE FROM response_teams WHERE id = ?");
         $delStmt->bind_param("i", $team_id);
-        
         if ($delStmt->execute()) {
             $delStmt->close();
-            echo json_encode(['success' => true, 'message' => 'Unit deleted successfully.']);
+            echo json_encode(['success' => true]);
         } else {
             $err = $delStmt->error;
             $delStmt->close();
-            echo json_encode(['success' => false, 'message' => 'Database error: ' . $err]);
+            echo json_encode(['success' => false, 'message' => $err]);
         }
         exit();
     }
+
     if ($action === 'recall_team' || $action === 'cancel_dispatch') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $incident_id = isset($_POST['incident_id']) ? (int)$_POST['incident_id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);
@@ -1059,19 +832,16 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             exit();
         }
 
-        // 1. Release the primary assigned response team
         $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
         $stmt_rt->bind_param("i", $incident_id);
         $stmt_rt->execute();
         $stmt_rt->close();
 
-        // 2. Reset incident back to active and remove the assigned unit
         $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id = ?");
         $stmt_inc->bind_param("i", $incident_id);
         $stmt_inc->execute();
         $stmt_inc->close();
 
-        // 3. Add audit log
         $admin_id = $_SESSION['user_id'] ?? 0;
         $log_msg = "Dispatched unit was recalled by admin.";
         $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
@@ -1086,20 +856,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-
-    // 1. Release the primary assigned response team
-    $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
-    $stmt_rt->bind_param("i", $incident_id);
-    $stmt_rt->execute();
-    $stmt_rt->close();
-
-    // 2. Reset incident back to active and remove the assigned unit
-    $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'active', assigned_to = NULL WHERE id = ?");
-    $stmt_inc->bind_param("i", $incident_id);
-    $stmt_inc->execute();
-    $stmt_inc->close();
-
-}
     if ($action === 'update_team_status') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
@@ -1115,7 +871,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Add Team
     if ($action === 'add_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $name = $_POST['team_name'] ?? '';
@@ -1128,6 +883,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         $stmt->close();
         exit();
     }
+
     if ($action === 'dismiss_broadcast') {
         while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json');
@@ -1136,7 +892,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         $uid  = (int)($_SESSION['user_id'] ?? 0);
 
         if ($b_id > 0 && $uid > 0) {
-            // Ensure dismissed_broadcast_id column exists
             $chk = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'dismissed_broadcast_id'");
             if ($chk && $chk->num_rows === 0) {
                 $conn->query("ALTER TABLE user_profiles ADD COLUMN dismissed_broadcast_id INT DEFAULT 0");
@@ -1152,7 +907,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         echo json_encode(['success' => true]);
         exit();
     }
-    // 🚀 SECURED: Send Broadcast
+
     if ($action === 'send_broadcast') {
         requireRole(['superadmin'], $role);
         $title = $_POST['title'] ?? '';
@@ -1162,7 +917,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             $stmt = $conn->prepare("INSERT INTO broadcasts (title, message, severity, is_active) VALUES (?, ?, ?, 1)");
             $stmt->bind_param("sss", $title, $message, $severity);
             if ($stmt->execute()) { ob_end_clean(); echo json_encode(['success' => true]); } 
-            else { ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Database error: ' . $stmt->error]); }
+            else { ob_end_clean(); echo json_encode(['success' => false, 'message' => $stmt->error]); }
             $stmt->close();
         } else {
             ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Missing fields']);
@@ -1180,11 +935,8 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
-    
     if ($action === 'deploy_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
-        
-        // Ensure buffer is clean right at the start
         while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json');
 
@@ -1206,7 +958,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             $existing_assigned = trim($curr['assigned_to'] ?? '');
             $is_backup_deploy = ((int)($curr['backup_requested'] ?? 0) === 1);
 
-            // Separate local unit from city backup deployment
             if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
                 if ($is_backup_deploy) {
                     $merged_teams = $existing_assigned . " | [City Backup: " . $new_team_names . "]";
@@ -1217,13 +968,11 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                 $merged_teams = $new_team_names;
             }
 
-            // Update incident status and assigned teams
             $stmt = $conn->prepare("UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
             $stmt->bind_param("s", $merged_teams);
             $stmt->execute();
             $stmt->close();
             
-            // Assign units
             $stmt_team = $conn->prepare("UPDATE response_teams SET current_incident_id = ?, status = 'deployed' WHERE id = ?");
             foreach ($team_ids as $tid) {
                 $team_id = (int)$tid;
@@ -1241,11 +990,10 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    
     if ($action === 'mark_on_scene') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $ids_raw = $_POST['id'] ?? '';
-        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
+        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
         if (!empty($ids_array)) {
             $id_list = implode(',', $ids_array);
             $conn->query("UPDATE incidents SET status = 'on-scene' WHERE id IN ($id_list)");
@@ -1254,11 +1002,10 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
-   
     if ($action === 'archive') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $ids_raw = $_POST['id'] ?? '';
-        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw))); // Safe Int Cast
+        $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
         if (!empty($ids_array)) {
             $id_list = implode(',', $ids_array);
             $conn->query("UPDATE incidents SET status = 'archived' WHERE id IN ($id_list)");
@@ -1281,16 +1028,13 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             if ($inc && !empty($inc['assigned_to'])) {
                 $assigned_str = $inc['assigned_to'];
 
-                // Check if a city backup is assigned
                 if (preg_match('/\|\s*\[City Backup:\s*([^\]]+)\]/', $assigned_str, $matches)) {
                     $backup_teams_str = $matches[1];
                     $backup_team_names = array_map('trim', explode(',', $backup_teams_str));
 
-                    // Strip city backup portion from assigned_to string
                     $clean_assigned = trim(preg_replace('/\|\s*\[City Backup:\s*[^\]]+\]/', '', $assigned_str));
                     $clean_assigned = rtrim($clean_assigned, " ,|");
 
-                    // Release only the city backup response team(s)
                     if (!empty($backup_team_names)) {
                         $placeholders = implode(',', array_fill(0, count($backup_team_names), '?'));
                         $types = str_repeat('s', count($backup_team_names));
@@ -1304,7 +1048,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                         $stmt_rt->close();
                     }
 
-                    // Update incident: re-flag backup_requested = 1 so the prompt re-opens if needed, or leave it pending
                     $upd_stmt = $conn->prepare("UPDATE incidents SET assigned_to = ?, backup_requested = 1 WHERE id = ?");
                     $upd_stmt->bind_param("si", $clean_assigned, $incident_id);
                     $upd_stmt->execute();
@@ -1317,7 +1060,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Add Log
     if ($action === 'add_log') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $incident_id = (int)$_POST['incident_id'];
@@ -1328,65 +1070,91 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         ob_end_clean(); echo "success"; exit();
     }
 
-    // 🚀 SECURED: Save Preferences
-    if ($action === 'save_preferences') {
-        $theme       = $_POST['theme'] ?? 'light';
-        $font_size   = $_POST['font_size'] ?? '16px';
-        $sound_alert = isset($_POST['sound_alert']) ? (int)$_POST['sound_alert'] : 1;
-        
-        // 1. Auto-Repair: Ensure columns exist
-        $check = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'sound_alert'");
-        if ($check && $check->num_rows === 0) {
-            $conn->query("ALTER TABLE user_profiles ADD COLUMN sound_alert TINYINT(1) DEFAULT 1");
-        }
-        $check_t = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'theme'");
-        if ($check_t && $check_t->num_rows === 0) {
-            $conn->query("ALTER TABLE user_profiles ADD COLUMN theme VARCHAR(20) DEFAULT 'light'");
-            $conn->query("ALTER TABLE user_profiles ADD COLUMN font_size VARCHAR(20) DEFAULT '16px'");
-        }
-        
-        // 2. Safely Update/Insert Profile
-        $check_prof = $conn->query("SELECT user_id FROM user_profiles WHERE user_id = " . (int)$user_id);
-        
-        if ($check_prof && $check_prof->num_rows > 0) {
-            $stmt = $conn->prepare("UPDATE user_profiles SET theme = ?, font_size = ?, sound_alert = ? WHERE user_id = ?");
-            $stmt->bind_param("ssii", $theme, $font_size, $sound_alert, $user_id);
-        } else {
-            $stmt = $conn->prepare("INSERT INTO user_profiles (user_id, theme, font_size, sound_alert) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("issi", $user_id, $theme, $font_size, $sound_alert);
-        }
-        
+    // 🚀 SECURED: Update Admin Account (Cloudinary Multi-format with JFIF support)
+    if ($action === 'update_admin_account') {
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
+
+        $user_id        = (int)($_SESSION['user_id'] ?? 0);
+        $first_name     = trim($_POST['first_name'] ?? '');
+        $last_name      = trim($_POST['last_name'] ?? '');
+        $phone_number   = trim($_POST['phone_number'] ?? '');
+        $position       = trim($_POST['position'] ?? '');
+        $radio_callsign = trim($_POST['radio_callsign'] ?? '');
+        $department     = trim($_POST['department'] ?? '');
+        $barangay_raw   = trim($_POST['barangay'] ?? '');
+        $current_pwd    = $_POST['current_password'] ?? '';
+        $new_pwd        = $_POST['new_password'] ?? '';
+
+        $stmt = $conn->prepare("SELECT password, barangay FROM users WHERE id = ?");
+        $stmt->bind_param("i", $user_id);
         $stmt->execute();
+        $user = $stmt->get_result()->fetch_assoc();
         $stmt->close();
-        
-        $_SESSION['sound_alert'] = $sound_alert;
-        
-        ob_end_clean(); 
-        echo json_encode(['success' => true]);
-        exit();
-    }
 
-    // 4. Handle File Upload via Cloudinary
+        if (!$user || !password_verify($current_pwd, $user['password'])) {
+            echo json_encode(['success' => false, 'message' => 'Incorrect current password!']);
+            exit();
+        }
+
+        $barangay = (!empty($barangay_raw)) ? $barangay_raw : ($user['barangay'] ?? null);
+
+        if (!empty($new_pwd)) {
+            $hashed_pwd = password_hash($new_pwd, PASSWORD_DEFAULT);
+            $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=?, password=? WHERE id=?");
+            $stmt_u->bind_param("sssssi", $first_name, $last_name, $barangay, $department, $hashed_pwd, $user_id);
+        } else {
+            $stmt_u = $conn->prepare("UPDATE users SET first_name=?, last_name=?, barangay=?, department=? WHERE id=?");
+            $stmt_u->bind_param("ssssi", $first_name, $last_name, $barangay, $department, $user_id);
+        }
+        $stmt_u->execute();
+        $stmt_u->close();
+
+        if (!empty($barangay)) { 
+            $_SESSION['barangay'] = $barangay; 
+        }
+        $_SESSION['first_name'] = $first_name;
+        $_SESSION['last_name']  = $last_name;
+
+        $chk_prof = $conn->query("SELECT user_id FROM user_profiles WHERE user_id = " . (int)$user_id);
+        if ($chk_prof && $chk_prof->num_rows === 0) {
+            $stmt_ins = $conn->prepare("INSERT INTO user_profiles (user_id, phone_number, position, radio_callsign) VALUES (?, ?, ?, ?)");
+            $stmt_ins->bind_param("isss", $user_id, $phone_number, $position, $radio_callsign);
+            $stmt_ins->execute();
+            $stmt_ins->close();
+        } else {
+            $stmt_p = $conn->prepare("UPDATE user_profiles SET phone_number=?, position=?, radio_callsign=? WHERE user_id=?");
+            $stmt_p->bind_param("sssi", $phone_number, $position, $radio_callsign, $user_id);
+            $stmt_p->execute();
+            $stmt_p->close();
+        }
+
         if (isset($_FILES['profile_picture']) && $_FILES['profile_picture']['error'] === UPLOAD_ERR_OK) {
-            $pp_allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-            $pp_ext_ok  = ['jpg', 'jpeg', 'png', 'gif', 'webp'];
-            
-            $pp_fi   = finfo_open(FILEINFO_MIME_TYPE);
-            $pp_mime = finfo_file($pp_fi, $_FILES['profile_picture']['tmp_name']);
-            finfo_close($pp_fi);
-            
-            $pp_ext = strtolower(pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION));
+            $tmp_path = $_FILES['profile_picture']['tmp_name'];
+            $orig_name = $_FILES['profile_picture']['name'];
 
-            if (!in_array($pp_mime, $pp_allowed) || !in_array($pp_ext, $pp_ext_ok) || !@getimagesize($_FILES['profile_picture']['tmp_name'])) {
-                echo json_encode(['success' => false, 'message' => 'Invalid image format.']);
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mime  = finfo_file($finfo, $tmp_path);
+            finfo_close($finfo);
+
+            $allowed_mimes = ['image/jpeg', 'image/pjpeg', 'image/png', 'image/webp', 'image/gif'];
+            $ext = strtolower(pathinfo($orig_name, PATHINFO_EXTENSION));
+            $allowed_exts = ['jpg', 'jpeg', 'png', 'webp', 'gif', 'jfif'];
+
+            $img_info = @getimagesize($tmp_path);
+            if (!in_array($mime, $allowed_mimes, true) || !in_array($ext, $allowed_exts, true) || $img_info === false) {
+                echo json_encode(['success' => false, 'message' => 'Security Error: Invalid or malicious image file.']);
                 exit();
             }
 
+            $clean_ext  = ($ext === 'jfif') ? 'jpg' : $ext;
+            $clean_mime = ($ext === 'jfif') ? 'image/jpeg' : $mime;
+            $file_id    = 'profile_' . (int)$user_id . '_' . time();
+
             $cloud_name    = 'wyxsiraw';
             $upload_preset = 'dasma_preset';
-            $file_id = 'profile_' . (int)$user_id . '_' . time();
 
-            $cfile = new CURLFile($_FILES['profile_picture']['tmp_name'], $pp_mime, $_FILES['profile_picture']['name']);
+            $cfile = new CURLFile($tmp_path, $clean_mime, $file_id . '.' . $clean_ext);
             $post_fields = [
                 'file'          => $cfile,
                 'upload_preset' => $upload_preset,
@@ -1421,7 +1189,44 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             }
         }
 
-    // 🚀 SECURED: Add Center
+        echo json_encode(['success' => true, 'message' => 'Profile completely updated!']);
+        exit();
+    }
+
+    if ($action === 'save_preferences') {
+        $theme       = $_POST['theme'] ?? 'light';
+        $font_size   = $_POST['font_size'] ?? '16px';
+        $sound_alert = isset($_POST['sound_alert']) ? (int)$_POST['sound_alert'] : 1;
+        
+        $check = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'sound_alert'");
+        if ($check && $check->num_rows === 0) {
+            $conn->query("ALTER TABLE user_profiles ADD COLUMN sound_alert TINYINT(1) DEFAULT 1");
+        }
+        $check_t = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'theme'");
+        if ($check_t && $check_t->num_rows === 0) {
+            $conn->query("ALTER TABLE user_profiles ADD COLUMN theme VARCHAR(20) DEFAULT 'light'");
+            $conn->query("ALTER TABLE user_profiles ADD COLUMN font_size VARCHAR(20) DEFAULT '16px'");
+        }
+        
+        $check_prof = $conn->query("SELECT user_id FROM user_profiles WHERE user_id = " . (int)$user_id);
+        if ($check_prof && $check_prof->num_rows > 0) {
+            $stmt = $conn->prepare("UPDATE user_profiles SET theme = ?, font_size = ?, sound_alert = ? WHERE user_id = ?");
+            $stmt->bind_param("ssii", $theme, $font_size, $sound_alert, $user_id);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO user_profiles (user_id, theme, font_size, sound_alert) VALUES (?, ?, ?, ?)");
+            $stmt->bind_param("issi", $user_id, $theme, $font_size, $sound_alert);
+        }
+        
+        $stmt->execute();
+        $stmt->close();
+        
+        $_SESSION['sound_alert'] = $sound_alert;
+        
+        ob_end_clean(); 
+        echo json_encode(['success' => true]);
+        exit();
+    }
+
     if ($action === 'add_center') { 
         requireRole($ADMIN_TIER_ROLES, $role);
         $name = $_POST['name'] ?? '';
@@ -1442,7 +1247,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
     
-    // 🚀 SECURED: Update Evac Center
     if ($action === 'update_evac_center') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
@@ -1461,7 +1265,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Delete Center
     if ($action === 'delete_center') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
@@ -1474,7 +1277,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
     
-    // 🚀 SECURED: End Broadcast
     if ($action === 'end_broadcast') {
         requireRole(['superadmin'], $role);
         $id = (int)$_POST['id'];
@@ -1487,7 +1289,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Delete Archived
     if ($action === 'delete_archived') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
@@ -1500,7 +1301,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         exit();
     }
 
-    // 🚀 SECURED: Update Role
     if ($action === 'update_role') {
         requireRole(['superadmin'], $role);
         $target_user   = (int)$_POST['user_id'];
@@ -1520,13 +1320,12 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         if ($stmt->execute()) { 
             ob_end_clean(); echo json_encode(['success' => true]); 
         } else { 
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Database error updating role.']); 
+            ob_end_clean(); echo json_encode(['success' => false, 'message' => $stmt->error]); 
         }
         $stmt->close();
         exit();
     }
 
-    // 🚀 SECURED: Toggle User Status
     if ($action === 'toggle_user_status') {
         requireRole(['superadmin'], $role);
         $target_user = (int)$_POST['user_id'];
@@ -1535,7 +1334,7 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         $stmt = $conn->prepare("UPDATE users SET status = ? WHERE id = ?");
         $stmt->bind_param("si", $new_status, $target_user);
         if ($stmt->execute()) { ob_end_clean(); echo json_encode(['success' => true]); } 
-        else { ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Database error updating status.']); }
+        else { ob_end_clean(); echo json_encode(['success' => false, 'message' => $stmt->error]); }
         $stmt->close();
         exit();
     }
@@ -1550,7 +1349,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
             exit();
         }
 
-        // Prevent deletion of any superadmin accounts
         $chk = $conn->prepare("SELECT role FROM users WHERE id = ?");
         $chk->bind_param("i", $target_user);
         $chk->execute();
@@ -1571,13 +1369,11 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
 
         $conn->begin_transaction();
         try {
-            // Remove associated profile records first
             $del_prof = $conn->prepare("DELETE FROM user_profiles WHERE user_id = ?");
             $del_prof->bind_param("i", $target_user);
             $del_prof->execute();
             $del_prof->close();
 
-            // Clear reporter references on incidents if nullable, or leave as recorded
             $upd_inc = $conn->prepare("UPDATE incidents SET reported_by = NULL WHERE reported_by = ?");
             if ($upd_inc) {
                 $upd_inc->bind_param("i", $target_user);
@@ -1585,7 +1381,6 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
                 $upd_inc->close();
             }
 
-            // Delete the main user row
             $stmt = $conn->prepare("DELETE FROM users WHERE id = ?");
             $stmt->bind_param("i", $target_user);
             $stmt->execute();
@@ -1597,18 +1392,9 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         } catch (Exception $e) {
             $conn->rollback();
             ob_end_clean();
-            echo json_encode(['success' => false, 'message' => 'Database error: ' . $e->getMessage()]);
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
         }
         exit();
     }
-    
-    if ($action === 'get_active_count') {
-        requireRole($ADMIN_TIER_ROLES, $role);
-        ob_end_clean();
-        header('Content-Type: application/json');
-        $res = $conn->query("SELECT COUNT(*) as c FROM incidents WHERE status NOT IN ('archived', 'rejected') AND (latitude BETWEEN 14.2500 AND 14.3900 AND longitude BETWEEN 120.8900 AND 121.0200)");
-        echo json_encode(['count' => $res->fetch_assoc()['c'] ?? 0]);
-        exit();
-    }
- 
+}
 ?>
