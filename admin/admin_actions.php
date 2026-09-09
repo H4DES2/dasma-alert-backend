@@ -114,23 +114,30 @@ if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             'upload_preset' => $upload_preset,
             'folder'        => 'dasma_evidence'
         ];
-        $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
-        curl_setopt($ch, CURLOPT_POST, true);
-        curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
-        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+       $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $post_fields);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
 
-        $response  = curl_exec($ch);
-        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        curl_close($ch);
+            $response  = curl_exec($ch);
+            $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+            curl_close($ch);
 
-        $json_res = json_decode($response, true);
-        if ($http_code === 200 && !empty($json_res['secure_url'])) {
-            $image_path = $json_res['secure_url'];
-        } else {
-            echo "Cloudinary Upload Failed (HTTP " . $http_code . "): " . ($response ?: 'Empty response from cURL');
-            exit();
-        }
+            $json_res = json_decode($response, true);
+            if ($http_code === 200 && !empty($json_res['secure_url'])) {
+                $cloud_photo_url = $json_res['secure_url'];
+
+                $stmt_img = $conn->prepare("UPDATE user_profiles SET profile_photo=? WHERE user_id=?");
+                $stmt_img->bind_param("si", $cloud_photo_url, $user_id);
+                $stmt_img->execute();
+                $stmt_img->close();
+
+                $_SESSION['profile_photo'] = $cloud_photo_url;
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Cloudinary upload failed: ' . ($response ?: 'HTTP ' . $http_code)]);
+                exit();
+            }
     }
 
 if (isset($_POST['action']) && $_POST['action'] === 'delete_announcement') {
