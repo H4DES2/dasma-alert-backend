@@ -55,11 +55,19 @@ function getIncidentIcon(type) {
 }
 
 function dismissBroadcast(id) {
-    const date = new Date();
-    date.setTime(date.getTime() + (24 * 60 * 60 * 1000));
-    document.cookie = "dismissed_broadcast_id=" + id + "; expires=" + date.toUTCString() + "; path=/";
     const banner = document.getElementById('global-broadcast-banner');
-    if (banner) banner.remove(); 
+    if (banner) banner.remove();
+
+    // Cookie fallback
+    const date = new Date();
+    date.setTime(date.getTime() + (30 * 24 * 60 * 60 * 1000));
+    document.cookie = `dismissed_broadcast_id=${id}; expires=${date.toUTCString()}; path=/; SameSite=Lax`;
+
+    // Persist via backend
+    const fd = new FormData();
+    fd.append('action', 'dismiss_broadcast');
+    fd.append('broadcast_id', id);
+    fetch(API_PATH, { method: 'POST', body: fd }).catch(err => console.error(err));
 }
 
 function fetchWeather() {

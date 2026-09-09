@@ -105,8 +105,22 @@ if (array_key_exists(strtoupper($raw_assigned_brgy), $locationAliases)) {
 // BROADCAST LOGIC
 $broadcast_result = $conn->query("SELECT * FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
 $active_broadcast = ($broadcast_result && $broadcast_result->num_rows > 0) ? $broadcast_result->fetch_assoc() : null;
-$dismissed_id = isset($_COOKIE['dismissed_broadcast_id']) ? $_COOKIE['dismissed_broadcast_id'] : 0;
-$show_banner = ($active_broadcast && $active_broadcast['id'] != $dismissed_id);
+
+// Check database profile first, then fallback to cookie
+$db_dismissed = 0;
+$stmt_d = $conn->prepare("SELECT dismissed_broadcast_id FROM user_profiles WHERE user_id = ?");
+if ($stmt_d) {
+    $stmt_d->bind_param("i", $user_id);
+    $stmt_d->execute();
+    $d_res = $stmt_d->get_result()->fetch_assoc();
+    $db_dismissed = (int)($d_res['dismissed_broadcast_id'] ?? 0);
+    $stmt_d->close();
+}
+
+$cookie_dismissed = (int)($_COOKIE['dismissed_broadcast_id'] ?? 0);
+$dismissed_id = max($db_dismissed, $cookie_dismissed);
+
+$show_banner = ($active_broadcast && (int)$active_broadcast['id'] !== $dismissed_id);
 ?>
 <!DOCTYPE html>
 <html lang="en">

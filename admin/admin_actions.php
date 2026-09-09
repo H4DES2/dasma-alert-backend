@@ -1128,7 +1128,30 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
         $stmt->close();
         exit();
     }
+    if ($action === 'dismiss_broadcast') {
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
 
+        $b_id = (int)($_POST['broadcast_id'] ?? 0);
+        $uid  = (int)($_SESSION['user_id'] ?? 0);
+
+        if ($b_id > 0 && $uid > 0) {
+            // Ensure dismissed_broadcast_id column exists
+            $chk = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'dismissed_broadcast_id'");
+            if ($chk && $chk->num_rows === 0) {
+                $conn->query("ALTER TABLE user_profiles ADD COLUMN dismissed_broadcast_id INT DEFAULT 0");
+            }
+
+            $stmt = $conn->prepare("UPDATE user_profiles SET dismissed_broadcast_id = ? WHERE user_id = ?");
+            if ($stmt) {
+                $stmt->bind_param("ii", $b_id, $uid);
+                $stmt->execute();
+                $stmt->close();
+            }
+        }
+        echo json_encode(['success' => true]);
+        exit();
+    }
     // 🚀 SECURED: Send Broadcast
     if ($action === 'send_broadcast') {
         requireRole(['superadmin'], $role);
