@@ -1361,12 +1361,15 @@ if ($action === 'delete_team' || (isset($_POST['action']) && $_POST['action'] ==
 
             $cloud_name    = 'wyxsiraw';
             $upload_preset = 'dasma_preset';
+            $file_id = 'profile_' . (int)$user_id . '_' . time();
 
             $cfile = new CURLFile($_FILES['profile_picture']['tmp_name'], $pp_mime, $_FILES['profile_picture']['name']);
             $post_fields = [
                 'file'          => $cfile,
                 'upload_preset' => $upload_preset,
-                'folder'        => 'dasma_profiles'
+                'folder'        => 'dasma_profiles',
+                'asset_folder'  => 'dasma_profiles',
+                'public_id'     => 'dasma_profiles/' . $file_id
             ];
 
             $ch = curl_init("https://api.cloudinary.com/v1_1/{$cloud_name}/image/upload");
