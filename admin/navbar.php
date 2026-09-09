@@ -37,14 +37,20 @@ $default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/sv
 $raw_photo     = trim($user_data['profile_photo'] ?? '');
 $profile_photo = $default_avatar;
 
-if (!empty($raw_photo)) {
-    $clean_path = ltrim($raw_photo, '/');
-    if (file_exists(__DIR__ . '/../' . $clean_path)) {
-        $profile_photo = '../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
-    } elseif (file_exists(__DIR__ . '/../../' . $clean_path)) {
-        $profile_photo = '../../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+if (!empty($raw_photo) && $raw_photo !== 'NULL') {
+    // 1. Direct Cloudinary / external HTTPS URL
+    if (str_starts_with($raw_photo, 'http://') || str_starts_with($raw_photo, 'https://')) {
+        $profile_photo = htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
     } else {
-        $profile_photo = '/' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+        // 2. Local relative paths
+        $clean_path = ltrim($raw_photo, '/');
+        if (file_exists(__DIR__ . '/../' . $clean_path)) {
+            $profile_photo = '../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+        } elseif (file_exists(__DIR__ . '/../../' . $clean_path)) {
+            $profile_photo = '../../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+        } else {
+            $profile_photo = '/' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
+        }
     }
 }
 
