@@ -10,7 +10,6 @@ if (!isset($auth) || !($auth instanceof Auth)) {
     $auth = new Auth($conn); 
 }
 
-// STRICT SUPERADMIN CHECK
 if (!$auth->isSuperAdmin()) {
     header("Location: ../php/login.php");
     exit();
@@ -18,9 +17,24 @@ if (!$auth->isSuperAdmin()) {
 
 session_write_close();
 
-// =========================================================================================
-// AUTO-REPAIR: SPAM & REJECTED INCIDENTS RELATIONAL FIX
-// =========================================================================================
+function getCloudinaryUrl(?string $path): string {
+    if (empty($path) || $path === 'NULL' || $path === 'null') {
+        return '';
+    }
+    $clean = trim($path);
+    if (str_starts_with($clean, '/http')) {
+        $clean = substr($clean, 1);
+    }
+    if (str_starts_with($clean, 'http://') || str_starts_with($clean, 'https://')) {
+        return $clean;
+    }
+    $clean = ltrim(str_replace(['dasma_api/', 'dasma-api/'], '', $clean), '/');
+    if (str_starts_with($clean, 'image/upload/')) {
+        return 'https://res.cloudinary.com/wyxsiraw/' . $clean;
+    }
+    return 'https://res.cloudinary.com/wyxsiraw/image/upload/' . $clean;
+}
+
 $conn->query("ALTER TABLE incidents MODIFY COLUMN status ENUM('active','dispatched','on-scene','resolved','archived','rejected','spam','out_of_range') DEFAULT 'active'");
 
 $conn->query("CREATE TABLE IF NOT EXISTS spam_reports (
@@ -36,16 +50,12 @@ $conn->query("INSERT IGNORE INTO spam_reports (incident_id, reason)
               WHERE status IN ('rejected', 'spam', 'out_of_range') 
               AND id NOT IN (SELECT incident_id FROM spam_reports)");
 
-// 🚀 AUTO-DELETE REJECTED/SPAM REPORTS OLDER THAN 3 DAYS
 $conn->query("DELETE FROM incidents WHERE status IN ('rejected', 'spam', 'out_of_range') AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)");
-// =========================================================================================
 
-// 1. GET THE FILTER VALUES
 $type_filter = isset($_GET['type']) ? $_GET['type'] : 'all';
 $time_filter = isset($_GET['time']) ? $_GET['time'] : 'all'; 
 $vault_time_filter = isset($_GET['vault_time']) ? $_GET['vault_time'] : 'all';
 
-// SECURED: Dynamic parameter binding architecture
 $where_clause = "WHERE i.status = 'archived'";
 $params = [];
 $types = "";
@@ -67,7 +77,6 @@ elseif ($time_filter === 'week') { $chart_time_clause = " AND created_at >= DATE
 elseif ($time_filter === 'month') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) "; } 
 elseif ($time_filter === 'year') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR) "; }
 
-// 2. SECURED FETCH: ARCHIVED INCIDENTS
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.image_path, i.created_at,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -88,7 +97,6 @@ $archived_incidents = ($result && $result->num_rows > 0) ? $result->fetch_all(MY
 $stmt->close();
 $js_incidents = json_encode($archived_incidents ?: []);
 
-// 3. SECURED FETCH: REPORT BIN INCIDENTS
 $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.status, i.image_path, i.created_at, i.admin_remarks,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -107,14 +115,12 @@ $bin_incidents = ($bin_result && $bin_result->num_rows > 0) ? $bin_result->fetch
 $stmt_bin->close();
 $js_bin_incidents = json_encode($bin_incidents ?: []);
 
-// 4. SECURED FETCH: BROADCAST HISTORY
 $broadcast_query = "SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC";
 $stmt_bc = $conn->prepare($broadcast_query);
 $stmt_bc->execute();
 $broadcast_history = ($res = $stmt_bc->get_result()) ? $res->fetch_all(MYSQLI_ASSOC) : [];
 $stmt_bc->close();
 
-// 5. SECURED FETCH: UNIQUE TYPES
 $stmt_t = $conn->prepare("SELECT DISTINCT incident_type FROM incidents WHERE status = 'archived'");
 $stmt_t->execute();
 $types_res = $stmt_t->get_result();
@@ -122,7 +128,6 @@ $unique_types = [];
 while($t = $types_res->fetch_assoc()) { $unique_types[] = $t['incident_type']; }
 $stmt_t->close();
 
-// 6. SECURED FETCH: CHART DATA
 $chart_type_query = "SELECT incident_type, COUNT(*) as count FROM incidents WHERE status = 'archived' $chart_time_clause GROUP BY incident_type ORDER BY count DESC";
 $stmt_ct = $conn->prepare($chart_type_query);
 $stmt_ct->execute();
@@ -140,7 +145,6 @@ if ($chart_type_res) {
 }
 $stmt_ct->close();
 
-// 7. SECURED FETCH: SEASONALITY CHART
 $dates_query = "SELECT created_at FROM incidents WHERE status NOT IN ('rejected', 'spam', 'out_of_range')";
 $stmt_d = $conn->prepare($dates_query);
 $stmt_d->execute();
@@ -154,7 +158,6 @@ if ($dates_res) {
 $stmt_d->close();
 $js_seasonality_dates = json_encode($seasonality_dates);
 
-// 8. SECURED FETCH: EVACUATION CHART
 $evac_query = "SELECT name, capacity, current_occupants FROM evacuation_centers ORDER BY current_occupants DESC LIMIT 10";
 $stmt_e = $conn->prepare($evac_query);
 $stmt_e->execute();
@@ -192,7 +195,6 @@ $stmt_e->close();
     <?php include 'navbar.php'; ?>
 
     <main class="main-content">
-        
         <header style="margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 15px;">
             <div>
                 <h1 style="color: #333; margin: 0; font-size: 2.2rem;">Global Analytics</h1>
@@ -205,9 +207,7 @@ $stmt_e->close();
         </header>
 
         <div class="dashboard-grid">
-            
             <div class="main-col">
-                
                 <div class="sitting-panel" style="flex: none;">
                     <div class="panel-header">
                         <h2><i class='bx bxs-archive' style="color:#607d8b;"></i> Incident Archive Vault</h2>
@@ -258,6 +258,8 @@ $stmt_e->close();
                                             $minutes = floor(($diff % 3600) / 60);
                                             $duration_str = ($hours > 0 ? "{$hours}h " : "") . "{$minutes}m";
                                         }
+
+                                        $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
                                         <td>
@@ -284,8 +286,8 @@ $stmt_e->close();
                                         </td>
                                         <td style="text-align: center; vertical-align: middle;" class="exclude-export">
                                             <div class="btn-action-group">
-                                                <?php if (!empty($inc['image_path']) && $inc['image_path'] !== 'NULL'): ?>
-                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('/<?php echo addslashes($inc['image_path']); ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                                <?php if (!empty($vaultImg)): ?>
+                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?php echo htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8'); ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
                                                 <?php endif; ?>
                                                 <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?php echo $logs_js; ?>', '<?php echo addslashes($inc['incident_type']); ?>')" title="View Logs"><i class='bx bx-list-ul'></i></button>
                                             </div>
@@ -349,6 +351,7 @@ $stmt_e->close();
                                     <?php foreach ($bin_incidents as $bin): 
                                         $b_status = strtoupper($bin['status']);
                                         $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
+                                        $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
                                         <td>
@@ -369,8 +372,8 @@ $stmt_e->close();
                                         </td>
                                         <td style="text-align: center;" class="exclude-export">
                                             <div class="btn-action-group">
-                                                <?php if (!empty($bin['image_path']) && $bin['image_path'] !== 'NULL'): ?>
-                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('/<?php echo addslashes($bin['image_path']); ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                                <?php if (!empty($binImg)): ?>
+                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?php echo htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8'); ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
                                                 <?php endif; ?>
                                                 <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?php echo $logs_js; ?>', '<?php echo addslashes($bin['incident_type']); ?>')" title="View Logs"><i class='bx bx-list-ul'></i></button>
                                             </div>
@@ -382,11 +385,9 @@ $stmt_e->close();
                         </table>
                     </div>
                 </div>
-
             </div>
 
             <div class="side-col">
-                
                 <div class="sitting-panel" style="padding: 20px;">
                     <div class="panel-header" style="margin-bottom: 15px;">
                         <h2><i class='bx bxs-hot' style="color:#d32f2f;"></i> Spatial Hotspots</h2>
@@ -457,7 +458,6 @@ $stmt_e->close();
                     </div>
                 </div>
             </div>
-
         </div>
     </main>
 
@@ -478,19 +478,14 @@ $stmt_e->close();
         </div>
     </div>
 
-    <!-- MODAL: Mobile Analytics Details -->
     <div id="mobileAnalyticsModal" class="modal" style="z-index: 10005;">
         <div class="modal-content" style="max-width: 90%; padding: 24px;">
             <div class="close-modal" onclick="closeModal('mobileAnalyticsModal')" style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; z-index: 1000;"><i class='bx bx-x'></i></div>
             <h3 id="m-analytics-title" style="margin-bottom: 16px; font-weight: 900; font-size: 1.3rem; padding-right: 30px; color: var(--text-primary);"></h3>
-            
-            <div id="m-analytics-body" style="display: flex; flex-direction: column;">
-                <!-- Dynamically Injected -->
-            </div>
+            <div id="m-analytics-body" style="display: flex; flex-direction: column;"></div>
         </div>
     </div>                                       
 <?php
-// Prepare heatmap coordinates directly in PHP
 $heat_coords = [];
 if (!empty($archived_incidents)) {
     foreach ($archived_incidents as $inc) {
@@ -509,7 +504,6 @@ if (!empty($archived_incidents)) {
     window.typeData          = <?= json_encode($type_data ?? []) ?>;
     window.typeColors        = <?= json_encode($type_colors ?? []) ?>;
     
-    /* Evacuation & Heatmap Data */
     window.evacLabels        = <?= json_encode($evac_labels ?? []) ?>;
     window.evacOccupants     = <?= json_encode($evac_occupants ?? []) ?>;
     window.evacCapacity      = <?= json_encode($evac_capacity ?? []) ?>;

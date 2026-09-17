@@ -99,7 +99,8 @@ function renderSeasonality() {
     const canvasElement = document.getElementById('seasonalityLineChart');
     if (!canvasElement) return;
 
-    const filter = document.getElementById('seasonalityFilter').value;
+    const filterEl = document.getElementById('seasonalityFilter');
+    const filter = filterEl ? filterEl.value : 'all';
     const now = new Date();
     
     let filtered = allSeasonDates.filter(dateStr => {
@@ -269,15 +270,21 @@ function exportPDF() {
 }
 
 function applyFilters() { 
-    let typeVal = document.getElementById('typeFilter').value;
-    let timeVal = document.getElementById('timeFilter').value;
-    let vaultTimeVal = document.getElementById('vaultTimeFilter').value;
+    let typeVal = document.getElementById('typeFilter')?.value || 'all';
+    let timeVal = document.getElementById('timeFilter')?.value || 'all';
+    let vaultTimeVal = document.getElementById('vaultTimeFilter')?.value || 'all';
     window.location.href = `analytics.php?type=${encodeURIComponent(typeVal)}&time=${encodeURIComponent(timeVal)}&vault_time=${encodeURIComponent(vaultTimeVal)}`; 
 }
 
 function closeModal(id) {
     const el = document.getElementById(id);
-    if (el) el.style.display = 'none';
+    if (el) {
+        el.style.display = 'none';
+        if (id === 'viewPhotoModal') {
+            const img = document.getElementById('evidencePhotoViewer');
+            if (img) img.src = '';
+        }
+    }
 }
 
 function viewLogs(logsString, incidentTitle) {
@@ -319,16 +326,24 @@ function viewLogs(logsString, incidentTitle) {
     const modal = document.getElementById('viewLogsModal');
     if (modal) modal.style.display = 'flex';
 }
-function viewPhoto(rawPath) {
-    let cleanPath = rawPath;
-    if (cleanPath.startsWith('/')) { 
-        cleanPath = cleanPath.substring(1); 
+
+function viewPhoto(url) {
+    if (!url || url === 'null' || url === 'NULL') return;
+    
+    let cleanUrl = url.trim();
+    if (cleanUrl.startsWith('/http')) cleanUrl = cleanUrl.substring(1);
+    
+    if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        const path = cleanUrl.replace(/^\/?(dasma_api\/|dasma-api\/)?/, '');
+        cleanUrl = 'https://res.cloudinary.com/wyxsiraw/image/upload/' + path;
     }
-    
-    let finalUrl = '/dasma_api/' + cleanPath;
-    
-    document.getElementById('evidencePhotoViewer').src = finalUrl;
-    document.getElementById('viewPhotoModal').style.display = 'flex';
+
+    const imgViewer = document.getElementById('evidencePhotoViewer');
+    const modal = document.getElementById('viewPhotoModal');
+    if (imgViewer && modal) {
+        imgViewer.src = cleanUrl;
+        modal.style.display = 'flex';
+    }
 }
 
 function stopBroadcast(id) {
@@ -400,3 +415,13 @@ function openMobileModal(row, type) {
 
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
+
+window.viewPhoto = viewPhoto;
+window.closeModal = closeModal;
+window.viewLogs = viewLogs;
+window.openMobileModal = openMobileModal;
+window.renderSeasonality = renderSeasonality;
+window.applyFilters = applyFilters;
+window.exportCSV = exportCSV;
+window.exportPDF = exportPDF;
+window.stopBroadcast = stopBroadcast;
