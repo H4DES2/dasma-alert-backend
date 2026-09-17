@@ -664,3 +664,6 @@ html.global-dark-mode .leaflet-control-zoom a {
     color: #f4f4f5 !important;
     border-bottom: 1px solid #27272a !important;
 }
+.triage-table tr.cluster-child:hover td {
+    background: rgba(128, 128, 128, 0.12) !important;
+}
