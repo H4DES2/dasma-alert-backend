@@ -4,3 +4,5 @@ _ide_helper.php
 uploads/evidence/*
 uploads/announcements/*
 uploads/profile/*
+phl_admin4.geojson
+*.geojson

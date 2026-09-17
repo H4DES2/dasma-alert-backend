@@ -446,13 +446,31 @@ function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs,
 }
 
 function rejectIncident(id) {
-    customConfirm("Reject Incident?", "Is this a false alarm?", "bx-x-circle", "#555555", function() {
+    customConfirm("Reject Incident?", "Mark this report as false alarm / rejected?", "bx-x-circle", "#555555", function() {
         let fd = new FormData(); 
         fd.append('action', 'reject_incident'); 
         fd.append('incident_id', id);
+
         fetch(API_PATH, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(d => { if (d.success) fetchLocalData(); });
+            .then(async r => {
+                const rawText = await r.text();
+                try {
+                    return JSON.parse(rawText);
+                } catch (e) {
+                    throw new Error("Server output: " + rawText.substring(0, 120));
+                }
+            })
+            .then(d => { 
+                if (d.success) {
+                    fetchLocalData(); 
+                } else {
+                    customAlert("Reject Failed", d.message || "Could not reject report.", "bx-error", "#d32f2f");
+                }
+            })
+            .catch(err => {
+                console.error("Reject error:", err);
+                customAlert("Server Error", err.message, "bx-error", "#d32f2f");
+            });
     });
 }
 
@@ -512,7 +530,57 @@ function openMobileModal(row) {
     bodyEl.querySelectorAll('.mobile-expand-icon').forEach(icon => icon.style.display = 'none');
     document.getElementById('mobileIncidentModal').style.display = 'flex';
 }
+// Verification Confirmation Handler
+function confirmVerifyIncident(ids, btn = null) {
+    if (btn) {
+        const drop = btn.closest('.verify-dropdown');
+        if (drop) drop.style.display = 'none';
+    }
+    const fd = new FormData();
+    fd.append('action', 'confirm_verify');
+    fd.append('incident_id', ids);
 
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async r => {
+            const rawText = await r.text();
+            try {
+                return JSON.parse(rawText);
+            } catch (e) {
+                throw new Error("Server output: " + rawText.substring(0, 120));
+            }
+        })
+        .then(d => { 
+            if (d.success) {
+                fetchLocalData(); 
+            } else {
+                customAlert("Error", d.message || "Failed to verify.", "bx-error", "#d32f2f"); 
+            }
+        })
+        .catch(err => {
+            console.error("Verify error:", err);
+            customAlert("Server Error", err.message, "bx-error", "#d32f2f");
+        });
+}
+function toggleCluster(key) {
+    const rows = document.querySelectorAll(`.cluster-row-${key}`);
+    const icon = document.getElementById(`icon_${key}`);
+    rows.forEach(r => {
+        r.style.display = (r.style.display === 'none' || r.style.display === '') ? 'table-row' : 'none';
+    });
+    if (icon) {
+        if (icon.classList.contains('bx-folder-plus')) {
+            icon.classList.replace('bx-folder-plus', 'bx-folder-minus');
+        } else {
+            icon.classList.replace('bx-folder-minus', 'bx-folder-plus');
+        }
+    }
+}
+function toggleBackupRow(id) {
+    const row = document.getElementById(`backup-row-${id}`);
+    if (row) {
+        row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
+    }
+}
 window.openDeployModal = openDeployModal;
 window.submitDispatch = submitDispatch;
 window.cancelDispatch = cancelDispatch;
@@ -528,3 +596,6 @@ window.resolveIncident = resolveIncident;
 window.viewEvidence = viewEvidence;
 window.openMobileModal = openMobileModal;
 window.closeModal = closeModal;
+window.confirmVerifyIncident = confirmVerifyIncident;
+window.toggleCluster = toggleCluster;
+window.toggleBackupRow = toggleBackupRow;

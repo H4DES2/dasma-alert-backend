@@ -271,20 +271,72 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_resolve_incident') {
 
 if (isset($_POST['action']) && $_POST['action'] === 'confirm_verify') {
     requireRole($ADMIN_TIER_ROLES, $role);
-    ob_end_clean();
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header('Content-Type: application/json');
+
     $ids_raw = $_POST['incident_id'] ?? '';
     $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
         $v_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
-        if (empty($v_name)) { $v_name = $_SESSION['username']; }
-        
+        if (empty($v_name)) { $v_name = $_SESSION['username'] ?? 'Barangay Admin'; }
+
         $stmt = $conn->prepare("UPDATE incidents SET is_verified = 1, verified_by = ? WHERE id IN ($id_list)");
         $stmt->bind_param("s", $v_name);
         $stmt->execute();
         $stmt->close();
+
+        // Optional: log verification
+        $admin_id = (int)($_SESSION['user_id'] ?? 0);
+        $log_msg = "Incident verified by {$v_name}.";
+        $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+        if ($stmt_log) {
+            foreach ($ids_array as $inc_id) {
+                $stmt_log->bind_param("iis", $inc_id, $admin_id, $log_msg);
+                $stmt_log->execute();
+            }
+            $stmt_log->close();
+        }
     }
     echo json_encode(['success' => true]);
+    exit();
+}
+
+if (isset($_POST['action']) && $_POST['action'] === 'reject_incident') {
+    requireRole($ADMIN_TIER_ROLES, $role);
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header('Content-Type: application/json');
+
+    $ids_raw = $_POST['incident_id'] ?? $_POST['id'] ?? '';
+    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
+
+    if (!empty($ids_array)) {
+        $id_list = implode(',', $ids_array);
+        // Mark incident as rejected so it disappears from the active feed
+        $conn->query("UPDATE incidents SET status = 'rejected', is_verified = 0 WHERE id IN ($id_list)");
+
+        // Release any units that might be attached
+        $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'available' WHERE current_incident_id IN ($id_list)");
+
+        // Log rejection
+        $admin_id = (int)($_SESSION['user_id'] ?? 0);
+        $v_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
+        if (empty($v_name)) { $v_name = $_SESSION['username'] ?? 'Barangay Admin'; }
+        $log_msg = "Incident rejected as false alarm by {$v_name}.";
+
+        $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+        if ($stmt_log) {
+            foreach ($ids_array as $inc_id) {
+                $stmt_log->bind_param("iis", $inc_id, $admin_id, $log_msg);
+                $stmt_log->execute();
+            }
+            $stmt_log->close();
+        }
+
+        echo json_encode(['success' => true]);
+    } else {
+        echo json_encode(['success' => false, 'message' => 'No incident ID provided']);
+    }
     exit();
 }
 
@@ -532,7 +584,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                 <div class='verify-btn-wrapper' style='width:100%; position: relative;'>
                                     <button class='btn-sm verify-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); toggleVerifyDropdown(this)'><i class='bx bx-check-shield' style='font-size: 1.1rem;'></i> Verify</button>
                                     <div class='verify-dropdown' style='display:none; position: absolute; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 100; width:150px; left:50%; transform:translateX(-50%); padding:5px;'>
-                                        <button class='btn-sm confirm-verify-btn' style='background:#388e3c; color: white !important; width: 100%; justify-content: center; margin-bottom: 5px;' data-confirm-ids='$dispatch_id'>Confirm</button>
+                                        <button class='btn-sm confirm-verify-btn' style='background:#388e3c; color: white !important; width: 100%; justify-content: center; margin-bottom: 5px;' onclick='event.stopPropagation(); confirmVerifyIncident(\"$dispatch_id\", this)' data-confirm-ids='$dispatch_id'>Confirm</button>
                                         <button class='btn-sm cancel-verify-btn' style='background:#555555; color: white !important; width: 100%; justify-content: center;' onclick='event.stopPropagation(); hideVerifyDropdown(this)'>Cancel</button>
                                     </div>
                                 </div>
