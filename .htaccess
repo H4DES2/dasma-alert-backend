@@ -34,12 +34,23 @@
     # Global Favicon Route
     RewriteRule ^favicon\.ico$ uploads/system/DasmaAlert.png [L]
 
-    # Map both /login and /login.php internally to /php/login.php
-    RewriteRule ^login(\.php)?/?$ php/login.php [L,QSA]
+    # 1. External redirect: /php/login or /php/login.php -> /login
+    RewriteCond %{THE_REQUEST} \s/+php/login(\.php)?[\s?] [NC]
+    RewriteRule ^ /login [R=301,L]
 
-    # Clean portal shortcuts
+    # 2. External redirect: Strip .php from any direct browser URL request
+    RewriteCond %{THE_REQUEST} ^[A-Z]{3,}\s/+(.+?)\.php[\s?] [NC]
+    RewriteRule ^ %1 [R=301,L]
+
+    # 3. Clean Portal Routes (Internal Rewrites)
+    RewriteRule ^login/?$ php/login.php [L,QSA]
     RewriteRule ^admin/?$ admin/dashboard.php [L,QSA]
     RewriteRule ^client/?$ client/dashboard.php [L,QSA]
+
+    # 4. Internally append .php for extensionless URLs
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.*)$ $1.php [L,QSA]
 
     Options -Indexes
 </IfModule>
