@@ -223,15 +223,19 @@ function exportPDF() {
     doc.setTextColor(100, 100, 100);
     doc.text("Generated on: " + new Date().toLocaleString(), 14, 22);
 
-    // Vault Table
+    // 1. Incident Archive Vault Table
     doc.setFontSize(14);
     doc.setTextColor(50, 50, 50);
     doc.text("Incident Archive Vault", 14, 32);
     
     let vaultRows = allIncidents.map(inc => [
-        inc.id, inc.incident_type, inc.severity, inc.barangay, 
-        inc.created_at, inc.resolved_at || 'N/A', 
-        (inc.initial_log || '').substring(0, 50) + "..."
+        inc.id, 
+        inc.incident_type, 
+        inc.severity, 
+        inc.barangay, 
+        inc.created_at, 
+        inc.resolved_at || 'N/A', 
+        inc.initial_log || 'No user details provided.'
     ]);
 
     doc.autoTable({
@@ -239,31 +243,63 @@ function exportPDF() {
         head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Initial Log']],
         body: vaultRows,
         theme: 'grid',
-        headStyles: { fillColor: [25, 118, 210] },
-        styles: { fontSize: 8, overflow: 'linebreak' },
-        columnStyles: { 6: { cellWidth: 60 } }
+        headStyles: { fillColor: [25, 118, 210], fontStyle: 'bold' },
+        styles: { 
+            fontSize: 8, 
+            cellPadding: 3, 
+            overflow: 'linebreak', 
+            valign: 'top' 
+        },
+        columnStyles: { 
+            0: { cellWidth: 12 },
+            1: { cellWidth: 45 },
+            2: { cellWidth: 22 },
+            3: { cellWidth: 32 },
+            4: { cellWidth: 34 },
+            5: { cellWidth: 34 },
+            6: { cellWidth: 'auto' } // Allows log text to wrap completely without truncation
+        }
     });
 
     let finalY = doc.lastAutoTable.finalY || 36;
 
-    // Bin Table
+    // 2. Report Bin Table
     doc.setFontSize(14);
     doc.setTextColor(50, 50, 50);
     doc.text("Report Bin (Rejected / Spam)", 14, finalY + 15);
     
-    let binRows = binIncidents.map(bin => [
-        bin.id, bin.incident_type, bin.status.toUpperCase(), bin.barangay, 
-        bin.created_at, 
-        (bin.spam_reason || bin.admin_remarks || 'No reason').substring(0, 60) + "..."
-    ]);
+    let binRows = binIncidents.map(bin => {
+        let reason = bin.spam_reason || bin.admin_remarks || 'No reason provided';
+        return [
+            bin.id, 
+            bin.incident_type, 
+            bin.status.toUpperCase(), 
+            bin.barangay, 
+            bin.created_at, 
+            reason
+        ];
+    });
 
     doc.autoTable({
         startY: finalY + 20,
         head: [['ID', 'Type', 'Status', 'Barangay', 'Reported Date', 'Reject Reason']],
         body: binRows,
         theme: 'grid',
-        headStyles: { fillColor: [66, 66, 66] },
-        styles: { fontSize: 8, overflow: 'linebreak' }
+        headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
+        styles: { 
+            fontSize: 8, 
+            cellPadding: 3, 
+            overflow: 'linebreak', 
+            valign: 'top' 
+        },
+        columnStyles: { 
+            0: { cellWidth: 12 },
+            1: { cellWidth: 55 },
+            2: { cellWidth: 25 },
+            3: { cellWidth: 38 },
+            4: { cellWidth: 38 },
+            5: { cellWidth: 'auto' } // Allows reject reason to wrap completely without truncation
+        }
     });
 
     doc.save('Citywide_Comprehensive_Report.pdf');

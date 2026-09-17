@@ -317,18 +317,49 @@ if (isset($_POST['action']) && $_POST['action'] === 'reject_incident') {
 
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
-        // Mark incident as rejected so it disappears from the active feed
-        $conn->query("UPDATE incidents SET status = 'rejected', is_verified = 0 WHERE id IN ($id_list)");
+        $admin_id = (int)($_SESSION['user_id'] ?? 0);
 
-        // Release any units that might be attached
+        // Fetch actual full name from database
+        $admin_name = '';
+        if ($admin_id > 0) {
+            $stmt_u = $conn->prepare("SELECT first_name, last_name, username FROM users WHERE id = ?");
+            $stmt_u->bind_param("i", $admin_id);
+            $stmt_u->execute();
+            $u_row = $stmt_u->get_result()->fetch_assoc();
+            $stmt_u->close();
+            if ($u_row) {
+                $full = trim(($u_row['first_name'] ?? '') . ' ' . ($u_row['last_name'] ?? ''));
+                $admin_name = !empty($full) ? $full : ($u_row['username'] ?? '');
+            }
+        }
+        if (empty($admin_name)) {
+            $admin_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
+            if (empty($admin_name)) { $admin_name = $_SESSION['username'] ?? 'Officer'; }
+        }
+
+        $reject_reason = "Rejected by {$admin_name} (False Alarm)";
+
+        // Update incidents status and admin_remarks with the actual officer name
+        $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'rejected', is_verified = 0, admin_remarks = ? WHERE id IN ($id_list)");
+        $stmt_inc->bind_param("s", $reject_reason);
+        $stmt_inc->execute();
+        $stmt_inc->close();
+
+        // Release attached response units
         $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'available' WHERE current_incident_id IN ($id_list)");
 
-        // Log rejection
-        $admin_id = (int)($_SESSION['user_id'] ?? 0);
-        $v_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
-        if (empty($v_name)) { $v_name = $_SESSION['username'] ?? 'Barangay Admin'; }
-        $log_msg = "Incident rejected as false alarm by {$v_name}.";
+        // Sync directly to spam_reports
+        foreach ($ids_array as $inc_id) {
+            $stmt_sr = $conn->prepare("INSERT INTO spam_reports (incident_id, reason) VALUES (?, ?) ON DUPLICATE KEY UPDATE reason = VALUES(reason)");
+            if ($stmt_sr) {
+                $stmt_sr->bind_param("is", $inc_id, $reject_reason);
+                $stmt_sr->execute();
+                $stmt_sr->close();
+            }
+        }
 
+        // Insert incident log
+        $log_msg = "Incident rejected as false alarm by {$admin_name}.";
         $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
         if ($stmt_log) {
             foreach ($ids_array as $inc_id) {

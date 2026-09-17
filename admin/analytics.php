@@ -35,6 +35,9 @@ function getCloudinaryUrl(?string $path): string {
     return 'https://res.cloudinary.com/wyxsiraw/image/upload/' . $clean;
 }
 
+// =========================================================================================
+// AUTO-REPAIR & DATA HYGIENE
+// =========================================================================================
 $conn->query("ALTER TABLE incidents MODIFY COLUMN status ENUM('active','dispatched','on-scene','resolved','archived','rejected','spam','out_of_range') DEFAULT 'active'");
 
 $conn->query("CREATE TABLE IF NOT EXISTS spam_reports (
@@ -45,15 +48,40 @@ $conn->query("CREATE TABLE IF NOT EXISTS spam_reports (
     FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
 )");
 
+// Resolve legacy/generic "Rejected by Admin" using the actual officer's name from logs
+$conn->query("
+    UPDATE incidents i
+    JOIN incident_logs il ON il.incident_id = i.id AND (LOWER(il.log_message) LIKE '%reject%' OR LOWER(il.log_message) LIKE '%false alarm%')
+    JOIN users u ON il.user_id = u.id
+    SET i.admin_remarks = CONCAT('Rejected by ', 
+        CASE 
+            WHEN TRIM(CONCAT(IFNULL(u.first_name, ''), ' ', IFNULL(u.last_name, ''))) != '' 
+            THEN TRIM(CONCAT(IFNULL(u.first_name, ''), ' ', IFNULL(u.last_name, '')))
+            ELSE u.username 
+        END, 
+        ' (False Alarm)')
+    WHERE i.status IN ('rejected', 'spam', 'out_of_range')
+      AND (i.admin_remarks LIKE '%Rejected by Admin%' OR i.admin_remarks IS NULL OR i.admin_remarks = '')
+");
+
 $conn->query("INSERT IGNORE INTO spam_reports (incident_id, reason) 
               SELECT id, admin_remarks FROM incidents 
               WHERE status IN ('rejected', 'spam', 'out_of_range') 
               AND id NOT IN (SELECT incident_id FROM spam_reports)");
 
-$conn->query("DELETE FROM incidents WHERE status IN ('rejected', 'spam', 'out_of_range') AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)");
+$conn->query("
+    UPDATE spam_reports sr
+    JOIN incidents i ON sr.incident_id = i.id
+    SET sr.reason = i.admin_remarks
+    WHERE i.admin_remarks IS NOT NULL AND (sr.reason LIKE '%Rejected by Admin%' OR sr.reason IS NULL OR sr.reason = '')
+");
 
-$type_filter = isset($_GET['type']) ? $_GET['type'] : 'all';
-$time_filter = isset($_GET['time']) ? $_GET['time'] : 'all'; 
+$conn->query("DELETE FROM incidents WHERE status IN ('rejected', 'spam', 'out_of_range') AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)");
+// =========================================================================================
+
+// 1. FILTER CONTROLS
+$type_filter       = isset($_GET['type']) ? $_GET['type'] : 'all';
+$time_filter       = isset($_GET['time']) ? $_GET['time'] : 'all'; 
 $vault_time_filter = isset($_GET['vault_time']) ? $_GET['vault_time'] : 'all';
 
 $where_clause = "WHERE i.status = 'archived'";
@@ -77,6 +105,7 @@ elseif ($time_filter === 'week') { $chart_time_clause = " AND created_at >= DATE
 elseif ($time_filter === 'month') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) "; } 
 elseif ($time_filter === 'year') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR) "; }
 
+// 2. SECURED FETCH: ARCHIVED INCIDENTS
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.image_path, i.created_at,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -97,6 +126,7 @@ $archived_incidents = ($result && $result->num_rows > 0) ? $result->fetch_all(MY
 $stmt->close();
 $js_incidents = json_encode($archived_incidents ?: []);
 
+// 3. SECURED FETCH: REPORT BIN INCIDENTS
 $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.status, i.image_path, i.created_at, i.admin_remarks,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -115,19 +145,22 @@ $bin_incidents = ($bin_result && $bin_result->num_rows > 0) ? $bin_result->fetch
 $stmt_bin->close();
 $js_bin_incidents = json_encode($bin_incidents ?: []);
 
+// 4. SECURED FETCH: BROADCAST HISTORY
 $broadcast_query = "SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC";
 $stmt_bc = $conn->prepare($broadcast_query);
 $stmt_bc->execute();
 $broadcast_history = ($res = $stmt_bc->get_result()) ? $res->fetch_all(MYSQLI_ASSOC) : [];
 $stmt_bc->close();
 
+// 5. SECURED FETCH: UNIQUE TYPES
 $stmt_t = $conn->prepare("SELECT DISTINCT incident_type FROM incidents WHERE status = 'archived'");
 $stmt_t->execute();
 $types_res = $stmt_t->get_result();
 $unique_types = [];
-while($t = $types_res->fetch_assoc()) { $unique_types[] = $t['incident_type']; }
+while ($t = $types_res->fetch_assoc()) { $unique_types[] = $t['incident_type']; }
 $stmt_t->close();
 
+// 6. SECURED FETCH: CHART DATA
 $chart_type_query = "SELECT incident_type, COUNT(*) as count FROM incidents WHERE status = 'archived' $chart_time_clause GROUP BY incident_type ORDER BY count DESC";
 $stmt_ct = $conn->prepare($chart_type_query);
 $stmt_ct->execute();
@@ -136,7 +169,7 @@ $type_labels = []; $type_data = []; $type_colors = [];
 $palette = ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#0097a7', '#0288d1'];
 $color_idx = 0;
 if ($chart_type_res) {
-    while($row = $chart_type_res->fetch_assoc()) {
+    while ($row = $chart_type_res->fetch_assoc()) {
         $type_labels[] = strtoupper($row['incident_type']);
         $type_data[] = $row['count'];
         $type_colors[] = $palette[$color_idx % count($palette)];
@@ -145,26 +178,28 @@ if ($chart_type_res) {
 }
 $stmt_ct->close();
 
+// 7. SECURED FETCH: SEASONALITY CHART
 $dates_query = "SELECT created_at FROM incidents WHERE status NOT IN ('rejected', 'spam', 'out_of_range')";
 $stmt_d = $conn->prepare($dates_query);
 $stmt_d->execute();
 $dates_res = $stmt_d->get_result();
 $seasonality_dates = [];
 if ($dates_res) {
-    while($row = $dates_res->fetch_assoc()) {
+    while ($row = $dates_res->fetch_assoc()) {
         $seasonality_dates[] = $row['created_at'];
     }
 }
 $stmt_d->close();
 $js_seasonality_dates = json_encode($seasonality_dates);
 
+// 8. SECURED FETCH: EVACUATION CHART
 $evac_query = "SELECT name, capacity, current_occupants FROM evacuation_centers ORDER BY current_occupants DESC LIMIT 10";
 $stmt_e = $conn->prepare($evac_query);
 $stmt_e->execute();
 $evac_res = $stmt_e->get_result();
 $evac_labels = []; $evac_capacity = []; $evac_occupants = [];
 if ($evac_res) {
-    while($row = $evac_res->fetch_assoc()) {
+    while ($row = $evac_res->fetch_assoc()) {
         $evac_labels[] = strlen($row['name']) > 15 ? substr($row['name'], 0, 15) . '...' : $row['name'];
         $evac_capacity[] = $row['capacity'];
         $evac_occupants[] = $row['current_occupants'];
