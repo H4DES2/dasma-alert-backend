@@ -604,7 +604,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $action_btns .= "</div>";
 
                 if ($extraClass != "" && strpos($extraClass, 'cluster-row') !== false) {
-                    $action_btns = "<span style='color: #888; font-size: 0.8rem; font-weight: bold; background: #eee; padding: 5px 10px; border-radius: 8px;'><i class='bx bx-link'></i> Merged to Primary</span>";
+                    $action_btns = "<span style='color: var(--text-muted, #888); font-size: 0.8rem; font-weight: bold; background: var(--surface-subtle, rgba(128,128,128,0.15)); border: 1px solid var(--border-color, rgba(128,128,128,0.2)); padding: 5px 10px; border-radius: 8px;'><i class='bx bx-link'></i> Merged to Primary</span>";
                 }
 
                 $incident_info = "<span style='font-weight:700;'>".htmlspecialchars($inc['incident_type'])."</span><br>
@@ -616,9 +616,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                 $clusterCall = ($isParent && $duplicateCount > 0) ? "toggleCluster(\"$clusterKey\");" : "";
                 $onclick = "onclick='openMobileModal(this); toggleBackupRow({$inc['id']}); $clusterCall'";
-                $hover = ($isParent && $duplicateCount > 0) ? "onmouseover='this.style.background=\"#e2e8f0\"' onmouseout='this.style.background=\"transparent\"'" : "";
 
-                $rowHtml = "<tr class='$extraClass' style='cursor: pointer; $extraStyle' $onclick $hover>
+                $rowHtml = "<tr class='$extraClass' style='cursor: pointer; $extraStyle' $onclick>
                     <td style='vertical-align: middle;'><div style='font-weight: 800; font-size: 1.1rem; color: #d32f2f;'>{$exact_time}</div><div style='font-size: 0.85rem; color: #888; font-weight: 600;'>{$exact_date}</div></td>
                     <td style='vertical-align: middle;'><div><b>".htmlspecialchars($inc['display_brgy'])."</b><br><small style='color:#d32f2f; font-weight:700;'>$coords</small><br><small style='color:#555;'>Rep: ".htmlspecialchars($reporter_display)."</small></div></td>
                     <td class='mobile-hide' style='vertical-align: middle;'>$incident_info</td>
@@ -692,7 +691,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                     $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", $cluster_ids_str, true, $count - 1, $key);
                     for ($i = 1; $i < $count; $i++) {
-                        $html .= $renderRow($group[$i], $role, "cluster-row-$key", "display: none; background: #fafafa; border-left: 4px solid #1976d2;", null, false, 0, "");
+                        $html .= $renderRow($group[$i], $role, "cluster-row-$key", "display: none; border-left: 4px solid var(--color-info, #1976d2);", null, false, 0, "");
                     }
                 } else {
                     $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");
