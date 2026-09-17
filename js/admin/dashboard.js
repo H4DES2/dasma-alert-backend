@@ -160,8 +160,10 @@ document.addEventListener('DOMContentLoaded', function() {
             maxZoom: 19, attribution: 'OpenStreetMap'
         });
 
-        const darkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19, attribution: 'CartoDB'
+        const darkMatter = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: 'OpenStreetMap',
+            className: 'dark-map-tiles'
         });
 
         const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
