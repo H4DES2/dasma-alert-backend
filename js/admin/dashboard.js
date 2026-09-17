@@ -4,7 +4,7 @@ let evacsVisible = false;
 let previousIncidentCount = -1; 
 let audioCtx = null;
 let soundEnabled = window.soundEnabled ?? false;
-let syncInterval = null;
+let eventSource = null;
 
 const API_PATH = window.location.pathname.includes('/alert/') 
     ? '/alert/admin/admin_actions.php' 
@@ -165,6 +165,142 @@ function getIncidentIcon(type, severity, backupRequested) {
     }); 
 }
 
+function applyDashboardUpdates(data) {
+    if (!data) return;
+
+    const kpiAct = document.getElementById('kpi-active'); 
+    if (kpiAct) {
+        let currentCount = parseInt(data.kpi.active) || 0;
+        
+        if (previousIncidentCount !== -1 && currentCount > previousIncidentCount && soundEnabled) {
+            let incidentSeverity = 'minor'; 
+            if (data.table) {
+                let tempDiv = document.createElement('div');
+                tempDiv.innerHTML = data.table;
+                let firstRow = tempDiv.querySelector('tr');
+                if (firstRow) {
+                    let text = firstRow.innerHTML.toLowerCase();
+                    if (text.includes('critical')) incidentSeverity = 'critical';
+                    else if (text.includes('major') || text.includes('warning')) incidentSeverity = 'major';
+                }
+            }
+            playSynthesizedSound(incidentSeverity);
+        }
+        
+        previousIncidentCount = currentCount; 
+        kpiAct.innerText = data.kpi.active; 
+    }
+
+    const kpiDep = document.getElementById('kpi-deployed'); if (kpiDep) kpiDep.innerText = data.kpi.deployed; 
+    const kpiEvac = document.getElementById('kpi-evacuees'); if (kpiEvac) kpiEvac.innerText = data.kpi.evacuees; 
+    
+    if (data.kpi_details) {
+        const actDet = document.getElementById('kpi-active-details');
+        if (actDet) actDet.innerHTML = data.kpi_details.active.length ? data.kpi_details.active.map(d => `<div>${d}</div>`).join('') : '<div>All clear.</div>';
+        const depDet = document.getElementById('kpi-deployed-details');
+        if (depDet) depDet.innerHTML = data.kpi_details.deployed.length ? data.kpi_details.deployed.map(d => `<div>${d}</div>`).join('') : '<div>No teams active.</div>';
+        const evacDet = document.getElementById('kpi-evacuees-details');
+        if (evacDet) evacDet.innerHTML = data.kpi_details.evacuees.length ? data.kpi_details.evacuees.map(d => `<div>${d}</div>`).join('') : '<div>All empty.</div>';
+    }
+
+    const tBody = document.getElementById('triage-table-body');
+    if (tBody && data.table && data.table !== lastTableHTML) { 
+        tBody.innerHTML = data.table; 
+        lastTableHTML = data.table;
+    } 
+    
+    if (typeof incidentLayer !== 'undefined' && data.map) {
+        incidentLayer.clearLayers(); 
+        data.map.forEach(inc => { 
+            let lat = parseFloat(inc.latitude);
+            let lng = parseFloat(inc.longitude);
+            
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                L.marker([lat, lng], { 
+                    icon: getIncidentIcon(inc.incident_type, inc.severity, inc.backup_requested) 
+                })
+                .addTo(incidentLayer)
+                .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:var(--color-critical); font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>`); 
+            }
+        });
+    }
+
+    if (typeof evacLayer !== 'undefined' && data.evac_centers) {
+        evacLayer.clearLayers();
+        data.evac_centers.forEach(evac => {
+            let lat = parseFloat(evac.latitude);
+            let lng = parseFloat(evac.longitude);
+            
+            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                let eIcon = L.divIcon({ 
+                    html: `<i class='bx bxs-home-heart' style='color: #10b981; font-size: 28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));'></i>`, 
+                    className: 'custom-leaflet-icon', 
+                    iconSize: [28, 28], 
+                    iconAnchor: [14, 28] 
+                });
+                L.marker([lat, lng], { icon: eIcon })
+                    .addTo(evacLayer)
+                    .bindPopup(`<b>${evac.name}</b><br>Barangay: ${evac.barangay}<br>Occupants: ${evac.current_occupants} / ${evac.capacity}`);
+            }
+        });
+    }
+}
+
+function initSSE() {
+    if (eventSource) {
+        eventSource.close();
+        eventSource = null;
+    }
+
+    const brgyNode = document.getElementById('table-filter-brgy');
+    const typeNode = document.getElementById('map-filter-incident');
+    const brgyFilter = brgyNode ? brgyNode.value : ''; 
+    const typeFilter = typeNode ? typeNode.value : 'all'; 
+
+    const url = `${API_PATH}?action=sse_stream&brgy=${encodeURIComponent(brgyFilter)}&type=${encodeURIComponent(typeFilter)}`;
+    eventSource = new EventSource(url);
+
+    eventSource.onmessage = function(e) {
+        try {
+            const data = JSON.parse(e.data);
+            applyDashboardUpdates(data);
+        } catch (err) {
+            console.error("SSE parse error:", err);
+        }
+    };
+
+    eventSource.onerror = function() {
+        if (eventSource.readyState === EventSource.CLOSED) {
+            setTimeout(initSSE, 3000);
+        }
+    };
+}
+
+// Retain one-shot sync for instant user interaction updates
+function syncDashboard() { 
+    const brgyNode = document.getElementById('table-filter-brgy');
+    const typeNode = document.getElementById('map-filter-incident');
+    const brgyFilter = brgyNode ? brgyNode.value : ''; 
+    const typeFilter = typeNode ? typeNode.value : 'all'; 
+
+    fetch(`${API_PATH}?action=master_sync&brgy=${encodeURIComponent(brgyFilter)}&type=${typeFilter}`)
+    .then(async res => {
+        if (res.status === 401 || res.status === 403) {
+            if (eventSource) eventSource.close();
+            window.location.href = '../php/login.php';
+            return null;
+        }
+        if (!res.ok) throw new Error(`Network Error: ${res.status}`);
+        return res.json();
+    })
+    .then(data => {
+        if (data) applyDashboardUpdates(data);
+    })
+    .catch(e => {
+        console.error(e.message);
+    }); 
+}
+
 document.addEventListener('DOMContentLoaded', function() { 
     const mapContainer = document.getElementById('dasma-map');
     if (mapContainer) {
@@ -212,114 +348,11 @@ document.addEventListener('DOMContentLoaded', function() {
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
     }
 
-    syncDashboard(); 
-    if (syncInterval) clearInterval(syncInterval);
-    syncInterval = setInterval(syncDashboard, 5000); 
+    initSSE();
+
+    document.getElementById('table-filter-brgy')?.addEventListener('change', initSSE);
+    document.getElementById('map-filter-incident')?.addEventListener('change', initSSE);
 });
-
-function syncDashboard() { 
-    const brgyNode = document.getElementById('table-filter-brgy');
-    const typeNode = document.getElementById('map-filter-incident');
-    const brgyFilter = brgyNode ? brgyNode.value : ''; 
-    const typeFilter = typeNode ? typeNode.value : 'all'; 
-
-    fetch(`${API_PATH}?action=master_sync&brgy=${encodeURIComponent(brgyFilter)}&type=${typeFilter}`)
-    .then(async res => {
-        if (res.status === 401 || res.status === 403) {
-            if (syncInterval) clearInterval(syncInterval);
-            window.location.href = '../php/login.php';
-            return null;
-        }
-
-        if (!res.ok) throw new Error(`Network Error: ${res.status} ${res.statusText}`);
-        const rawText = await res.text(); 
-        try { return JSON.parse(rawText); } 
-        catch (err) { throw new Error("PHP Output was not JSON."); }
-    })
-    .then(data => {
-        if (!data) return;
-
-        const kpiAct = document.getElementById('kpi-active'); 
-        if (kpiAct) {
-            let currentCount = parseInt(data.kpi.active) || 0;
-            
-            if (previousIncidentCount !== -1 && currentCount > previousIncidentCount && soundEnabled) {
-                let incidentSeverity = 'minor'; 
-                if (data.table) {
-                    let tempDiv = document.createElement('div');
-                    tempDiv.innerHTML = data.table;
-                    let firstRow = tempDiv.querySelector('tr');
-                    if (firstRow) {
-                        let text = firstRow.innerHTML.toLowerCase();
-                        if (text.includes('critical')) incidentSeverity = 'critical';
-                        else if (text.includes('major') || text.includes('warning')) incidentSeverity = 'major';
-                    }
-                }
-                playSynthesizedSound(incidentSeverity);
-            }
-            
-            previousIncidentCount = currentCount; 
-            kpiAct.innerText = data.kpi.active; 
-        }
-
-        const kpiDep = document.getElementById('kpi-deployed'); if (kpiDep) kpiDep.innerText = data.kpi.deployed; 
-        const kpiEvac = document.getElementById('kpi-evacuees'); if (kpiEvac) kpiEvac.innerText = data.kpi.evacuees; 
-        
-        if (data.kpi_details) {
-            const actDet = document.getElementById('kpi-active-details');
-            if (actDet) actDet.innerHTML = data.kpi_details.active.length ? data.kpi_details.active.map(d => `<div>${d}</div>`).join('') : '<div>All clear.</div>';
-            const depDet = document.getElementById('kpi-deployed-details');
-            if (depDet) depDet.innerHTML = data.kpi_details.deployed.length ? data.kpi_details.deployed.map(d => `<div>${d}</div>`).join('') : '<div>No teams active.</div>';
-            const evacDet = document.getElementById('kpi-evacuees-details');
-            if (evacDet) evacDet.innerHTML = data.kpi_details.evacuees.length ? data.kpi_details.evacuees.map(d => `<div>${d}</div>`).join('') : '<div>All empty.</div>';
-        }
-
-        const tBody = document.getElementById('triage-table-body');
-        if (tBody && data.table && data.table !== lastTableHTML) { 
-            tBody.innerHTML = data.table; 
-            lastTableHTML = data.table;
-        } 
-        
-        if (typeof incidentLayer !== 'undefined' && data.map) {
-            incidentLayer.clearLayers(); 
-            data.map.forEach(inc => { 
-                let lat = parseFloat(inc.latitude);
-                let lng = parseFloat(inc.longitude);
-                
-                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                    L.marker([lat, lng], { 
-                        icon: getIncidentIcon(inc.incident_type, inc.severity, inc.backup_requested) 
-                    })
-                    .addTo(incidentLayer)
-                    .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:var(--color-critical); font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>`); 
-                }
-            });
-        }
-
-        if (typeof evacLayer !== 'undefined' && data.evac_centers) {
-            evacLayer.clearLayers();
-            data.evac_centers.forEach(evac => {
-                let lat = parseFloat(evac.latitude);
-                let lng = parseFloat(evac.longitude);
-                
-                if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                    let eIcon = L.divIcon({ 
-                        html: `<i class='bx bxs-home-heart' style='color: #10b981; font-size: 28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));'></i>`, 
-                        className: 'custom-leaflet-icon', 
-                        iconSize: [28, 28], 
-                        iconAnchor: [14, 28] 
-                    });
-                    L.marker([lat, lng], { icon: eIcon })
-                        .addTo(evacLayer)
-                        .bindPopup(`<b>${evac.name}</b><br>Barangay: ${evac.barangay}<br>Occupants: ${evac.current_occupants} / ${evac.capacity}`);
-                }
-            });
-        }
-
-    }).catch(e => {
-        if (e.message !== "PHP Output was not JSON.") { console.error(e.message); }
-    }); 
-}
 
 function toggleVerifyDropdown(btn) {
     const wrapper = btn.closest('.verify-btn-wrapper');
