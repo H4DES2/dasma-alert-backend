@@ -4,7 +4,12 @@ let evacsVisible = false;
 let previousIncidentCount = -1; 
 let audioCtx = null;
 let soundEnabled = window.soundEnabled ?? false;
-const API_PATH = '../admin/admin_actions.php';
+let syncInterval = null;
+
+const API_PATH = window.location.pathname.includes('/alert/') 
+    ? '/alert/admin/admin_actions.php' 
+    : '../admin/admin_actions.php';
+
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -81,7 +86,7 @@ function toggleSound() {
 
 function closeModal(id) { 
     const mod = document.getElementById(id);
-    if(mod) mod.style.display = 'none'; 
+    if (mod) mod.style.display = 'none'; 
 }
 
 function customAlert(title, message, iconClass = 'bx-info-circle', color = '#3b82f6') {
@@ -126,6 +131,13 @@ function toggleCluster(key) {
         let isHidden = rows[0].style.display === 'none';
         rows.forEach(r => r.style.display = isHidden ? 'table-row' : 'none');
         if (icon) icon.className = isHidden ? 'bx bx-folder-minus' : 'bx bx-folder-plus';
+    }
+}
+
+function toggleBackupRow(incidentId) {
+    const row = document.getElementById('backup-row-' + incidentId);
+    if (row) {
+        row.style.display = (row.style.display === 'none') ? 'table-row' : 'none';
     }
 }
 
@@ -201,7 +213,8 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     syncDashboard(); 
-    setInterval(syncDashboard, 5000); 
+    if (syncInterval) clearInterval(syncInterval);
+    syncInterval = setInterval(syncDashboard, 5000); 
 });
 
 function syncDashboard() { 
@@ -212,14 +225,22 @@ function syncDashboard() {
 
     fetch(`${API_PATH}?action=master_sync&brgy=${encodeURIComponent(brgyFilter)}&type=${typeFilter}`)
     .then(async res => {
-        if(!res.ok) throw new Error(`Network Error: ${res.status} ${res.statusText}`);
+        if (res.status === 401 || res.status === 403) {
+            if (syncInterval) clearInterval(syncInterval);
+            window.location.href = '../php/login.php';
+            return null;
+        }
+
+        if (!res.ok) throw new Error(`Network Error: ${res.status} ${res.statusText}`);
         const rawText = await res.text(); 
         try { return JSON.parse(rawText); } 
         catch (err) { throw new Error("PHP Output was not JSON."); }
     })
     .then(data => {
+        if (!data) return;
+
         const kpiAct = document.getElementById('kpi-active'); 
-        if(kpiAct) {
+        if (kpiAct) {
             let currentCount = parseInt(data.kpi.active) || 0;
             
             if (previousIncidentCount !== -1 && currentCount > previousIncidentCount && soundEnabled) {
@@ -241,16 +262,16 @@ function syncDashboard() {
             kpiAct.innerText = data.kpi.active; 
         }
 
-        const kpiDep = document.getElementById('kpi-deployed'); if(kpiDep) kpiDep.innerText = data.kpi.deployed; 
-        const kpiEvac = document.getElementById('kpi-evacuees'); if(kpiEvac) kpiEvac.innerText = data.kpi.evacuees; 
+        const kpiDep = document.getElementById('kpi-deployed'); if (kpiDep) kpiDep.innerText = data.kpi.deployed; 
+        const kpiEvac = document.getElementById('kpi-evacuees'); if (kpiEvac) kpiEvac.innerText = data.kpi.evacuees; 
         
         if (data.kpi_details) {
             const actDet = document.getElementById('kpi-active-details');
-            if(actDet) actDet.innerHTML = data.kpi_details.active.length ? data.kpi_details.active.map(d => `<div>${d}</div>`).join('') : '<div>All clear.</div>';
+            if (actDet) actDet.innerHTML = data.kpi_details.active.length ? data.kpi_details.active.map(d => `<div>${d}</div>`).join('') : '<div>All clear.</div>';
             const depDet = document.getElementById('kpi-deployed-details');
-            if(depDet) depDet.innerHTML = data.kpi_details.deployed.length ? data.kpi_details.deployed.map(d => `<div>${d}</div>`).join('') : '<div>No teams active.</div>';
+            if (depDet) depDet.innerHTML = data.kpi_details.deployed.length ? data.kpi_details.deployed.map(d => `<div>${d}</div>`).join('') : '<div>No teams active.</div>';
             const evacDet = document.getElementById('kpi-evacuees-details');
-            if(evacDet) evacDet.innerHTML = data.kpi_details.evacuees.length ? data.kpi_details.evacuees.map(d => `<div>${d}</div>`).join('') : '<div>All empty.</div>';
+            if (evacDet) evacDet.innerHTML = data.kpi_details.evacuees.length ? data.kpi_details.evacuees.map(d => `<div>${d}</div>`).join('') : '<div>All empty.</div>';
         }
 
         const tBody = document.getElementById('triage-table-body');
@@ -296,8 +317,50 @@ function syncDashboard() {
         }
 
     }).catch(e => {
-        if(e.message !== "PHP Output was not JSON.") { console.error(e.message); }
+        if (e.message !== "PHP Output was not JSON.") { console.error(e.message); }
     }); 
+}
+
+function toggleVerifyDropdown(btn) {
+    const wrapper = btn.closest('.verify-btn-wrapper');
+    const dropdown = wrapper.querySelector('.verify-dropdown');
+    const isHidden = dropdown.style.display === 'none';
+    
+    document.querySelectorAll('.verify-dropdown').forEach(d => d.style.display = 'none');
+    dropdown.style.display = isHidden ? 'block' : 'none';
+}
+
+function hideVerifyDropdown(btn) { 
+    const drop = btn.closest('.verify-dropdown');
+    if (drop) drop.style.display = 'none'; 
+}
+
+function confirmVerifyIncident(ids, btn = null) {
+    if (btn) {
+        const drop = btn.closest('.verify-dropdown');
+        if (drop) drop.style.display = 'none';
+    }
+    const fd = new FormData();
+    fd.append('action', 'confirm_verify');
+    fd.append('incident_id', ids);
+
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async r => {
+            const rawText = await r.text();
+            try { return JSON.parse(rawText); } 
+            catch (e) { throw new Error("Server output: " + rawText.substring(0, 120)); }
+        })
+        .then(d => { 
+            if (d.success) {
+                syncDashboard(); 
+            } else {
+                customAlert("Error", d.message || "Failed to verify.", "bx-error", "#ef4444"); 
+            }
+        })
+        .catch(err => {
+            console.error("Verify error:", err);
+            customAlert("Server Error", err.message, "bx-error", "#ef4444");
+        });
 }
 
 function openDeployModal(ids, name) {
@@ -317,10 +380,10 @@ function openDeployModal(ids, name) {
     document.getElementById('dispatchModal').style.display = 'flex';
 
     fetch(API_PATH + "?action=get_available_teams&incident_type=" + encodeURIComponent(name))
-        .then(r=>r.json())
+        .then(r => r.json())
         .then(data => {
             let html = '';
-            if(data.length === 0) {
+            if (!data || data.length === 0) {
                 html = "<div style='text-align:center; color:var(--color-critical); font-weight:bold; padding: 15px;'>No units currently available.</div>";
             } else {
                 data.forEach(t => {
@@ -361,20 +424,12 @@ function submitDispatch() {
         fetch(API_PATH, { method: 'POST', body: fd })
             .then(async r => {
                 const raw = await r.text();
-                try {
-                    return JSON.parse(raw);
-                } catch(e) {
-                    throw new Error("Server output was not JSON: " + raw.substring(0, 100));
-                }
+                try { return JSON.parse(raw); } 
+                catch (e) { throw new Error("Server output was not JSON: " + raw.substring(0, 100)); }
             })
             .then(d => {
                 if (d.success) {
-                    // Safe refresh regardless of whether this is Admin or Barangay dashboard
-                    if (typeof syncDashboard === 'function') {
-                        syncDashboard();
-                    } else if (typeof fetchLocalData === 'function') {
-                        fetchLocalData();
-                    }
+                    syncDashboard();
                 } else {
                     customAlert("Dispatch Failed", d.message || "Could not deploy team.", "bx-error", "#ef4444");
                 }
@@ -408,124 +463,10 @@ function cancelDispatch(ids) {
     });
 }
 
-function rejectIncident(ids) {
-    customConfirm("Reject Incident", "Are you sure you want to reject this incident as a False Alarm?", "bx-x-circle", "#ef4444", function() {
-        let fd = new FormData(); fd.append('action', 'reject_incident'); fd.append('incident_id', ids);
-        fetch(API_PATH, { method: 'POST', body: fd }).then(r=>r.json()).then(d=>syncDashboard());
-    });
+function recallIncident(incidentId) {
+    cancelDispatch(incidentId);
 }
 
-function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs, extra, backupRequested) { 
-    const imgEl = document.getElementById('evidenceImageFull');
-    if (imagePath && imagePath !== 'NULL' && imagePath !== '') {
-        // Strip any leading slashes or redundant dasma_api prefixes
-        let cleanPath = imagePath.replace(/^\/?(dasma_api\/)?/, '');
-        
-        // Define your API host where uploads are stored
-        const API_BASE_URL = 'https://dasma-api-l9ql.onrender.com';
-
-        // Point relative paths to the API server
-        if (cleanPath.startsWith('http')) {
-            imgEl.src = cleanPath;
-        } else {
-            imgEl.src = API_BASE_URL + '/' + cleanPath.replace(/^\/+/, '');
-        }
-
-        imgEl.parentElement.style.display = 'flex';
-    } else {
-        imgEl.parentElement.style.display = 'none';
-    }
-    const typeNode = document.getElementById('evType'); if(typeNode) typeNode.innerText = incidentType;
-    const brgyNode = document.getElementById('evBrgy'); if(brgyNode) brgyNode.innerText = brgy;
-    const dateNode = document.getElementById('evDateTime'); if(dateNode) dateNode.innerText = `${date} at ${time}`;
-    
-    const repNode = document.getElementById('evReporter'); 
-    if(repNode) repNode.innerHTML = `${reporter} <br><small style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">${extra || ''}</small>`;
-    
-    const logNode = document.getElementById('evLogs'); 
-    if(logNode) logNode.innerText = logs ? `"${logs}"` : "No reporter logs available.";
-
-    const mod = document.getElementById('evidenceModal');
-    if(mod) mod.style.display = 'flex'; 
-
-    if (backupRequested == 1) {
-        setTimeout(() => {
-            customAlert("🚨 URGENT: BACKUP REQUESTED 🚨", "The responder at this location has requested immediate backup/assistance!", "bxs-error", "#ef4444");
-        }, 300);
-    }
-}
-
-function dismissBroadcast(id) {
-    document.cookie = "dismissed_broadcast_id=" + id + "; path=/; max-age=" + (60 * 60 * 24);
-    const banner = document.getElementById('broadcast-banner');
-    if(banner) banner.style.display = 'none';
-    document.body.classList.remove('has-broadcast');
-}
-
-document.querySelectorAll('.kpi-card').forEach(card => {
-    card.addEventListener('click', function(e) {
-        if (window.innerWidth <= 768) {
-            const isExpanded = this.classList.contains('mobile-expanded');
-            document.querySelectorAll('.kpi-card').forEach(c => {
-                c.classList.remove('mobile-expanded');
-            });
-            if (!isExpanded) {
-                this.classList.add('mobile-expanded');
-            }
-        }
-    });
-});
-
-function openAnnouncementModal(id = '', title = '', message = '') {
-    document.getElementById('ann_id').value = id;
-    document.getElementById('ann_title').value = title;
-    document.getElementById('ann_message').value = message.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
-    document.getElementById('ann_image').value = ''; 
-    
-    document.getElementById('annModalTitle').innerHTML = id ? `<i class='bx bx-edit' style='color:var(--color-info);'></i> Edit Announcement` : `<i class='bx bxs-bell-ring' style='color:var(--color-warning);'></i> Create Announcement`;
-    
-    document.getElementById('announcementModal').style.display = 'flex';
-}
-
-function openMobileModal(row) {
-    if (window.innerWidth > 768) return; 
-
-    const cells = row.querySelectorAll('td');
-    if (cells.length < 6) return;
-
-    document.getElementById('m-modal-time').innerHTML = cells[0].innerHTML;
-    document.getElementById('m-modal-loc').innerHTML = cells[1].innerHTML;
-    document.getElementById('m-modal-info').innerHTML = cells[2].innerHTML;
-    document.getElementById('m-modal-ev').innerHTML = cells[3].innerHTML;
-    document.getElementById('m-modal-status').innerHTML = cells[4].innerHTML;
-    document.getElementById('m-modal-actions').innerHTML = cells[5].innerHTML;
-
-    document.getElementById('mobileIncidentModal').style.display = 'flex';
-}
-function deleteAnnouncement(id) {
-    customConfirm("Delete Announcement", "Are you sure you want to permanently delete this announcement?", "bx-trash", "#ef4444", function() {
-        let fd = new FormData();
-        fd.append('action', 'delete_announcement');
-        fd.append('id', id);
-
-        fetch(API_PATH, { method: 'POST', body: fd })
-        .then(r => r.text())
-        .then(res => {
-            if (res.trim() === 'success') {
-                location.reload();
-            } else {
-                customAlert("Delete Failed", res, "bx-error", "#ef4444");
-            }
-        })
-        .catch(err => customAlert("Error", err.message, "bx-error", "#ef4444"));
-    });
-}
-function toggleBackupRow(incidentId) {
-    const row = document.getElementById('backup-row-' + incidentId);
-    if (row) {
-        row.style.display = (row.style.display === 'none') ? 'table-row' : 'none';
-    }
-}
 function recallCityBackup(incidentId) {
     customConfirm(
         "Recall City Backup?",
@@ -553,10 +494,61 @@ function recallCityBackup(incidentId) {
         }
     );
 }
-function recallIncident(incidentId) {
-    cancelDispatch(incidentId);
+
+function rejectIncident(ids) {
+    customConfirm("Reject Incident", "Are you sure you want to reject this incident as a False Alarm?", "bx-x-circle", "#ef4444", function() {
+        let fd = new FormData(); 
+        fd.append('action', 'reject_incident'); 
+        fd.append('incident_id', ids);
+
+        fetch(API_PATH, { method: 'POST', body: fd })
+            .then(async r => {
+                const raw = await r.text();
+                try { return JSON.parse(raw); } 
+                catch (e) { throw new Error("Server output was not JSON"); }
+            })
+            .then(d => {
+                if (d.success) {
+                    syncDashboard();
+                } else {
+                    customAlert("Error", d.message || "Could not reject report.", "bx-error", "#ef4444");
+                }
+            })
+            .catch(e => {
+                console.error(e);
+                syncDashboard();
+            });
+    });
 }
-// Clean Evidence Viewer: Image Only
+
+function resolveIncident(ids) {
+    customConfirm(
+        "Mark as Resolved?",
+        "This will officially close the incident, automatically archive the connected backup request, and recall any deployed units. Proceed?",
+        "bx-check-shield",
+        "#10b981",
+        function() {
+            let fd = new FormData();
+            fd.append('action', 'admin_resolve_incident');
+            fd.append('incident_id', ids);
+
+            fetch(API_PATH, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) {
+                        syncDashboard(); 
+                    } else {
+                        customAlert("Error", d.message || "Failed to resolve.", "bx-error", "#ef4444");
+                    }
+                })
+                .catch(e => {
+                    console.error(e);
+                    syncDashboard(); 
+                });
+        }
+    );
+}
+
 function viewEvidence(imagePath) { 
     const imgEl = document.getElementById('evidenceImageFull');
     if (!imgEl) return;
@@ -577,22 +569,43 @@ function viewEvidence(imagePath) {
         customAlert("No Evidence", "No image evidence was submitted for this report.", "bx-image-alt", "#71717a");
     }
 }
+
+function dismissBroadcast(id) {
+    document.cookie = "dismissed_broadcast_id=" + id + "; path=/; max-age=" + (60 * 60 * 24);
+    const banner = document.getElementById('broadcast-banner');
+    if (banner) banner.style.display = 'none';
+    document.body.classList.remove('has-broadcast');
+}
+
+function openAnnouncementModal(id = '', title = '', message = '') {
+    document.getElementById('ann_id').value = id;
+    document.getElementById('ann_title').value = title;
+    document.getElementById('ann_message').value = message.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+    document.getElementById('ann_image').value = ''; 
+    
+    document.getElementById('annModalTitle').innerHTML = id 
+        ? `<i class='bx bx-edit' style='color:var(--color-info);'></i> Edit Announcement` 
+        : `<i class='bx bxs-bell-ring' style='color:var(--color-warning);'></i> Create Announcement`;
+    
+    document.getElementById('announcementModal').style.display = 'flex';
+}
+
 function saveAnnouncement() {
     let id = document.getElementById('ann_id').value;
     let title = document.getElementById('ann_title').value.trim();
     let msg = document.getElementById('ann_message').value.trim();
     let img = document.getElementById('ann_image').files[0];
 
-    if(!title || !msg) return customAlert("Required Fields", "Title and Message are required.", "bx-error", "#ef4444");
+    if (!title || !msg) return customAlert("Required Fields", "Title and Message are required.", "bx-error", "#ef4444");
 
     let fd = new FormData();
     fd.append('action', 'save_announcement');
-    if(id) fd.append('id', id);
+    if (id) fd.append('id', id);
     fd.append('title', title);
     fd.append('message', msg);
-    if(img) fd.append('image', img);
+    if (img) fd.append('image', img);
 
-    fetch('admin_actions.php', { method: 'POST', body: fd })
+    fetch(API_PATH, { method: 'POST', body: fd })
     .then(async r => {
         if (!r.ok) {
             let errText = await r.text();
@@ -601,7 +614,7 @@ function saveAnnouncement() {
         return r.text();
     })
     .then(text => {
-        if(text.trim() === 'success') {
+        if (text.trim() === 'success') {
             closeModal('announcementModal');
             location.reload(); 
         } else {
@@ -612,32 +625,70 @@ function saveAnnouncement() {
     });
 }
 
-function resolveIncident(ids) {
-    customConfirm(
-        "Mark as Resolved?",
-        "This will officially close the incident, automatically archive the connected backup request, and recall any deployed units. Proceed?",
-        "bx-check-shield",
-        "#10b981",
-        function() {
-            let fd = new FormData();
-            fd.append('action', 'admin_resolve_incident');
-            fd.append('incident_id', ids);
+function deleteAnnouncement(id) {
+    customConfirm("Delete Announcement", "Are you sure you want to permanently delete this announcement?", "bx-trash", "#ef4444", function() {
+        let fd = new FormData();
+        fd.append('action', 'delete_announcement');
+        fd.append('id', id);
 
-            fetch(API_PATH, { method: 'POST', body: fd })
-            .then(r => r.json())
-            .then(d => {
-                if (d.success) {
-                    syncDashboard(); 
-                } else {
-                    customAlert("Error", d.message, "bx-error", "#ef4444");
-                }
-            }).catch(e => {
-                console.error(e);
-                syncDashboard(); 
-            });
-        }
-    );
+        fetch(API_PATH, { method: 'POST', body: fd })
+        .then(r => r.text())
+        .then(res => {
+            if (res.trim() === 'success') {
+                location.reload();
+            } else {
+                customAlert("Delete Failed", res, "bx-error", "#ef4444");
+            }
+        })
+        .catch(err => customAlert("Error", err.message, "bx-error", "#ef4444"));
+    });
 }
+
+function openMobileModal(row) {
+    if (window.innerWidth > 768) return; 
+
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 6) return;
+
+    document.getElementById('m-modal-time').innerHTML = cells[0].innerHTML;
+    document.getElementById('m-modal-loc').innerHTML = cells[1].innerHTML;
+    document.getElementById('m-modal-info').innerHTML = cells[2].innerHTML;
+    document.getElementById('m-modal-ev').innerHTML = cells[3].innerHTML;
+    document.getElementById('m-modal-status').innerHTML = cells[4].innerHTML;
+    document.getElementById('m-modal-actions').innerHTML = cells[5].innerHTML;
+
+    document.getElementById('mobileIncidentModal').style.display = 'flex';
+}
+
+document.querySelectorAll('.kpi-card').forEach(card => {
+    card.addEventListener('click', function() {
+        if (window.innerWidth <= 768) {
+            const isExpanded = this.classList.contains('mobile-expanded');
+            document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('mobile-expanded'));
+            if (!isExpanded) this.classList.add('mobile-expanded');
+        }
+    });
+});
+
+window.openDeployModal = openDeployModal;
+window.submitDispatch = submitDispatch;
 window.cancelDispatch = cancelDispatch;
-window.recallCityBackup = recallCityBackup;
 window.recallIncident = recallIncident;
+window.recallCityBackup = recallCityBackup;
+window.resolveIncident = resolveIncident;
+window.rejectIncident = rejectIncident;
+window.viewEvidence = viewEvidence;
+window.toggleCluster = toggleCluster;
+window.toggleBackupRow = toggleBackupRow;
+window.toggleSound = toggleSound;
+window.toggleEvacLayer = toggleEvacLayer;
+window.syncDashboard = syncDashboard;
+window.closeModal = closeModal;
+window.openAnnouncementModal = openAnnouncementModal;
+window.deleteAnnouncement = deleteAnnouncement;
+window.saveAnnouncement = saveAnnouncement;
+window.openMobileModal = openMobileModal;
+window.dismissBroadcast = dismissBroadcast;
+window.toggleVerifyDropdown = toggleVerifyDropdown;
+window.hideVerifyDropdown = hideVerifyDropdown;
+window.confirmVerifyIncident = confirmVerifyIncident;
