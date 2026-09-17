@@ -83,8 +83,6 @@ if (isset($_GET['ajax_kpi'])) {
     ]);
     exit();
 }
-
-// 🚀 ROBUST JURISDICTION FETCH
 $user_id = $_SESSION['user_id'];
 $stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
 $stmt->bind_param("i", $user_id);
@@ -93,11 +91,7 @@ $u_data = $stmt->get_result()->fetch_assoc();
 $raw_assigned_brgy = trim($u_data['barangay'] ?? '');
 
 $locationAliases = [
-    '6XWG+X37' => 'Biga I',
-    'MANUELAVILLE' => 'San Agustin II',
-    'THE COURTYARDS' => 'Salawag',
-    'ORCHARD' => 'Salawag',
-    'SUMMERWIND' => 'Burol Main'
+    'BUROL MAIN'     => 'Burol'
 ];
 
 $assigned_brgy = $raw_assigned_brgy;

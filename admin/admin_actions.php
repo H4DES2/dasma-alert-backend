@@ -35,6 +35,10 @@ function requireRole(array $allowedRoles, $role) {
 }
 
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
+    if (strcasecmp(trim($fallback), 'Burol Main') === 0) {
+        $fallback = 'Burol';
+    }
+
     if ($lat == 0.0 || $lng == 0.0) {
         return $fallback;
     }
@@ -54,7 +58,8 @@ function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fal
         $result = $stmt->get_result();
         if ($row = $result->fetch_assoc()) {
             $stmt->close();
-            return $row['name'];
+            $sector = trim($row['name']);
+            return (strcasecmp($sector, 'Burol Main') === 0) ? 'Burol' : $sector;
         }
         $stmt->close();
     }
@@ -63,7 +68,7 @@ function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fal
 }
 
 // =========================================================================================
-// 🚀 AUTO-REPAIR SYSTEM
+//  AUTO-REPAIR SYSTEM
 // =========================================================================================
 $check_col = $conn->query("SHOW COLUMNS FROM incidents LIKE 'verified_by'");
 if ($check_col && $check_col->num_rows === 0) {
@@ -434,12 +439,15 @@ function compileMasterSync(mysqli $conn, string $role, string $admin_brgy, strin
     $type_clause .= " AND (i.latitude BETWEEN 14.2500 AND 14.3900 AND i.longitude BETWEEN 120.8900 AND 121.0200) ";
 
     $target = !empty($target_brgy) ? trim($target_brgy) : trim($admin_brgy);
-    if (!empty($target) && strtolower($target) !== 'all barangays' && strtolower($target) !== 'all') {
-        $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
-        $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-        $types .= "ss"; $params[] = $target; $params[] = "%" . $target . "%";
-        $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = "%" . $target . "%";
-    }
+if (strcasecmp($target, 'Burol Main') === 0) {
+    $target = 'Burol';
+}
+if (!empty($target) && strtolower($target) !== 'all barangays' && strtolower($target) !== 'all') {
+    $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
+    $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
+    $types .= "ss"; $params[] = $target; $params[] = "%" . $target . "%";
+    $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = "%" . $target . "%";
+}
 
     if (!function_exists('executeSyncQuery')) {
         function executeSyncQuery($conn, $sql, $types, $params) {
@@ -498,11 +506,12 @@ function compileMasterSync(mysqli $conn, string $role, string $admin_brgy, strin
     if ($resTab && $resTab->num_rows > 0) {
         $clustered_data = [];
 
-        while ($inc = $resTab->fetch_assoc()) {
+        while ($inc = $resTab->fetch_assoc()) {// Inside while ($inc = $resTab->fetch_assoc())
             $raw_brgy = trim((string)($inc['barangay'] ?? ''));
             $fallback_brgy = !empty($raw_brgy) ? $raw_brgy : ($inc['reporter_home'] ?? 'Unknown Location');
-            $inc['display_brgy'] = getStrictBarangay($inc['latitude'], $inc['longitude'], $fallback_brgy);
+            $resolved_brgy = getStrictBarangay($inc['latitude'], $inc['longitude'], $fallback_brgy);
 
+            $inc['display_brgy'] = (strcasecmp(trim($resolved_brgy), 'Burol Main') === 0) ? 'Burol' : $resolved_brgy;
             $lat = (float)$inc['latitude'];
             $lng = (float)$inc['longitude'];
             $found_cluster = false;
