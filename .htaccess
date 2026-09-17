@@ -7,6 +7,7 @@
     ExpiresByType text/javascript "access plus 1 month"
     ExpiresByType image/jpeg "access plus 1 month"
     ExpiresByType image/png "access plus 1 month"
+    ExpiresByType image/x-icon "access plus 1 month"
     ExpiresByType image/svg+xml "access plus 1 month"
     ExpiresByType font/woff2 "access plus 1 year"
 </IfModule>
@@ -25,9 +26,13 @@
     # Enable Gzip compression for text, css, and js
     AddOutputFilterByType DEFLATE text/plain text/html text/xml text/css application/xml application/xhtml+xml application/rss+xml application/javascript application/x-javascript
 </IfModule>
+
 <IfModule mod_rewrite.c>
     RewriteEngine On
     RewriteBase /
+
+    # Global Favicon Route
+    RewriteRule ^favicon\.ico$ uploads/system/DasmaAlert.png [L]
 
     # Map both /login and /login.php internally to /php/login.php
     RewriteRule ^login(\.php)?/?$ php/login.php [L,QSA]
