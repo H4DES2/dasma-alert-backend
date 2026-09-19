@@ -4,7 +4,7 @@ const allSeasonDates = window.allSeasonDates || [];
 let lineChartInstance = null;
 
 // -----------------------------------------------------
-// INITIALIZE CHARTS
+// 1. INITIALIZE CHARTS
 // -----------------------------------------------------
 document.addEventListener("DOMContentLoaded", function() {
     if (typeof ChartDataLabels !== 'undefined') {
@@ -15,7 +15,7 @@ document.addEventListener("DOMContentLoaded", function() {
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
     const textColor = isDarkMode ? '#8b949e' : '#888';
 
-    // 1. Pie Chart
+    // Pie Chart
     const pieCanvas = document.getElementById('typePieChart');
     if (pieCanvas) {
         new Chart(pieCanvas.getContext('2d'), {
@@ -41,7 +41,7 @@ document.addEventListener("DOMContentLoaded", function() {
                         formatter: (value, context) => {
                             let dataArr = context.chart.data.datasets[0].data;
                             let total = 0;
-                            dataArr.forEach(data => { total += parseInt(data); });
+                            dataArr.forEach(data => { total += parseInt(data, 10); });
                             let percentage = Math.round((value / total) * 100);
                             return percentage >= 4 ? percentage + '%' : '';
                         }
@@ -51,10 +51,9 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 2. Seasonality Line Chart Initializer
     renderSeasonality();
 
-    // 3. Evacuation Overflow Bar Chart
+    // Evacuation Overflow Bar Chart
     const evacCanvas = document.getElementById('evacOverflowChart');
     if (evacCanvas) {
         new Chart(evacCanvas.getContext('2d'), {
@@ -78,7 +77,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 4. Leaflet Heatmap
+    // Leaflet Heatmap
     const heatmapEl = document.getElementById('heatmap');
     if (heatmapEl) {
         let dasmaBounds = L.latLngBounds([14.2700, 120.9150], [14.3750, 121.0100]);
@@ -93,7 +92,7 @@ document.addEventListener("DOMContentLoaded", function() {
 });
 
 // -----------------------------------------------------
-// DYNAMIC SEASONALITY FUNCTION
+// 2. DYNAMIC SEASONALITY FUNCTION
 // -----------------------------------------------------
 function renderSeasonality() {
     const canvasElement = document.getElementById('seasonalityLineChart');
@@ -173,138 +172,361 @@ function renderSeasonality() {
 }
 
 // -----------------------------------------------------
-// MASTER EXPORT FUNCTIONS (CSV & PDF)
+// 3. REPORT BUILDER: STRICT FUTURE-LOCKED TIMEFRAME
 // -----------------------------------------------------
-function exportCSV() {
-    let csvContent = "data:text/csv;charset=utf-8,";
-    
-    // 1. Vault Data
-    csvContent += "--- INCIDENT ARCHIVE VAULT ---\n";
-    csvContent += "ID,Type,Severity,Barangay,Latitude,Longitude,Reported,Arrived,Resolved,Initial Log,Full Timeline Logs\n";
-    allIncidents.forEach(inc => {
-        let row = [
-            inc.id, inc.incident_type, inc.severity, inc.barangay, inc.latitude, inc.longitude,
-            inc.created_at, inc.arrived_at || 'N/A', inc.resolved_at || 'N/A',
-            `"${(inc.initial_log || '').replace(/"/g, '""')}"`,
-            `"${(inc.all_logs || '').replace(/\|\|\|/g, ' \n ').replace(/\|-\|/g, ': ').replace(/"/g, '""')}"`
-        ];
-        csvContent += row.join(",") + "\n";
+function getTodayBounds() {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return {
+        now,
+        year: yyyy,
+        month: now.getMonth() + 1,
+        dateStr: `${yyyy}-${mm}-${dd}`,
+        monthStr: `${yyyy}-${mm}`
+    };
+}
+
+function openReportModal() {
+    const b = getTodayBounds();
+
+    const dayInput = document.getElementById('rep_day');
+    const weekStart = document.getElementById('rep_week_start');
+    const weekEnd = document.getElementById('rep_week_end');
+    const monthInput = document.getElementById('rep_month');
+
+    // Strict future lock
+    if (dayInput) { dayInput.max = b.dateStr; dayInput.value = b.dateStr; }
+    if (weekStart) { weekStart.max = b.dateStr; }
+    if (weekEnd) { weekEnd.max = b.dateStr; weekEnd.value = b.dateStr; }
+    if (monthInput) { monthInput.max = b.monthStr; monthInput.value = b.monthStr; }
+
+    const priorDate = new Date();
+    priorDate.setDate(priorDate.getDate() - 6);
+    const priorStr = priorDate.toISOString().split('T')[0];
+    if (weekStart) weekStart.value = priorStr;
+
+    const yearSelect = document.getElementById('rep_year');
+    const qYearSelect = document.getElementById('rep_quarter_year');
+    [yearSelect, qYearSelect].forEach(sel => {
+        if (!sel) return;
+        sel.innerHTML = '';
+        for (let y = b.year; y >= 2024; y--) {
+            const opt = document.createElement('option');
+            opt.value = y;
+            opt.textContent = y;
+            sel.appendChild(opt);
+        }
     });
 
-    // 2. Spam/Bin Data
-    csvContent += "\n--- REPORT BIN (REJECTED/SPAM) ---\n";
-    csvContent += "ID,Type,Status,Barangay,Reported Date,Reject Reason,Full Timeline Logs\n";
-    binIncidents.forEach(bin => {
-        let row = [
-            bin.id, bin.incident_type, bin.status, bin.barangay, bin.created_at,
-            `"${(bin.spam_reason || bin.admin_remarks || '').replace(/"/g, '""')}"`,
-            `"${(bin.all_logs || '').replace(/\|\|\|/g, ' \n ').replace(/\|-\|/g, ': ').replace(/"/g, '""')}"`
-        ];
-        csvContent += row.join(",") + "\n";
-    });
+    updateQuarterOptions();
+    handlePeriodChange();
 
-    let encodedUri = encodeURI(csvContent);
-    let link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", "Citywide_Comprehensive_Report.csv");
+    const modal = document.getElementById('customReportModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function handlePeriodChange() {
+    const period = document.getElementById('rep_period')?.value || 'day';
+    ['day', 'weekly', 'monthly', 'quarterly', 'yearly'].forEach(p => {
+        const el = document.getElementById(`box_${p}`);
+        if (el) el.style.display = (p === period) ? 'block' : 'none';
+    });
+}
+
+function validateWeekRange() {
+    const b = getTodayBounds();
+    const sInput = document.getElementById('rep_week_start');
+    const eInput = document.getElementById('rep_week_end');
+    const msg = document.getElementById('week_validation_msg');
+    if (!sInput || !eInput || !msg) return false;
+
+    msg.innerText = '';
+    if (sInput.value > b.dateStr) sInput.value = b.dateStr;
+    if (eInput.value > b.dateStr) eInput.value = b.dateStr;
+
+    const start = new Date(sInput.value);
+    const end = new Date(eInput.value);
+
+    if (start > end) {
+        msg.innerText = 'Start date cannot be after end date.';
+        return false;
+    }
+
+    const diffDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    if (diffDays > 7) {
+        msg.innerText = `Range is ${diffDays} days. Please limit weekly reporting to 7 days maximum.`;
+        return false;
+    }
+    return true;
+}
+
+function updateQuarterOptions() {
+    const b = getTodayBounds();
+    const qYear = parseInt(document.getElementById('rep_quarter_year')?.value || b.year, 10);
+    const qSelect = document.getElementById('rep_quarter_q');
+    if (!qSelect) return;
+
+    qSelect.innerHTML = '';
+    const currentQ = Math.ceil(b.month / 3);
+
+    const quarters = [
+        { q: 1, label: 'Q1 (January – March)' },
+        { q: 2, label: 'Q2 (April – June)' },
+        { q: 3, label: 'Q3 (July – September)' },
+        { q: 4, label: 'Q4 (October – December)' }
+    ];
+
+    quarters.forEach(item => {
+        if (qYear === b.year && item.q > currentQ) return;
+        const opt = document.createElement('option');
+        opt.value = item.q;
+        opt.textContent = item.label;
+        qSelect.appendChild(opt);
+    });
+}
+
+function getDateFilterRange() {
+    const b = getTodayBounds();
+    const period = document.getElementById('rep_period')?.value || 'day';
+    let start = new Date(0);
+    let end = new Date();
+    let label = '';
+
+    if (period === 'day') {
+        const val = document.getElementById('rep_day')?.value || b.dateStr;
+        start = new Date(`${val}T00:00:00`);
+        end = new Date(`${val}T23:59:59`);
+        label = `Day of ${val}`;
+    } else if (period === 'weekly') {
+        if (!validateWeekRange()) return null;
+        const sVal = document.getElementById('rep_week_start')?.value;
+        const eVal = document.getElementById('rep_week_end')?.value;
+        start = new Date(`${sVal}T00:00:00`);
+        end = new Date(`${eVal}T23:59:59`);
+        label = `Weekly: ${sVal} to ${eVal}`;
+    } else if (period === 'monthly') {
+        const mVal = document.getElementById('rep_month')?.value || b.monthStr;
+        const [y, m] = mVal.split('-').map(Number);
+        start = new Date(y, m - 1, 1, 0, 0, 0);
+        end = new Date(y, m, 0, 23, 59, 59);
+        label = `Month of ${mVal}`;
+    } else if (period === 'quarterly') {
+        const y = parseInt(document.getElementById('rep_quarter_year')?.value || b.year, 10);
+        const q = parseInt(document.getElementById('rep_quarter_q')?.value || 1, 10);
+        const startMonth = (q - 1) * 3;
+        start = new Date(y, startMonth, 1, 0, 0, 0);
+        end = new Date(y, startMonth + 3, 0, 23, 59, 59);
+        label = `${y} Q${q} Report`;
+    } else if (period === 'yearly') {
+        const y = parseInt(document.getElementById('rep_year')?.value || b.year, 10);
+        start = new Date(y, 0, 1, 0, 0, 0);
+        end = new Date(y, 11, 31, 23, 59, 59);
+        label = `Year ${y} Annual Report`;
+    }
+
+    if (end > b.now) end = b.now;
+
+    return { start, end, label };
+}
+
+function processReportGeneration() {
+    const range = getDateFilterRange();
+    if (!range) return;
+
+    const format = document.querySelector('input[name="rep_format"]:checked')?.value || 'pdf';
+    const incVault = document.getElementById('inc_vault')?.checked ?? true;
+    const incBin = document.getElementById('inc_bin')?.checked ?? true;
+
+    const filteredVault = incVault ? allIncidents.filter(i => {
+        const d = new Date(i.created_at.replace(' ', 'T'));
+        return d >= range.start && d <= range.end;
+    }) : [];
+
+    const filteredBin = incBin ? binIncidents.filter(i => {
+        const d = new Date(i.created_at.replace(' ', 'T'));
+        return d >= range.start && d <= range.end;
+    }) : [];
+
+    if (filteredVault.length === 0 && filteredBin.length === 0) {
+        alert(`No incident or rejection records found for: ${range.label}`);
+        return;
+    }
+
+    closeModal('customReportModal');
+
+    if (format === 'csv') {
+        generateCustomCSV(filteredVault, filteredBin, range.label);
+    } else {
+        generateCustomPDF(filteredVault, filteredBin, range.label);
+    }
+}
+
+// -----------------------------------------------------
+// 4. GRANULAR EXPORT LOGIC (CSV & PDF)
+// -----------------------------------------------------
+function generateCustomCSV(vaultRows, binRows, rangeLabel) {
+    let csv = `\uFEFF--- DASMARINAS CITY CDRRMO AUDIT REPORT ---\n`;
+    csv += `TIMEFRAME: ${rangeLabel}\n`;
+    csv += `GENERATED: ${new Date().toLocaleString()}\n\n`;
+
+    if (vaultRows.length > 0) {
+        csv += `--- INCIDENT ARCHIVE VAULT (${vaultRows.length} Records) ---\n`;
+        csv += `ID,Type,Severity,Barangay,Reported Date,Resolved Date,Citizen Input,Full Timeline\n`;
+        vaultRows.forEach(i => {
+            csv += [
+                i.id,
+                `"${i.incident_type}"`,
+                i.severity,
+                `"${i.barangay}"`,
+                `"${i.created_at}"`,
+                `"${i.resolved_at || 'N/A'}"`,
+                `"${(i.initial_log || '').replace(/"/g, '""')}"`,
+                `"${(i.all_logs || '').replace(/\|\|\|/g, ' | ').replace(/\|-\|/g, ': ').replace(/"/g, '""')}"`
+            ].join(',') + '\n';
+        });
+        csv += '\n';
+    }
+
+    if (binRows.length > 0) {
+        csv += `--- REPORT BIN REJECTION AUDIT (${binRows.length} Records) ---\n`;
+        csv += `ID,Type,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation,Audit Logs\n`;
+        binRows.forEach(b => {
+            csv += [
+                b.id,
+                `"${b.incident_type}"`,
+                `"${b.barangay}"`,
+                `"${b.created_at}"`,
+                `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
+                `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
+                `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
+                `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`,
+                `"${(b.all_logs || '').replace(/\|\|\|/g, ' | ').replace(/\|-\|/g, ': ').replace(/"/g, '""')}"`
+            ].join(',') + '\n';
+        });
+    }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Dasma_Alert_Report_${rangeLabel.replace(/[^a-z0-9]/gi, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
 }
 
-function exportPDF() {
+function generateCustomPDF(vaultRows, binRows, rangeLabel) {
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('landscape'); 
-    
+    const doc = new jsPDF('landscape');
+
     doc.setFontSize(18);
     doc.setTextColor(25, 118, 210);
-    doc.text("Citywide Comprehensive Report", 14, 15);
+    doc.text('CDRRMO Dasmariñas Incident Report', 14, 15);
+
     doc.setFontSize(10);
     doc.setTextColor(100, 100, 100);
-    doc.text("Generated on: " + new Date().toLocaleString(), 14, 22);
+    doc.text(`Timeframe: ${rangeLabel}  |  Generated: ${new Date().toLocaleString()}`, 14, 22);
 
-    // 1. Incident Archive Vault Table
-    doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50);
-    doc.text("Incident Archive Vault", 14, 32);
-    
-    let vaultRows = allIncidents.map(inc => [
-        inc.id, 
-        inc.incident_type, 
-        inc.severity, 
-        inc.barangay, 
-        inc.created_at, 
-        inc.resolved_at || 'N/A', 
-        inc.initial_log || 'No user details provided.'
-    ]);
+    let startY = 30;
 
-    doc.autoTable({
-        startY: 36,
-        head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Initial Log']],
-        body: vaultRows,
-        theme: 'grid',
-        headStyles: { fillColor: [25, 118, 210], fontStyle: 'bold' },
-        styles: { 
-            fontSize: 8, 
-            cellPadding: 3, 
-            overflow: 'linebreak', 
-            valign: 'top' 
-        },
-        columnStyles: { 
-            0: { cellWidth: 12 },
-            1: { cellWidth: 45 },
-            2: { cellWidth: 22 },
-            3: { cellWidth: 32 },
-            4: { cellWidth: 34 },
-            5: { cellWidth: 34 },
-            6: { cellWidth: 'auto' } // Allows log text to wrap completely without truncation
+    if (vaultRows.length > 0) {
+        doc.setFontSize(13);
+        doc.setTextColor(33, 33, 33);
+        doc.text(`Incident Archive Vault (${vaultRows.length} Records)`, 14, startY);
+
+        const vData = vaultRows.map(i => [
+            i.id,
+            i.incident_type,
+            i.severity,
+            i.barangay,
+            i.created_at,
+            i.resolved_at || 'N/A',
+            i.initial_log || 'No details'
+        ]);
+
+        doc.autoTable({
+            startY: startY + 4,
+            head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Note']],
+            body: vData,
+            theme: 'grid',
+            headStyles: { fillColor: [25, 118, 210] },
+            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+        });
+
+        startY = doc.lastAutoTable.finalY + 12;
+    }
+
+    if (binRows.length > 0) {
+        if (startY > 155) {
+            doc.addPage();
+            startY = 20;
         }
-    });
 
-    let finalY = doc.lastAutoTable.finalY || 36;
+        doc.setFontSize(13);
+        doc.setTextColor(211, 47, 47);
+        doc.text(`Report Bin & Rejection Audit (${binRows.length} Records)`, 14, startY);
 
-    // 2. Report Bin Table
-    doc.setFontSize(14);
-    doc.setTextColor(50, 50, 50);
-    doc.text("Report Bin (Rejected / Spam)", 14, finalY + 15);
-    
-    let binRows = binIncidents.map(bin => {
-        let reason = bin.spam_reason || bin.admin_remarks || 'No reason provided';
-        return [
-            bin.id, 
-            bin.incident_type, 
-            bin.status.toUpperCase(), 
-            bin.barangay, 
-            bin.created_at, 
-            reason
-        ];
-    });
+        const bData = binRows.map(b => [
+            b.id,
+            b.incident_type,
+            b.barangay,
+            b.parsed_category || 'False Alarm',
+            b.parsed_officer || 'Officer',
+            b.parsed_notes || b.spam_reason || 'N/A'
+        ]);
 
-    doc.autoTable({
-        startY: finalY + 20,
-        head: [['ID', 'Type', 'Status', 'Barangay', 'Reported Date', 'Reject Reason']],
-        body: binRows,
-        theme: 'grid',
-        headStyles: { fillColor: [66, 66, 66], fontStyle: 'bold' },
-        styles: { 
-            fontSize: 8, 
-            cellPadding: 3, 
-            overflow: 'linebreak', 
-            valign: 'top' 
-        },
-        columnStyles: { 
-            0: { cellWidth: 12 },
-            1: { cellWidth: 55 },
-            2: { cellWidth: 25 },
-            3: { cellWidth: 38 },
-            4: { cellWidth: 38 },
-            5: { cellWidth: 'auto' } // Allows reject reason to wrap completely without truncation
-        }
-    });
+        doc.autoTable({
+            startY: startY + 4,
+            head: [['ID', 'Type', 'Barangay', 'Category', 'Audited By', 'Official Reason']],
+            body: bData,
+            theme: 'grid',
+            headStyles: { fillColor: [211, 47, 47] },
+            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+        });
+    }
 
-    doc.save('Citywide_Comprehensive_Report.pdf');
+    doc.save(`Dasma_Alert_Report_${rangeLabel.replace(/[^a-z0-9]/gi, '_')}.pdf`);
 }
 
+// -----------------------------------------------------
+// 5. COLD STORAGE: REPORT BACKUP (OFFLINE SNAPSHOT)
+// -----------------------------------------------------
+function backupAllReports() {
+    if (!confirm('Download a complete offline report backup snapshot (Archive Vault + Report Bin + Audit Logs)?')) {
+        return;
+    }
+
+    const payload = {
+        system: "Dasma Alert Emergency Command",
+        backup_type: "Full Reports Cold Storage Snapshot",
+        generated_at: new Date().toISOString(),
+        counts: {
+            vault_incidents: allIncidents.length,
+            bin_incidents: binIncidents.length,
+            total_records: allIncidents.length + binIncidents.length
+        },
+        archive_vault: allIncidents,
+        report_bin_audit: binIncidents
+    };
+
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `Dasma_Alert_Reports_Backup_${new Date().toISOString().split('T')[0]}.json`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+}
+
+// -----------------------------------------------------
+// 6. GENERAL CONTROLS & MODALS
+// -----------------------------------------------------
 function applyFilters() { 
     let typeVal = document.getElementById('typeFilter')?.value || 'all';
     let timeVal = document.getElementById('timeFilter')?.value || 'all';
@@ -335,22 +557,18 @@ function viewLogs(logsString, incidentTitle) {
         container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No timeline logs recorded.</div>';
     } else {
         const entries = logsString.split('|||').map(e => e.trim()).filter(Boolean);
-
         let html = '<div style="display: flex; flex-direction: column; gap: 12px; padding: 10px 0;">';
         entries.forEach(entry => {
             const parts = entry.split('|-|');
             const time = parts[0] || '';
             const user = parts[1] || 'System';
             const msg = parts[2] || '';
-
             html += `
                 <div class="timeline-log-card">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                         <span class="timeline-log-meta">${time} - ${user}</span>
                     </div>
-                    <div class="timeline-log-msg">
-                        ${msg}
-                    </div>
+                    <div class="timeline-log-msg">${msg}</div>
                 </div>
             `;
         });
@@ -365,10 +583,8 @@ function viewLogs(logsString, incidentTitle) {
 
 function viewPhoto(url) {
     if (!url || url === 'null' || url === 'NULL') return;
-    
     let cleanUrl = url.trim();
     if (cleanUrl.startsWith('/http')) cleanUrl = cleanUrl.substring(1);
-    
     if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
         const path = cleanUrl.replace(/^\/?(dasma_api\/|dasma-api\/)?/, '');
         cleanUrl = 'https://res.cloudinary.com/wyxsiraw/image/upload/' + path;
@@ -400,7 +616,7 @@ function stopBroadcast(id) {
 }
 
 // -----------------------------------------------------
-// MOBILE MODAL LOGIC
+// 7. MOBILE MODAL LOGIC
 // -----------------------------------------------------
 function openMobileModal(row, type) {
     if (window.innerWidth > 768) return; 
@@ -408,7 +624,6 @@ function openMobileModal(row, type) {
     const cells = row.querySelectorAll('td');
     const titleEl = document.getElementById('m-analytics-title');
     const bodyEl = document.getElementById('m-analytics-body');
-    
     let html = '';
     
     if (type === 'archive') {
@@ -419,10 +634,10 @@ function openMobileModal(row, type) {
         html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container" style="display:flex; gap:10px; width:100%;">${cells[3].innerHTML}</div></div>`;
     } 
     else if (type === 'bin') {
-        titleEl.innerHTML = "Report Bin Details";
-        html += `<div class="mobile-detail-box"><small class="mobile-label">Incident & Logs</small>${cells[0].innerHTML}</div>`;
+        titleEl.innerHTML = "Granular Rejection Audit";
+        html += `<div class="mobile-detail-box"><small class="mobile-label">Incident & Citizen Input</small>${cells[0].innerHTML}</div>`;
         html += `<div class="mobile-detail-box"><small class="mobile-label">Location & Status</small>${cells[1].innerHTML}</div>`;
-        html += `<div class="mobile-detail-box"><small class="mobile-label">Rejection Reason</small>${cells[2].innerHTML}</div>`;
+        html += `<div class="mobile-detail-box"><small class="mobile-label">Audit & Explanation</small>${cells[2].innerHTML}</div>`;
         html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container" style="display:flex; gap:10px; width:100%;">${cells[3].innerHTML}</div></div>`;
     }
     else if (type === 'broadcast') {
@@ -452,12 +667,17 @@ function openMobileModal(row, type) {
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
 
+// Window bindings
+window.openReportModal = openReportModal;
+window.handlePeriodChange = handlePeriodChange;
+window.validateWeekRange = validateWeekRange;
+window.updateQuarterOptions = updateQuarterOptions;
+window.processReportGeneration = processReportGeneration;
+window.backupAllReports = backupAllReports;
 window.viewPhoto = viewPhoto;
 window.closeModal = closeModal;
 window.viewLogs = viewLogs;
 window.openMobileModal = openMobileModal;
 window.renderSeasonality = renderSeasonality;
 window.applyFilters = applyFilters;
-window.exportCSV = exportCSV;
-window.exportPDF = exportPDF;
 window.stopBroadcast = stopBroadcast;

@@ -17,84 +17,77 @@ if (!$auth->isSuperAdmin()) {
 
 session_write_close();
 
-// 3. CENTRALIZED QUERY BUILDER HELPER
 class AnalyticsQueryBuilder {
     public static function build(string $period, string $dateColumn = 'created_at'): array {
         switch (strtolower(trim($period))) {
             case 'today':
-                return [
-                    'clause' => " AND DATE($dateColumn) = CURDATE() ",
-                    'group'  => "DATE_FORMAT($dateColumn, '%h:00 %p')"
-                ];
+                return ['clause' => " AND DATE($dateColumn) = CURDATE() ", 'group' => "DATE_FORMAT($dateColumn, '%h:00 %p')"];
             case 'weekly':
             case 'week':
-                return [
-                    'clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 WEEK) ",
-                    'group'  => "DATE_FORMAT($dateColumn, '%a (%b %d)')"
-                ];
+                return ['clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 WEEK) ", 'group' => "DATE_FORMAT($dateColumn, '%a (%b %d)')"];
             case 'monthly':
             case 'month':
-                return [
-                    'clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ",
-                    'group'  => "DATE_FORMAT($dateColumn, 'Week %u (%b)')"
-                ];
+                return ['clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ", 'group' => "DATE_FORMAT($dateColumn, 'Week %u (%b)')"];
             case 'yearly':
             case 'year':
-                return [
-                    'clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 YEAR) ",
-                    'group'  => "DATE_FORMAT($dateColumn, '%b %Y')"
-                ];
+                return ['clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 YEAR) ", 'group' => "DATE_FORMAT($dateColumn, '%b %Y')"];
             case 'all':
             default:
-                return [
-                    'clause' => "",
-                    'group'  => "DATE_FORMAT($dateColumn, '%Y-%m')"
-                ];
+                return ['clause' => "", 'group' => "DATE_FORMAT($dateColumn, '%Y-%m')"];
         }
     }
 }
 
 function getCloudinaryUrl(?string $path): string {
-    if (empty($path) || $path === 'NULL' || $path === 'null') {
-        return '';
-    }
+    if (empty($path) || $path === 'NULL' || $path === 'null') return '';
     $clean = trim($path);
-    if (str_starts_with($clean, '/http')) {
-        $clean = substr($clean, 1);
-    }
-    if (str_starts_with($clean, 'http://') || str_starts_with($clean, 'https://')) {
-        return $clean;
-    }
+    if (str_starts_with($clean, '/http')) $clean = substr($clean, 1);
+    if (str_starts_with($clean, 'http://') || str_starts_with($clean, 'https://')) return $clean;
     $clean = ltrim(str_replace(['dasma_api/', 'dasma-api/'], '', $clean), '/');
-    if (str_starts_with($clean, 'image/upload/')) {
-        return 'https://res.cloudinary.com/wyxsiraw/' . $clean;
-    }
     return 'https://res.cloudinary.com/wyxsiraw/image/upload/' . $clean;
 }
 
-// AUTO-REPAIR & DATA HYGIENE
-$conn->query("ALTER TABLE incidents MODIFY COLUMN status ENUM('active','dispatched','on-scene','resolved','archived','rejected','spam','out_of_range') DEFAULT 'active'");
+function parseRejectionDetails(?string $rawReason): array {
+    if (empty($rawReason)) {
+        return ['officer' => 'Command Admin', 'category' => 'False Alarm', 'notes' => 'No specific notes recorded.'];
+    }
+    $officer = 'Officer';
+    $category = 'False Alarm';
+    $notes = '';
 
-$conn->query("CREATE TABLE IF NOT EXISTS spam_reports (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    incident_id INT NOT NULL,
-    reason TEXT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
-)");
+    if (preg_match('/Rejected by ([^\[\(]+)(?:\(([^\)]+)\))?\s*(?:\[([^\]]+)\])?(?:\s*:\s*(.*))?/i', $rawReason, $matches)) {
+        $officerName = trim($matches[1] ?? '');
+        $subBrgy = trim($matches[2] ?? '');
+        $cat = trim($matches[3] ?? '');
+        $extra = trim($matches[4] ?? '');
 
-// Sync any missing spam reports
-$conn->query("INSERT IGNORE INTO spam_reports (incident_id, reason) 
-              SELECT id, admin_remarks FROM incidents 
-              WHERE status IN ('rejected', 'spam', 'out_of_range') 
-              AND id NOT IN (SELECT incident_id FROM spam_reports)");
+        if (!empty($subBrgy) && empty($cat)) {
+            if (stripos($subBrgy, 'Alarm') !== false || stripos($subBrgy, 'Range') !== false || stripos($subBrgy, 'Duplicate') !== false || stripos($subBrgy, 'Prank') !== false) {
+                $category = $subBrgy;
+                $officer = $officerName;
+            } else {
+                $officer = $officerName . " ({$subBrgy})";
+            }
+        } else {
+            $officer = $officerName . (!empty($subBrgy) ? " ({$subBrgy})" : "");
+            if (!empty($cat)) $category = $cat;
+        }
+        $notes = !empty($extra) ? $extra : $category;
+    } else {
+        $notes = $rawReason;
+        if (stripos($rawReason, 'false alarm') !== false) $category = 'False Alarm';
+        elseif (stripos($rawReason, 'out of range') !== false) $category = 'Out of Jurisdiction';
+        elseif (stripos($rawReason, 'duplicate') !== false) $category = 'Duplicate Report';
+        elseif (stripos($rawReason, 'prank') !== false || stripos($rawReason, 'spam') !== false) $category = 'Prank / Spam';
+    }
 
-$conn->query("DELETE FROM incidents WHERE status IN ('rejected', 'spam', 'out_of_range') AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)");
+    return ['officer' => $officer ?: 'Command Officer', 'category' => $category ?: 'False Alarm', 'notes' => $notes ?: 'False alarm verification.'];
+}
 
-// 1. FILTER CONTROLS & QUERY BUILDER
-$type_filter       = isset($_GET['type']) ? $_GET['type'] : 'all';
-$time_filter       = isset($_GET['time']) ? $_GET['time'] : 'all'; 
-$vault_time_filter = isset($_GET['vault_time']) ? $_GET['vault_time'] : 'all';
+// 1. FILTER CONTROLS
+$type_filter       = $_GET['type'] ?? 'all';
+$time_filter       = $_GET['time'] ?? 'all'; 
+$vault_time_filter = $_GET['vault_time'] ?? 'all';
 
 $vault_query_cfg = AnalyticsQueryBuilder::build($vault_time_filter, 'i.created_at');
 $chart_query_cfg = AnalyticsQueryBuilder::build($time_filter, 'created_at');
@@ -109,9 +102,7 @@ if ($type_filter !== 'all') {
     $params[] = "%" . $type_filter . "%";
 }
 
-$chart_time_clause = $chart_query_cfg['clause'];
-
-// 2. SECURED FETCH: ARCHIVED INCIDENTS
+// 2. ARCHIVED INCIDENTS
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.image_path, i.created_at,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -127,16 +118,17 @@ $query = "
 $stmt = $conn->prepare($query);
 if (!empty($params)) { $stmt->bind_param($types, ...$params); }
 $stmt->execute();
-$result = $stmt->get_result();
-$archived_incidents = ($result && $result->num_rows > 0) ? $result->fetch_all(MYSQLI_ASSOC) : [];
+$archived_incidents = ($res = $stmt->get_result()) ? $res->fetch_all(MYSQLI_ASSOC) : [];
 $stmt->close();
 $js_incidents = json_encode($archived_incidents ?: []);
 
-// 3. SECURED FETCH: REPORT BIN INCIDENTS
+// 3. DETAILED REPORT BIN WITH REJECTION AUDIT
 $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.status, i.image_path, i.created_at, i.admin_remarks,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
            sr.reason as spam_reason,
+           DATE_FORMAT(sr.created_at, '%b %d, %Y - %h:%i %p') as rejected_date_str,
+           (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as initial_log,
            (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') 
             FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id) as all_logs
     FROM incidents i 
@@ -146,90 +138,77 @@ $bin_query = "
 ";
 $stmt_bin = $conn->prepare($bin_query);
 $stmt_bin->execute();
-$bin_result = $stmt_bin->get_result();
-$bin_incidents = ($bin_result && $bin_result->num_rows > 0) ? $bin_result->fetch_all(MYSQLI_ASSOC) : [];
+$bin_incidents = ($bin_res = $stmt_bin->get_result()) ? $bin_res->fetch_all(MYSQLI_ASSOC) : [];
 $stmt_bin->close();
 $js_bin_incidents = json_encode($bin_incidents ?: []);
 
-// 1. SECURED FETCH: REJECTION REASONS SUMMARY BREAKDOWN
-$reject_summary_query = "
-    SELECT 
-        CASE 
-            WHEN reason LIKE '%False Alarm%' THEN 'False Alarm'
-            WHEN reason LIKE '%Out of Range%' OR reason LIKE '%out_of_range%' THEN 'Out of Jurisdiction'
-            WHEN reason LIKE '%Duplicate%' THEN 'Duplicate Report'
-            WHEN reason LIKE '%Prank%' OR reason LIKE '%Spam%' THEN 'Prank / Spam'
-            ELSE 'Unspecified / Other'
-        END as reason_category,
-        COUNT(*) as total_count
-    FROM spam_reports
-    GROUP BY reason_category
-    ORDER BY total_count DESC
-";
-$reject_res = $conn->query($reject_summary_query);
-$rejection_summaries = ($reject_res && $reject_res->num_rows > 0) ? $reject_res->fetch_all(MYSQLI_ASSOC) : [];
+// 4. SUMMARY BREAKDOWN STATS
+$reject_categories_count = [
+    'False Alarm'             => 0,
+    'Out of Jurisdiction'     => 0,
+    'Duplicate Report'        => 0,
+    'Prank / Spam'            => 0,
+    'Incomplete Information'  => 0,
+    'Other / Unspecified'     => 0
+];
 
-// 4. SECURED FETCH: BROADCAST HISTORY
-$broadcast_query = "SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC";
-$stmt_bc = $conn->prepare($broadcast_query);
-$stmt_bc->execute();
-$broadcast_history = ($res = $stmt_bc->get_result()) ? $res->fetch_all(MYSQLI_ASSOC) : [];
-$stmt_bc->close();
+foreach ($bin_incidents as &$bin_row) {
+    $parsed = parseRejectionDetails($bin_row['spam_reason'] ?: $bin_row['admin_remarks']);
+    $bin_row['parsed_officer']  = $parsed['officer'];
+    $bin_row['parsed_category'] = $parsed['category'];
+    $bin_row['parsed_notes']    = $parsed['notes'];
 
-// 5. SECURED FETCH: UNIQUE TYPES
-$stmt_t = $conn->prepare("SELECT DISTINCT incident_type FROM incidents WHERE status = 'archived'");
-$stmt_t->execute();
-$types_res = $stmt_t->get_result();
+    $matched = false;
+    foreach (array_keys($reject_categories_count) as $k) {
+        if (stripos($parsed['category'], str_replace(' / Spam', '', $k)) !== false || stripos($parsed['category'], $k) !== false) {
+            $reject_categories_count[$k]++;
+            $matched = true;
+            break;
+        }
+    }
+    if (!$matched) {
+        $reject_categories_count['Other / Unspecified']++;
+    }
+}
+unset($bin_row);
+
+$total_rejected = count($bin_incidents);
+
+// 5. CHARTS & BROADCASTS
+$broadcast_history = ($b_res = $conn->query("SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC")) ? $b_res->fetch_all(MYSQLI_ASSOC) : [];
+$types_res = $conn->query("SELECT DISTINCT incident_type FROM incidents WHERE status = 'archived'");
 $unique_types = [];
 while ($t = $types_res->fetch_assoc()) { $unique_types[] = $t['incident_type']; }
-$stmt_t->close();
 
-// 6. SECURED FETCH: CHART DATA
-$chart_type_query = "SELECT incident_type, COUNT(*) as count FROM incidents WHERE status = 'archived' $chart_time_clause GROUP BY incident_type ORDER BY count DESC";
-$stmt_ct = $conn->prepare($chart_type_query);
-$stmt_ct->execute();
-$chart_type_res = $stmt_ct->get_result();
+$chart_type_res = $conn->query("SELECT incident_type, COUNT(*) as count FROM incidents WHERE status = 'archived' {$chart_query_cfg['clause']} GROUP BY incident_type ORDER BY count DESC");
 $type_labels = []; $type_data = []; $type_colors = [];
 $palette = ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#0097a7', '#0288d1'];
 $color_idx = 0;
-if ($chart_type_res) {
-    while ($row = $chart_type_res->fetch_assoc()) {
-        $type_labels[] = strtoupper($row['incident_type']);
-        $type_data[] = $row['count'];
-        $type_colors[] = $palette[$color_idx % count($palette)];
-        $color_idx++;
-    }
+while ($row = $chart_type_res->fetch_assoc()) {
+    $type_labels[] = strtoupper($row['incident_type']);
+    $type_data[] = $row['count'];
+    $type_colors[] = $palette[$color_idx % count($palette)];
+    $color_idx++;
 }
-$stmt_ct->close();
 
-// 7. SECURED FETCH: SEASONALITY CHART
-$dates_query = "SELECT created_at FROM incidents WHERE status NOT IN ('rejected', 'spam', 'out_of_range')";
-$stmt_d = $conn->prepare($dates_query);
-$stmt_d->execute();
-$dates_res = $stmt_d->get_result();
+$dates_res = $conn->query("SELECT created_at FROM incidents WHERE status NOT IN ('rejected', 'spam', 'out_of_range')");
 $seasonality_dates = [];
-if ($dates_res) {
-    while ($row = $dates_res->fetch_assoc()) {
-        $seasonality_dates[] = $row['created_at'];
-    }
-}
-$stmt_d->close();
-$js_seasonality_dates = json_encode($seasonality_dates);
+while ($row = $dates_res->fetch_assoc()) { $seasonality_dates[] = $row['created_at']; }
 
-// 8. SECURED FETCH: EVACUATION CHART
-$evac_query = "SELECT name, capacity, current_occupants FROM evacuation_centers ORDER BY current_occupants DESC LIMIT 10";
-$stmt_e = $conn->prepare($evac_query);
-$stmt_e->execute();
-$evac_res = $stmt_e->get_result();
+$evac_res = $conn->query("SELECT name, capacity, current_occupants FROM evacuation_centers ORDER BY current_occupants DESC LIMIT 10");
 $evac_labels = []; $evac_capacity = []; $evac_occupants = [];
-if ($evac_res) {
-    while ($row = $evac_res->fetch_assoc()) {
-        $evac_labels[] = strlen($row['name']) > 15 ? substr($row['name'], 0, 15) . '...' : $row['name'];
-        $evac_capacity[] = $row['capacity'];
-        $evac_occupants[] = $row['current_occupants'];
+while ($row = $evac_res->fetch_assoc()) {
+    $evac_labels[] = strlen($row['name']) > 15 ? substr($row['name'], 0, 15) . '...' : $row['name'];
+    $evac_capacity[] = $row['capacity'];
+    $evac_occupants[] = $row['current_occupants'];
+}
+
+$heat_coords = [];
+foreach ($archived_incidents as $inc) {
+    if (!empty($inc['latitude']) && !empty($inc['longitude'])) {
+        $heat_coords[] = [(float)$inc['latitude'], (float)$inc['longitude'], 0.8];
     }
 }
-$stmt_e->close();
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -237,7 +216,6 @@ $stmt_e->close();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Global Analytics | Command Center</title>
-    
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -259,14 +237,14 @@ $stmt_e->close();
                 <h1 style="color: #333; margin: 0; font-size: 2.2rem;">Global Analytics</h1>
                 <p style="color: #666; margin-top: 5px; font-weight: 800;">Command Center City-Wide Reports</p>
             </div>
-            <!-- 4. ACTION BAR WITH DATABASE BACKUP BUTTON -->
-            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
-                <button onclick="exportCSV()" class="btn-action" style="background: #388e3c;"><i class='bx bx-spreadsheet' style="font-size: 1.2rem;"></i> Export Data</button>
-                <button onclick="exportPDF()" class="btn-action" style="background: #d32f2f;"><i class='bx bxs-file-pdf' style="font-size: 1.2rem;"></i> Generate Report</button>
-                <a href="admin_actions.php?action=download_db_backup" class="btn-action" style="background: #607d8b; text-decoration: none;">
-                    <i class='bx bx-data' style="font-size: 1.2rem;"></i> Backup DB
-                </a>
-            </div>
+            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+    <button type="button" onclick="openReportModal()" class="btn-action" style="background: #d32f2f;">
+        <i class='bx bxs-file-pdf' style="font-size: 1.2rem;"></i> Generate Report
+    </button>
+    <button type="button" onclick="backupAllReports()" class="btn-action" style="background: #455a64;">
+        <i class='bx bx-archive-in' style="font-size: 1.2rem;"></i> Backup Reports
+    </button>
+</div>
         </header>
 
         <div class="dashboard-grid">
@@ -276,16 +254,16 @@ $stmt_e->close();
                         <h2><i class='bx bxs-archive' style="color:#607d8b;"></i> Incident Archive Vault</h2>
                         <div style="display:flex; gap: 10px; align-items: center;">
                             <select id="vaultTimeFilter" class="filter-select" onchange="applyFilters()">
-                                <option value="all" <?php echo ($vault_time_filter === 'all') ? 'selected' : ''; ?>>All Time</option>
-                                <option value="today" <?php echo ($vault_time_filter === 'today') ? 'selected' : ''; ?>>Today</option>
-                                <option value="week" <?php echo ($vault_time_filter === 'week') ? 'selected' : ''; ?>>1 Week</option>
-                                <option value="month" <?php echo ($vault_time_filter === 'month') ? 'selected' : ''; ?>>1 Month</option>
-                                <option value="year" <?php echo ($vault_time_filter === 'year') ? 'selected' : ''; ?>>1 Year</option>
+                                <option value="all" <?= ($vault_time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
+                                <option value="today" <?= ($vault_time_filter === 'today') ? 'selected' : '' ?>>Today</option>
+                                <option value="week" <?= ($vault_time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
+                                <option value="month" <?= ($vault_time_filter === 'month') ? 'selected' : '' ?>>1 Month</option>
+                                <option value="year" <?= ($vault_time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
                             </select>
                             <select id="typeFilter" class="filter-select" onchange="applyFilters()">
                                 <option value="all">All Types</option>
                                 <?php foreach($unique_types as $type): ?>
-                                    <option value="<?php echo htmlspecialchars($type); ?>" <?php echo ($type_filter === $type) ? 'selected' : ''; ?>><?php echo htmlspecialchars($type); ?></option>
+                                    <option value="<?= htmlspecialchars($type) ?>" <?= ($type_filter === $type) ? 'selected' : '' ?>><?= htmlspecialchars($type) ?></option>
                                 <?php endforeach; ?>
                             </select>
                         </div>
@@ -307,52 +285,144 @@ $stmt_e->close();
                                     <?php foreach ($archived_incidents as $inc): 
                                         $badge_class = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'info' : 'major');
                                         $logs_js = htmlspecialchars($inc['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
-                                        
                                         $created = strtotime($inc['created_at']);
                                         $arrived = $inc['arrived_at'] ? strtotime($inc['arrived_at']) : null;
                                         $resolved = $inc['resolved_at'] ? strtotime($inc['resolved_at']) : null;
-                                        $arr_str = $arrived ? date('h:i A', $arrived) : 'Unknown';
-                                        $res_str = $resolved ? date('h:i A', $resolved) : 'Unknown';
-                                        
-                                        $duration_str = "N/A";
-                                        if ($resolved && $created && $resolved >= $created) {
-                                            $diff = $resolved - $created;
-                                            $hours = floor($diff / 3600);
-                                            $minutes = floor(($diff % 3600) / 60);
-                                            $duration_str = ($hours > 0 ? "{$hours}h " : "") . "{$minutes}m";
-                                        }
-
+                                        $duration_str = ($resolved && $created && $resolved >= $created) ? floor(($resolved - $created) / 60) . "m" : "N/A";
                                         $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
                                         <td>
-                                            <div style="font-weight: 900; font-size: 1.15rem; color: #1976d2; margin-bottom: 2px; padding-right: 25px;">
-                                                <?php echo htmlspecialchars($inc['incident_type']); ?>
-                                                <i class='bx bx-chevron-right mobile-expand-icon'></i>
+                                            <div style="font-weight: 900; font-size: 1.15rem; color: #1976d2; margin-bottom: 2px;">
+                                                <?= htmlspecialchars($inc['incident_type']) ?>
                                             </div>
-                                            <div style="font-size: 0.8rem; color: #888; font-weight: 600; margin-bottom: 6px;"><?php echo $inc['date_str']; ?></div>
-                                            <div class="user-log-box">"<?php echo htmlspecialchars($inc['initial_log'] ?? 'No user details provided.'); ?>"</div>
+                                            <div style="font-size: 0.8rem; color: #888; font-weight: 600; margin-bottom: 6px;"><?= $inc['date_str'] ?></div>
+                                            <div class="user-log-box">"<?= htmlspecialchars($inc['initial_log'] ?? 'No user details provided.') ?>"</div>
                                         </td>
                                         <td>
-                                            <span style="font-weight: 800; font-size: 0.95rem; color: #222; display:block; margin-bottom: 8px;"><?php echo htmlspecialchars($inc['barangay']); ?></span>
-                                            <span class="badge <?php echo $badge_class; ?>"><?php echo strtoupper($inc['severity']); ?></span>
+                                            <span style="font-weight: 800; font-size: 0.95rem; color: #222; display:block; margin-bottom: 8px;"><?= htmlspecialchars($inc['barangay']) ?></span>
+                                            <span class="badge <?= $badge_class ?>"><?= strtoupper($inc['severity']) ?></span>
                                         </td>
                                         <td>
                                             <div class="timeline-text">
-                                                <div class="timeline-row"><strong>Reported:</strong> <span><?php echo date('h:i A', $created); ?></span></div>
-                                                <div class="timeline-row"><strong style="color:#388e3c;">Arrived:</strong> <span><?php echo $arr_str; ?></span></div>
-                                                <div class="timeline-row"><strong style="color:#1976d2;">Resolved:</strong> <span><?php echo $res_str; ?></span></div>
+                                                <div class="timeline-row"><strong>Reported:</strong> <span><?= date('h:i A', $created) ?></span></div>
+                                                <div class="timeline-row"><strong style="color:#388e3c;">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Unknown' ?></span></div>
+                                                <div class="timeline-row"><strong style="color:#1976d2;">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Unknown' ?></span></div>
                                                 <div class="duration-text" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #edf2f7; font-weight: 900; color: #d32f2f; display: flex; justify-content: space-between;">
-                                                    <span>Total Time:</span> <span><?php echo $duration_str; ?></span>
+                                                    <span>Total Time:</span> <span><?= $duration_str ?></span>
                                                 </div>
                                             </div>
                                         </td>
                                         <td style="text-align: center; vertical-align: middle;" class="exclude-export">
                                             <div class="btn-action-group">
                                                 <?php if (!empty($vaultImg)): ?>
-                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?php echo htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8'); ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
                                                 <?php endif; ?>
-                                                <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?php echo $logs_js; ?>', '<?php echo addslashes($inc['incident_type']); ?>')" title="View Logs"><i class='bx bx-list-ul'></i></button>
+                                                <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Logs"><i class='bx bx-list-ul'></i></button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                <?php endif; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- REPORT BIN & REJECTION SUMMARY AUDIT -->
+                <div class="sitting-panel" style="flex: none;">
+                    <div class="panel-header" style="align-items: flex-start; flex-direction: column; gap: 8px;">
+                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
+                            <h2><i class='bx bxs-trash-alt' style="color:#d32f2f;"></i> Report Bin & Rejection Audit</h2>
+                            <span class="badge" style="background:#212121; font-size:0.8rem; padding: 8px 14px;"><?= $total_rejected ?> Total Rejections</span>
+                        </div>
+                        <p style="font-size: 0.85rem; color: #777; margin: 0; font-weight: 600;">Granular breakdown of filtered false alarms, duplicates, and out-of-jurisdiction calls</p>
+                    </div>
+
+                    <!-- SUMMARY STATS TILES -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px;">
+                        <?php foreach ($reject_categories_count as $cat_name => $count): 
+                            $accent_border = match($cat_name) {
+                                'False Alarm' => '#d32f2f',
+                                'Out of Jurisdiction' => '#f57c00',
+                                'Duplicate Report' => '#1976d2',
+                                'Prank / Spam' => '#6a1b9a',
+                                'Incomplete Information' => '#00838f',
+                                default => '#616161'
+                            };
+                            $pct = $total_rejected > 0 ? round(($count / $total_rejected) * 100) : 0;
+                        ?>
+                            <div style="background: #ffffff; border: 1px solid #e0e6ed; border-left: 5px solid <?= $accent_border ?>; padding: 14px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
+                                <div style="font-size: 0.72rem; color: #888; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;"><?= $cat_name ?></div>
+                                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top: 6px;">
+                                    <span style="font-size: 1.5rem; font-weight: 900; color: #222;"><?= $count ?></span>
+                                    <span style="font-size: 0.75rem; font-weight: 800; color: <?= $accent_border ?>;"><?= $pct ?>%</span>
+                                </div>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+
+                    <!-- DETAILED REJECTION TABLE -->
+                    <div class="table-scroll-wrapper">
+                        <table class="data-table" id="binTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 28%;">Incident & Citizen Input</th>
+                                    <th style="width: 20%;">Jurisdiction</th>
+                                    <th style="width: 38%;">Rejection Audit & Officer Reason</th>
+                                    <th style="width: 14%; text-align: center;" class="exclude-export">Evidence</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php if (empty($bin_incidents)): ?>
+                                    <tr><td colspan="4" style="text-align: center; color: #777; padding: 40px; font-weight: 700;">Report bin is clean. No rejected incidents.</td></tr>
+                                <?php else: ?>
+                                    <?php foreach ($bin_incidents as $bin): 
+                                        $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
+                                        $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
+                                        $catColor = match($bin['parsed_category']) {
+                                            'False Alarm' => '#d32f2f',
+                                            'Out of Jurisdiction' => '#f57c00',
+                                            'Duplicate Report', 'Duplicate' => '#1976d2',
+                                            'Prank', 'Prank / Spam' => '#6a1b9a',
+                                            default => '#424242'
+                                        };
+                                    ?>
+                                    <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
+                                        <td>
+                                            <div style="font-weight: 900; font-size: 1.05rem; color: #333; margin-bottom: 2px;">
+                                                <?= htmlspecialchars($bin['incident_type']) ?>
+                                            </div>
+                                            <div style="font-size: 0.78rem; color: #888; font-weight: 600; margin-bottom: 6px;"><?= $bin['date_str'] ?></div>
+                                            <div class="user-log-box" style="border-left-color: #90caf9;">
+                                                <strong style="color:#1976d2; display:block; font-size: 0.7rem; text-transform: uppercase;">Citizen Description:</strong>
+                                                "<?= htmlspecialchars($bin['initial_log'] ?? 'No user log entered.') ?>"
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <span style="font-weight: 800; font-size: 0.95rem; color: #222; display:block; margin-bottom: 6px;"><?= htmlspecialchars($bin['barangay']) ?></span>
+                                            <span class="badge" style="background: #424242;">REJECTED</span>
+                                        </td>
+                                        <td>
+                                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+                                                <span class="badge" style="background: <?= $catColor ?>; padding: 4px 8px; font-size: 0.65rem;">
+                                                    <?= strtoupper($bin['parsed_category']) ?>
+                                                </span>
+                                                <small style="color: #666; font-weight: 700;">
+                                                    <i class='bx bx-user-check' style="color:#1976d2;"></i> <?= htmlspecialchars($bin['parsed_officer']) ?>
+                                                </small>
+                                            </div>
+                                            <div class="user-log-box" style="border-left-color: <?= $catColor ?>; background: #fff; margin-top: 4px;">
+                                                <strong style="display:block; font-size: 0.7rem; color: #555; text-transform:uppercase;">Official Explanation:</strong>
+                                                <?= htmlspecialchars($bin['parsed_notes']) ?>
+                                            </div>
+                                        </td>
+                                        <td style="text-align: center; vertical-align: middle;" class="exclude-export">
+                                            <div class="btn-action-group">
+                                                <?php if (!empty($binImg)): ?>
+                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                                <?php endif; ?>
+                                                <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($bin['incident_type']) ?>')" title="Audit Trail"><i class='bx bx-list-ul'></i></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -392,79 +462,6 @@ $stmt_e->close();
                         <canvas id="seasonalityLineChart"></canvas>
                     </div>
                 </div>
-
-                <!-- 1. REPORT BIN WITH REASON SUMMARY CARDS -->
-                <div class="sitting-panel" style="flex: none;">
-                    <div class="panel-header">
-                        <h2><i class='bx bxs-trash-alt' style="color:#424242;"></i> Report Bin</h2>
-                    </div>
-
-                    <?php if (!empty($rejection_summaries)): ?>
-                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px;">
-                            <?php foreach ($rejection_summaries as $r_sum): ?>
-                                <div style="background: #f8f9fa; border: 1px solid #edf2f7; border-left: 4px solid #424242; padding: 12px; border-radius: 12px;">
-                                    <div style="font-size: 0.75rem; color: #888; font-weight: bold; text-transform: uppercase;">
-                                        <?= htmlspecialchars($r_sum['reason_category']) ?>
-                                    </div>
-                                    <div style="font-size: 1.4rem; font-weight: 900; color: #222; margin-top: 4px;">
-                                        <?= $r_sum['total_count'] ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php endif; ?>
-
-                    <div class="table-scroll-wrapper">
-                        <table class="data-table" id="binTable">
-                            <thead>
-                                <tr>
-                                    <th style="width: 30%;">Incident & Logs</th>
-                                    <th style="width: 25%;">Location</th>
-                                    <th style="width: 30%;">Rejection Reason</th>
-                                    <th style="width: 15%; text-align: center;" class="exclude-export">Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($bin_incidents)): ?>
-                                    <tr><td colspan="4" style="text-align: center; color: #777; padding: 40px; font-weight: 700;">Bin is empty.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($bin_incidents as $bin): 
-                                        $b_status = strtoupper($bin['status']);
-                                        $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
-                                        $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
-                                    ?>
-                                    <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
-                                        <td>
-                                            <div style="font-weight: 900; font-size: 1.1rem; color: #424242; margin-bottom: 2px; padding-right: 25px;">
-                                                <?php echo htmlspecialchars($bin['incident_type']); ?>
-                                                <i class='bx bx-chevron-right mobile-expand-icon'></i>
-                                            </div>
-                                            <div style="font-size: 0.8rem; color: #888; font-weight: 600;"><?php echo $bin['date_str']; ?></div>
-                                        </td>
-                                        <td>
-                                            <span style="font-weight: 800; font-size: 0.95rem; color: #222; display:block; margin-bottom: 8px;"><?php echo htmlspecialchars($bin['barangay']); ?></span>
-                                            <span class="badge spam"><?php echo str_replace('_', ' ', $b_status); ?></span>
-                                        </td>
-                                        <td>
-                                            <div class="user-log-box" style="border-left-color: #d32f2f;">
-                                                "<?php echo htmlspecialchars($bin['spam_reason'] ?: ($bin['admin_remarks'] ?: 'No reason provided.')); ?>"
-                                            </div>
-                                        </td>
-                                        <td style="text-align: center;" class="exclude-export">
-                                            <div class="btn-action-group">
-                                                <?php if (!empty($binImg)): ?>
-                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?php echo htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8'); ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
-                                                <?php endif; ?>
-                                                <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?php echo $logs_js; ?>', '<?php echo addslashes($bin['incident_type']); ?>')" title="View Logs"><i class='bx bx-list-ul'></i></button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
 
             <div class="side-col">
@@ -479,11 +476,11 @@ $stmt_e->close();
                     <div class="panel-header" style="margin-bottom: 5px;">
                         <h2><i class='bx bxs-pie-chart-alt-2' style="color:#f57c00;"></i> Breakdown</h2>
                         <select id="timeFilter" class="filter-select" onchange="applyFilters()">
-                            <option value="today" <?php echo ($time_filter === 'today') ? 'selected' : ''; ?>>Today</option>
-                            <option value="week" <?php echo ($time_filter === 'week') ? 'selected' : ''; ?>>1 Week</option>
-                            <option value="month" <?php echo ($time_filter === 'month') ? 'selected' : ''; ?>>1 Month</option>
-                            <option value="year" <?php echo ($time_filter === 'year') ? 'selected' : ''; ?>>1 Year</option>
-                            <option value="all" <?php echo ($time_filter === 'all') ? 'selected' : ''; ?>>All Time</option>
+                            <option value="today" <?= ($time_filter === 'today') ? 'selected' : '' ?>>Today</option>
+                            <option value="week" <?= ($time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
+                            <option value="month" <?= ($time_filter === 'month') ? 'selected' : '' ?>>1 Month</option>
+                            <option value="year" <?= ($time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
+                            <option value="all" <?= ($time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
                         </select>
                     </div>
                     <div class="chart-wrapper">
@@ -515,16 +512,13 @@ $stmt_e->close();
                                 <?php foreach ($broadcast_history as $b): ?>
                                 <tr class="clickable-row" onclick="openMobileModal(this, 'broadcast')">
                                     <td>
-                                        <b style="color: #222; font-size: 0.95rem; display:block; padding-right:20px; position:relative;">
-                                            <?php echo htmlspecialchars($b['title']); ?>
-                                            <i class='bx bx-chevron-right mobile-expand-icon' style="top: 0;"></i>
-                                        </b>
-                                        <small style="color:#888; font-weight:600;"><?php echo $b['date_str']; ?></small>
+                                        <b style="color: #222; font-size: 0.95rem; display:block;"><?= htmlspecialchars($b['title']) ?></b>
+                                        <small style="color:#888; font-weight:600;"><?= $b['date_str'] ?></small>
                                     </td>
-                                    <td><span class="badge <?php echo $b['severity']; ?>"><?php echo strtoupper($b['severity']); ?></span></td>
+                                    <td><span class="badge <?= $b['severity'] ?>"><?= strtoupper($b['severity']) ?></span></td>
                                     <td style="text-align: center;">
                                         <?php if ($b['is_active']): ?>
-                                            <button class="btn-action" style="background: #d32f2f; padding: 6px 12px; font-size: 0.75rem; border-radius: 8px;" onclick="event.stopPropagation(); stopBroadcast(<?php echo $b['id']; ?>)">
+                                            <button class="btn-action" style="background: #d32f2f; padding: 6px 12px; font-size: 0.75rem; border-radius: 8px;" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
                                                 <i class='bx bx-stop-circle'></i> STOP
                                             </button>
                                         <?php else: ?>
@@ -539,6 +533,108 @@ $stmt_e->close();
                 </div>
             </div>
         </div>
+        <!-- CUSTOM REPORT BUILDER MODAL -->
+<div id="customReportModal" class="modal" style="z-index: 10007;">
+    <div class="modal-content" style="max-width: 520px; padding: 30px;">
+        <div class="close-modal" onclick="closeModal('customReportModal')"><i class='bx bx-x'></i></div>
+        <div class="modal-header" style="margin-bottom: 20px;">
+            <h3 style="margin: 0; color: #1976d2; display: flex; align-items: center; gap: 8px;">
+                <i class='bx bxs-report'></i> Custom Report Generator
+            </h3>
+            <p style="margin: 4px 0 0; font-size: 0.8rem; color: #777;">Configure reporting timeframe, jurisdiction, and export format.</p>
+        </div>
+
+        <div class="modal-body">
+            <!-- 1. Format Selection -->
+            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: #555; text-transform: uppercase;">Export Format</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 16px;">
+                <label style="flex: 1; display: flex; align-items: center; gap: 8px; border: 1px solid #ddd; padding: 10px; border-radius: 10px; cursor: pointer;">
+                    <input type="radio" name="rep_format" value="pdf" checked>
+                    <span style="font-weight: 700; font-size: 0.85rem;"><i class='bx bxs-file-pdf' style="color:#d32f2f;"></i> PDF Document</span>
+                </label>
+                <label style="flex: 1; display: flex; align-items: center; gap: 8px; border: 1px solid #ddd; padding: 10px; border-radius: 10px; cursor: pointer;">
+                    <input type="radio" name="rep_format" value="csv">
+                    <span style="font-weight: 700; font-size: 0.85rem;"><i class='bx bx-spreadsheet' style="color:#388e3c;"></i> CSV Spreadsheet</span>
+                </label>
+            </div>
+
+            <!-- 2. Timeframe Selection -->
+            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: #555; text-transform: uppercase;">Timeframe Interval</label>
+            <select id="rep_period" class="filter-select" style="width: 100%; margin-bottom: 16px;" onchange="handlePeriodChange()">
+                <option value="day">Single Day</option>
+                <option value="weekly">Weekly Range (Up to 7 Days)</option>
+                <option value="monthly">Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="yearly">Yearly</option>
+            </select>
+
+            <!-- 3. Dynamic Date Containers -->
+            <div id="period_inputs_container" style="background: #f8f9fa; border: 1px solid #edf2f7; border-radius: 12px; padding: 14px; margin-bottom: 16px;">
+                <!-- Day Input -->
+                <div id="box_day">
+                    <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Select Date</label>
+                    <input type="date" id="rep_day" class="filter-select" style="width: 100%;">
+                </div>
+
+                <!-- Weekly Inputs -->
+                <div id="box_weekly" style="display: none;">
+                    <div style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Start Date (From)</label>
+                            <input type="date" id="rep_week_start" class="filter-select" style="width: 100%;" onchange="validateWeekRange()">
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">End Date (To)</label>
+                            <input type="date" id="rep_week_end" class="filter-select" style="width: 100%;" onchange="validateWeekRange()">
+                        </div>
+                    </div>
+                    <small id="week_validation_msg" style="color: #d32f2f; font-weight: 700; display: block; margin-top: 6px; font-size: 0.72rem;"></small>
+                </div>
+
+                <!-- Monthly Input -->
+                <div id="box_monthly" style="display: none;">
+                    <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Select Month</label>
+                    <input type="month" id="rep_month" class="filter-select" style="width: 100%;">
+                </div>
+
+                <!-- Quarterly Input -->
+                <div id="box_quarterly" style="display: none;">
+                    <div style="display: flex; gap: 10px;">
+                        <div style="flex: 1;">
+                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Year</label>
+                            <select id="rep_quarter_year" class="filter-select" style="width: 100%;" onchange="updateQuarterOptions()"></select>
+                        </div>
+                        <div style="flex: 1;">
+                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Quarter</label>
+                            <select id="rep_quarter_q" class="filter-select" style="width: 100%;"></select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Yearly Input -->
+                <div id="box_yearly" style="display: none;">
+                    <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Select Year</label>
+                    <select id="rep_year" class="filter-select" style="width: 100%;"></select>
+                </div>
+            </div>
+
+            <!-- 4. Scope & Content -->
+            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: #555; text-transform: uppercase;">Include Sections</label>
+            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="inc_vault" checked> Incident Archive Vault (Resolved Emergencies)
+                </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="inc_bin" checked> Report Bin (False Alarms & Rejections Audit)
+                </label>
+            </div>
+
+            <button type="button" class="btn-action" style="width: 100%; background: #1976d2; padding: 14px; font-size: 1rem;" onclick="processReportGeneration()">
+                <i class='bx bx-download'></i> Generate & Download
+            </button>
+        </div>
+    </div>
+</div>
     </main>
 
     <div id="viewLogsModal" class="modal" style="z-index: 10006;">
@@ -565,25 +661,14 @@ $stmt_e->close();
             <div id="m-analytics-body" style="display: flex; flex-direction: column;"></div>
         </div>
     </div>                                       
-<?php
-$heat_coords = [];
-if (!empty($archived_incidents)) {
-    foreach ($archived_incidents as $inc) {
-        if (!empty($inc['latitude']) && !empty($inc['longitude'])) {
-            $heat_coords[] = [(float)$inc['latitude'], (float)$inc['longitude'], 0.8];
-        }
-    }
-}
-?>
 
 <script>
     window.allIncidents      = <?= $js_incidents ?? '[]' ?>;
     window.binIncidents      = <?= $js_bin_incidents ?? '[]' ?>;
-    window.allSeasonDates    = <?= $js_seasonality_dates ?? '[]' ?>;
+    window.allSeasonDates    = <?= json_encode($seasonality_dates ?? []) ?>;
     window.typeLabels        = <?= json_encode($type_labels ?? []) ?>;
     window.typeData          = <?= json_encode($type_data ?? []) ?>;
     window.typeColors        = <?= json_encode($type_colors ?? []) ?>;
-    
     window.evacLabels        = <?= json_encode($evac_labels ?? []) ?>;
     window.evacOccupants     = <?= json_encode($evac_occupants ?? []) ?>;
     window.evacCapacity      = <?= json_encode($evac_capacity ?? []) ?>;
