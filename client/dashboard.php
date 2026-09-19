@@ -266,11 +266,11 @@ $show_banner = ($active_broadcast && (int)$active_broadcast['id'] !== $dismissed
             <label style="display:block; margin-bottom:6px; font-weight:800; color:#444; text-transform:uppercase; font-size:0.75rem;">Rejection Category</label>
             <select id="reject_category" class="filter-dropdown" style="width:100%; margin-bottom:15px; padding:10px; border-radius:10px; border:1px solid #ccc; font-weight:700;">
                 <option value="False Alarm">False Alarm</option>
-                <option value="Out of Range">Out of Jurisdiction / Out of Range</option>
-                <option value="Duplicate">Duplicate Report</option>
-                <option value="Prank">Prank / Spam Report</option>
-                <option value="Incomplete Info">Incomplete / Invalid Information</option>
-                <option value="Other">Other Reason</option>
+                <option value="Out of Jurisdiction">Out of Jurisdiction / Out of Range</option>
+                <option value="Duplicate Report">Duplicate Report</option>
+                <option value="Prank / Spam">Prank / Spam Report</option>
+                <option value="Incomplete Information">Incomplete / Invalid Information</option>
+                <option value="Other / Unspecified">Other Reason</option>
             </select>
 
             <label style="display:block; margin-bottom:6px; font-weight:800; color:#444; text-transform:uppercase; font-size:0.75rem;">Officer Remarks / Explanation</label>

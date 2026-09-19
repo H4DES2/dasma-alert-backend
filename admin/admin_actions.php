@@ -388,12 +388,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'verify_incident') {
     $ALLOWED_SEVERITIES = ['Critical', 'Major', 'Minor', 'Info', 'Pending'];
     $posted_severity = $_POST['severity'] ?? '';
     $new_severity = in_array($posted_severity, $ALLOWED_SEVERITIES, true) ? $posted_severity : 'Pending';
-    $remarks = $_POST['remarks'] ?? '';
+    $remarks = trim($_POST['remarks'] ?? '');
     
+    $v_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
+    if (empty($v_name)) { $v_name = $_SESSION['username'] ?? 'Barangay Admin'; }
+
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
-        $stmt = $conn->prepare("UPDATE incidents SET severity = ?, admin_remarks = ? WHERE id IN ($id_list)");
-        $stmt->bind_param("ss", $new_severity, $remarks);
+        $stmt = $conn->prepare("UPDATE incidents SET is_verified = 1, verified_by = COALESCE(verified_by, ?), severity = ?, admin_remarks = ? WHERE id IN ($id_list)");
+        $stmt->bind_param("sss", $v_name, $new_severity, $remarks);
         $stmt->execute();
         $stmt->close();
     }
@@ -682,7 +685,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                     </div>
                                 </div>
                             ";
-                            $action_btns .= "<button class='btn-sm reject-btn' style='background:#555555; width: 100%; justify-content: center;' onclick='event.stopPropagation(); rejectIncident(\"$dispatch_id\")'><i class='bx bx-x-circle' style='font-size: 1.1rem;'></i> Reject</button>";
+                            $action_btns .= "<button class='btn-sm reject-btn' style='background:#555555; width: 100%; justify-content: center;' onclick='event.stopPropagation(); rejectIncident(\"$dispatch_id\", \"$safe_type\")'><i class='bx bx-x-circle' style='font-size: 1.1rem;'></i> Reject</button>";
                         } else {
                             $action_btns .= "<button class='btn-sm sev-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openVerifyModal(\"$dispatch_id\")'><i class='bx bx-slider' style='font-size: 1.1rem;'></i> Change Severity</button>";
                             $action_btns .= "<button class='btn-sm dispatch-btn' style='background:#388e3c; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type\")'><i class='bx bxs-truck' style='font-size: 1.1rem;'></i> Dispatch</button>";

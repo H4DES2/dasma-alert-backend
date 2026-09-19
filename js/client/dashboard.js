@@ -581,6 +581,56 @@ function toggleBackupRow(id) {
         row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
     }
 }
+function rejectIncident(id, typeName = '') {
+    const idsInput = document.getElementById('reject_incident_ids');
+    const display = document.getElementById('reject_incident_display');
+    const catSelect = document.getElementById('reject_category');
+    const notes = document.getElementById('reject_notes');
+    
+    if (idsInput) idsInput.value = id;
+    if (display) display.innerText = typeName ? `"${typeName}" (ID #${id})` : `Incident #${id}`;
+    if (catSelect) catSelect.value = 'False Alarm';
+    if (notes) notes.value = '';
+
+    const modal = document.getElementById('rejectModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function submitRejectIncident() {
+    const id = document.getElementById('reject_incident_ids')?.value;
+    const reasonCategory = document.getElementById('reject_category')?.value || 'False Alarm';
+    const notes = document.getElementById('reject_notes')?.value.trim() || '';
+
+    if (!id) return;
+
+    closeModal('rejectModal');
+
+    const fd = new FormData();
+    fd.append('action', 'reject_incident');
+    fd.append('incident_id', id);
+    fd.append('reason_category', reasonCategory);
+    fd.append('notes', notes);
+
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async r => {
+            const raw = await r.text();
+            try { return JSON.parse(raw); } 
+            catch(e) { throw new Error(raw.substring(0, 100)); }
+        })
+        .then(d => {
+            if (d.success) {
+                fetchLocalData();
+            } else {
+                customAlert("Reject Failed", d.message || "Could not reject report.", "bx-error", "#d32f2f");
+            }
+        })
+        .catch(err => {
+            console.error("Reject error:", err);
+            customAlert("Server Error", "Failed to communicate with server.", "bx-error", "#d32f2f");
+        });
+}
+
+window.submitRejectIncident = submitRejectIncident;
 window.openDeployModal = openDeployModal;
 window.submitDispatch = submitDispatch;
 window.cancelDispatch = cancelDispatch;
