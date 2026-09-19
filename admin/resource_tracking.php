@@ -45,7 +45,7 @@ if ($role === 'admin' && !empty($my_brgy)) {
     $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
     $total_teams = (int)$s->get_result()->fetch_assoc()['count']; $s->close();
 
-    $s = $conn->prepare("SELECT COUNT(*) as count FROM response_teams WHERE status = 'available' AND (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')");
+    $s = $conn->prepare("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('available', 'operational') AND (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')");
     $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
     $avail_teams = (int)$s->get_result()->fetch_assoc()['count']; $s->close();
 
@@ -62,7 +62,7 @@ if ($role === 'admin' && !empty($my_brgy)) {
     $teams_result = $s->get_result(); $s->close();
 } else {
     $total_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams")->fetch_assoc()['count'] ?? 0);
-    $avail_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status = 'available'")->fetch_assoc()['count'] ?? 0);
+    $avail_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('available', 'operational')")->fetch_assoc()['count'] ?? 0);
     $dep_teams    = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('deployed','on-scene')")->fetch_assoc()['count'] ?? 0);
     $maint_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status = 'maintenance'")->fetch_assoc()['count'] ?? 0);
     $teams_result = $conn->query("SELECT * FROM response_teams ORDER BY status ASC, team_type ASC");
@@ -74,9 +74,10 @@ $avail_list = $dep_list = $maint_list = [];
 if ($teams_result && $teams_result->num_rows > 0) {
     $teams = $teams_result->fetch_all(MYSQLI_ASSOC);
     foreach ($teams as $t) {
-        if ($t['status'] === 'available')                                $avail_list[] = $t;
-        if ($t['status'] === 'deployed' || $t['status'] === 'on-scene') $dep_list[]   = $t;
-        if ($t['status'] === 'maintenance')                              $maint_list[] = $t;
+        $st = strtolower(trim($t['status']));
+        if ($st === 'available' || $st === 'operational')                 $avail_list[] = $t;
+        if ($st === 'deployed' || $st === 'on-scene')                    $dep_list[]   = $t;
+        if ($st === 'maintenance')                                       $maint_list[] = $t;
     }
 }
 ?>
@@ -206,7 +207,11 @@ if ($teams_result && $teams_result->num_rows > 0) {
                                 <td><strong><?php echo htmlspecialchars($team['team_name']); ?></strong></td>
                                 <td><i class='bx <?php echo $type_icon; ?>' style="font-size: 1.2rem; vertical-align: middle; margin-right: 8px; opacity: 0.7;"></i> <?php echo htmlspecialchars($team['team_type']); ?></td>
                                 <td><strong style="color:#1976d2; font-size:0.85rem;"><i class='bx bxs-map-pin'></i> <?php echo $assigned_to; ?></strong></td>
-                                <td><span class="badge <?php echo $team['status']; ?>"><?php echo strtoupper($team['status']); ?></span></td>
+                                <?php 
+                                    $st_clean = strtolower(trim($team['status']));
+                                    $badge_class = ($st_clean === 'operational' || $st_clean === 'available') ? 'available' : $st_clean;
+                                ?>
+                                <td><span class="badge <?php echo $badge_class; ?>"><?php echo strtoupper($team['status']); ?></span></td>
                                 
                                 <?php if($role === 'superadmin'): ?>
                                 <td style="text-align: center;">

@@ -352,3 +352,9 @@ html.global-dark-mode .data-table td {
     color: var(--text-primary) !important;
     border-bottom-color: var(--border-color) !important;
 }
+.badge.available,
+.badge.operational {
+    background: rgba(46, 125, 50, 0.15);
+    color: #2e7d32;
+    border: 1px solid rgba(46, 125, 50, 0.3);
+}

@@ -832,7 +832,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         exit();
     }
     
-    // 2. FETCH AVAILABLE/OPERATIONAL TEAMS (ON DUTY)
     if ($action === 'get_available_teams') {
         requireRole($ADMIN_TIER_ROLES, $role);
         ob_end_clean();
@@ -856,7 +855,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         
         $query = "SELECT id, team_name, team_type, assigned_barangay 
                   FROM response_teams 
-                  WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty') " . $team_brgy_filter;
+                  WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty')
+                    AND (current_incident_id IS NULL OR current_incident_id = 0) " . $team_brgy_filter;
                   
         $stmt = $conn->prepare($query);
         if (!empty($params)) { $stmt->bind_param($types, ...$params); }
