@@ -726,7 +726,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $has_city_backup = (strpos($assigned_text, '[City Backup:') !== false);
                 $is_backup_requested = ((int)$inc['backup_requested'] === 1);
 
-                if (($is_backup_requested || $has_city_backup) && (!strpos($extraClass, 'cluster-row'))) {
+                $is_child_row = (strpos($extraClass, 'cluster-child') !== false);
+                if (($is_backup_requested || $has_city_backup) && !$is_child_row) {
                     $safe_type_backup = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
 
                     if ($has_city_backup) {
@@ -735,7 +736,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
                         $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
                         $backup_action = ($role === 'superadmin') 
-                            ? "<div style='display: flex; gap: 8px; align-items: center;'><button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button></div>"
+                            ? "<div style='display: flex; gap: 8px; align-items: center;'><button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall City Backup</button></div>"
                             : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>";
                     } else {
                         $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
@@ -766,19 +767,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             };
 
             foreach ($clustered_data as $key => $group) {
-                $count = count($group);
-                if ($count > 1) {
-                    $cluster_ids = array_map(function($i) { return $i['id']; }, $group);
-                    $cluster_ids_str = implode(",", $cluster_ids);
+    $count = count($group);
+    if ($count > 1) {
+        $cluster_ids = array_map(function($i) { return $i['id']; }, $group);
+        $cluster_ids_str = implode(",", $cluster_ids);
 
-                    $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", $cluster_ids_str, true, $count - 1, $key);
-                    for ($i = 1; $i < $count; $i++) {
-                        $html .= $renderRow($group[$i], $role, "cluster-row-$key cluster-child", "display: none; background: var(--surface-subtle); border-left: 4px solid var(--color-info, #1976d2);", null, false, 0, "");
-                    }
-                } else {
-                    $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");
-                }
+        // Inherit backup request to parent row if any report in cluster requested it
+        foreach ($group as $g) {
+            if ((int)($g['backup_requested'] ?? 0) === 1) {
+                $group[0]['backup_requested'] = 1;
+                break;
             }
+        }
+
+        $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", $cluster_ids_str, true, $count - 1, $key);
+        for ($i = 1; $i < $count; $i++) {
+            $html .= $renderRow($group[$i], $role, "cluster-row-$key cluster-child", "display: none; background: var(--surface-subtle); border-left: 4px solid var(--color-info, #1976d2);", null, false, 0, "");
+        }
+    } else {
+        $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");
+    }
+}
         } else {
             $html = "<tr><td colspan='6' style='text-align:center; padding:40px; color:#888; font-weight:600;'>No active reports.</td></tr>";
         }
