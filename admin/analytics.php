@@ -17,6 +17,43 @@ if (!$auth->isSuperAdmin()) {
 
 session_write_close();
 
+// 3. CENTRALIZED QUERY BUILDER HELPER
+class AnalyticsQueryBuilder {
+    public static function build(string $period, string $dateColumn = 'created_at'): array {
+        switch (strtolower(trim($period))) {
+            case 'today':
+                return [
+                    'clause' => " AND DATE($dateColumn) = CURDATE() ",
+                    'group'  => "DATE_FORMAT($dateColumn, '%h:00 %p')"
+                ];
+            case 'weekly':
+            case 'week':
+                return [
+                    'clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 WEEK) ",
+                    'group'  => "DATE_FORMAT($dateColumn, '%a (%b %d)')"
+                ];
+            case 'monthly':
+            case 'month':
+                return [
+                    'clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 MONTH) ",
+                    'group'  => "DATE_FORMAT($dateColumn, 'Week %u (%b)')"
+                ];
+            case 'yearly':
+            case 'year':
+                return [
+                    'clause' => " AND $dateColumn >= DATE_SUB(NOW(), INTERVAL 1 YEAR) ",
+                    'group'  => "DATE_FORMAT($dateColumn, '%b %Y')"
+                ];
+            case 'all':
+            default:
+                return [
+                    'clause' => "",
+                    'group'  => "DATE_FORMAT($dateColumn, '%Y-%m')"
+                ];
+        }
+    }
+}
+
 function getCloudinaryUrl(?string $path): string {
     if (empty($path) || $path === 'NULL' || $path === 'null') {
         return '';
@@ -35,9 +72,7 @@ function getCloudinaryUrl(?string $path): string {
     return 'https://res.cloudinary.com/wyxsiraw/image/upload/' . $clean;
 }
 
-// =========================================================================================
 // AUTO-REPAIR & DATA HYGIENE
-// =========================================================================================
 $conn->query("ALTER TABLE incidents MODIFY COLUMN status ENUM('active','dispatched','on-scene','resolved','archived','rejected','spam','out_of_range') DEFAULT 'active'");
 
 $conn->query("CREATE TABLE IF NOT EXISTS spam_reports (
@@ -48,43 +83,23 @@ $conn->query("CREATE TABLE IF NOT EXISTS spam_reports (
     FOREIGN KEY (incident_id) REFERENCES incidents(id) ON DELETE CASCADE
 )");
 
-// Resolve legacy/generic "Rejected by Admin" using the actual officer's name from logs
-$conn->query("
-    UPDATE incidents i
-    JOIN incident_logs il ON il.incident_id = i.id AND (LOWER(il.log_message) LIKE '%reject%' OR LOWER(il.log_message) LIKE '%false alarm%')
-    JOIN users u ON il.user_id = u.id
-    SET i.admin_remarks = CONCAT('Rejected by ', 
-        CASE 
-            WHEN TRIM(CONCAT(IFNULL(u.first_name, ''), ' ', IFNULL(u.last_name, ''))) != '' 
-            THEN TRIM(CONCAT(IFNULL(u.first_name, ''), ' ', IFNULL(u.last_name, '')))
-            ELSE u.username 
-        END, 
-        ' (False Alarm)')
-    WHERE i.status IN ('rejected', 'spam', 'out_of_range')
-      AND (i.admin_remarks LIKE '%Rejected by Admin%' OR i.admin_remarks IS NULL OR i.admin_remarks = '')
-");
-
+// Sync any missing spam reports
 $conn->query("INSERT IGNORE INTO spam_reports (incident_id, reason) 
               SELECT id, admin_remarks FROM incidents 
               WHERE status IN ('rejected', 'spam', 'out_of_range') 
               AND id NOT IN (SELECT incident_id FROM spam_reports)");
 
-$conn->query("
-    UPDATE spam_reports sr
-    JOIN incidents i ON sr.incident_id = i.id
-    SET sr.reason = i.admin_remarks
-    WHERE i.admin_remarks IS NOT NULL AND (sr.reason LIKE '%Rejected by Admin%' OR sr.reason IS NULL OR sr.reason = '')
-");
-
 $conn->query("DELETE FROM incidents WHERE status IN ('rejected', 'spam', 'out_of_range') AND created_at < DATE_SUB(NOW(), INTERVAL 3 DAY)");
-// =========================================================================================
 
-// 1. FILTER CONTROLS
+// 1. FILTER CONTROLS & QUERY BUILDER
 $type_filter       = isset($_GET['type']) ? $_GET['type'] : 'all';
 $time_filter       = isset($_GET['time']) ? $_GET['time'] : 'all'; 
 $vault_time_filter = isset($_GET['vault_time']) ? $_GET['vault_time'] : 'all';
 
-$where_clause = "WHERE i.status = 'archived'";
+$vault_query_cfg = AnalyticsQueryBuilder::build($vault_time_filter, 'i.created_at');
+$chart_query_cfg = AnalyticsQueryBuilder::build($time_filter, 'created_at');
+
+$where_clause = "WHERE i.status = 'archived' " . $vault_query_cfg['clause'];
 $params = [];
 $types = "";
 
@@ -94,16 +109,7 @@ if ($type_filter !== 'all') {
     $params[] = "%" . $type_filter . "%";
 }
 
-if ($vault_time_filter === 'today') { $where_clause .= " AND DATE(i.created_at) = CURDATE() "; } 
-elseif ($vault_time_filter === 'week') { $where_clause .= " AND i.created_at >= DATE_SUB(NOW(), INTERVAL 1 WEEK) "; } 
-elseif ($vault_time_filter === 'month') { $where_clause .= " AND i.created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) "; } 
-elseif ($vault_time_filter === 'year') { $where_clause .= " AND i.created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR) "; }
-
-$chart_time_clause = "";
-if ($time_filter === 'today') { $chart_time_clause = " AND DATE(created_at) = CURDATE() "; } 
-elseif ($time_filter === 'week') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 WEEK) "; } 
-elseif ($time_filter === 'month') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 MONTH) "; } 
-elseif ($time_filter === 'year') { $chart_time_clause = " AND created_at >= DATE_SUB(NOW(), INTERVAL 1 YEAR) "; }
+$chart_time_clause = $chart_query_cfg['clause'];
 
 // 2. SECURED FETCH: ARCHIVED INCIDENTS
 $query = "
@@ -144,6 +150,24 @@ $bin_result = $stmt_bin->get_result();
 $bin_incidents = ($bin_result && $bin_result->num_rows > 0) ? $bin_result->fetch_all(MYSQLI_ASSOC) : [];
 $stmt_bin->close();
 $js_bin_incidents = json_encode($bin_incidents ?: []);
+
+// 1. SECURED FETCH: REJECTION REASONS SUMMARY BREAKDOWN
+$reject_summary_query = "
+    SELECT 
+        CASE 
+            WHEN reason LIKE '%False Alarm%' THEN 'False Alarm'
+            WHEN reason LIKE '%Out of Range%' OR reason LIKE '%out_of_range%' THEN 'Out of Jurisdiction'
+            WHEN reason LIKE '%Duplicate%' THEN 'Duplicate Report'
+            WHEN reason LIKE '%Prank%' OR reason LIKE '%Spam%' THEN 'Prank / Spam'
+            ELSE 'Unspecified / Other'
+        END as reason_category,
+        COUNT(*) as total_count
+    FROM spam_reports
+    GROUP BY reason_category
+    ORDER BY total_count DESC
+";
+$reject_res = $conn->query($reject_summary_query);
+$rejection_summaries = ($reject_res && $reject_res->num_rows > 0) ? $reject_res->fetch_all(MYSQLI_ASSOC) : [];
 
 // 4. SECURED FETCH: BROADCAST HISTORY
 $broadcast_query = "SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC";
@@ -235,9 +259,13 @@ $stmt_e->close();
                 <h1 style="color: #333; margin: 0; font-size: 2.2rem;">Global Analytics</h1>
                 <p style="color: #666; margin-top: 5px; font-weight: 800;">Command Center City-Wide Reports</p>
             </div>
-            <div style="display: flex; gap: 15px;">
+            <!-- 4. ACTION BAR WITH DATABASE BACKUP BUTTON -->
+            <div style="display: flex; gap: 15px; flex-wrap: wrap;">
                 <button onclick="exportCSV()" class="btn-action" style="background: #388e3c;"><i class='bx bx-spreadsheet' style="font-size: 1.2rem;"></i> Export Data</button>
                 <button onclick="exportPDF()" class="btn-action" style="background: #d32f2f;"><i class='bx bxs-file-pdf' style="font-size: 1.2rem;"></i> Generate Report</button>
+                <a href="admin_actions.php?action=download_db_backup" class="btn-action" style="background: #607d8b; text-decoration: none;">
+                    <i class='bx bx-data' style="font-size: 1.2rem;"></i> Backup DB
+                </a>
             </div>
         </header>
 
@@ -365,10 +393,27 @@ $stmt_e->close();
                     </div>
                 </div>
 
+                <!-- 1. REPORT BIN WITH REASON SUMMARY CARDS -->
                 <div class="sitting-panel" style="flex: none;">
                     <div class="panel-header">
                         <h2><i class='bx bxs-trash-alt' style="color:#424242;"></i> Report Bin</h2>
                     </div>
+
+                    <?php if (!empty($rejection_summaries)): ?>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 12px; margin-bottom: 20px;">
+                            <?php foreach ($rejection_summaries as $r_sum): ?>
+                                <div style="background: #f8f9fa; border: 1px solid #edf2f7; border-left: 4px solid #424242; padding: 12px; border-radius: 12px;">
+                                    <div style="font-size: 0.75rem; color: #888; font-weight: bold; text-transform: uppercase;">
+                                        <?= htmlspecialchars($r_sum['reason_category']) ?>
+                                    </div>
+                                    <div style="font-size: 1.4rem; font-weight: 900; color: #222; margin-top: 4px;">
+                                        <?= $r_sum['total_count'] ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
+                    <?php endif; ?>
+
                     <div class="table-scroll-wrapper">
                         <table class="data-table" id="binTable">
                             <thead>

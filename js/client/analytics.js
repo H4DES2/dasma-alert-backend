@@ -210,3 +210,53 @@ function openMobileModal(row) {
     bodyEl.innerHTML = html;
     document.getElementById('mobileDetailsModal').style.display = 'flex';
 }
+function rejectIncident(incidentId) {
+    const idInput = document.getElementById('reject_incident_ids');
+    const displayEl = document.getElementById('reject_incident_display');
+    const categorySelect = document.getElementById('reject_category');
+    const notesInput = document.getElementById('reject_notes');
+    const modal = document.getElementById('rejectModal');
+
+    if (idInput) idInput.value = incidentId;
+    if (displayEl) displayEl.innerText = 'Incident #' + incidentId;
+    if (categorySelect) categorySelect.value = 'False Alarm';
+    if (notesInput) notesInput.value = '';
+    if (modal) modal.style.display = 'flex';
+}
+
+function submitRejectIncident() {
+    const id = document.getElementById('reject_incident_ids')?.value;
+    const category = document.getElementById('reject_category')?.value || 'False Alarm';
+    const notes = document.getElementById('reject_notes')?.value.trim() || '';
+
+    if (!id) return;
+
+    const fd = new FormData();
+    fd.append('action', 'reject_incident');
+    fd.append('incident_id', id);
+    fd.append('reason_category', category);
+    fd.append('notes', notes);
+
+    fetch('../admin/admin_actions.php', { method: 'POST', body: fd })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                closeModal('rejectModal');
+                if (typeof loadTriageData === 'function') {
+                    loadTriageData();
+                } else {
+                    location.reload();
+                }
+            } else {
+                alert(data.message || 'Error rejecting incident.');
+            }
+        })
+        .catch(err => {
+            console.error('Rejection error:', err);
+            alert('Connection error while rejecting incident.');
+        });
+}
+
+// Expose handlers globally for HTML onclick attributes
+window.rejectIncident = rejectIncident;
+window.submitRejectIncident = submitRejectIncident;

@@ -68,7 +68,7 @@ function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fal
 }
 
 // =========================================================================================
-//  AUTO-REPAIR SYSTEM
+// AUTO-REPAIR SYSTEM
 // =========================================================================================
 $check_col = $conn->query("SHOW COLUMNS FROM incidents LIKE 'verified_by'");
 if ($check_col && $check_col->num_rows === 0) {
@@ -268,7 +268,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'admin_resolve_incident') {
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
         $conn->query("UPDATE incidents SET status = 'resolved', backup_requested = 0 WHERE id IN ($id_list)");
-        $conn->query("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id IN ($id_list)");
+        $conn->query("UPDATE response_teams SET status = 'operational', current_incident_id = NULL WHERE current_incident_id IN ($id_list)");
     }
     echo json_encode(['success' => true]);
     exit();
@@ -291,7 +291,6 @@ if (isset($_POST['action']) && $_POST['action'] === 'confirm_verify') {
         $stmt->execute();
         $stmt->close();
 
-        // Optional: log verification
         $admin_id = (int)($_SESSION['user_id'] ?? 0);
         $log_msg = "Incident verified by {$v_name}.";
         $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
@@ -314,52 +313,57 @@ if (isset($_POST['action']) && $_POST['action'] === 'reject_incident') {
 
     $ids_raw = $_POST['incident_id'] ?? $_POST['id'] ?? '';
     $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
+    $reason_category = trim($_POST['reason_category'] ?? 'False Alarm');
+    $custom_notes    = trim($_POST['notes'] ?? '');
 
     if (!empty($ids_array)) {
         $id_list = implode(',', $ids_array);
         $admin_id = (int)($_SESSION['user_id'] ?? 0);
 
-        // Fetch actual full name from database
+        // Fetch officer name and jurisdiction
         $admin_name = '';
+        $admin_brgy_label = '';
         if ($admin_id > 0) {
-            $stmt_u = $conn->prepare("SELECT first_name, last_name, username FROM users WHERE id = ?");
+            $stmt_u = $conn->prepare("SELECT first_name, last_name, username, barangay, role FROM users WHERE id = ?");
             $stmt_u->bind_param("i", $admin_id);
             $stmt_u->execute();
             $u_row = $stmt_u->get_result()->fetch_assoc();
             $stmt_u->close();
             if ($u_row) {
                 $full = trim(($u_row['first_name'] ?? '') . ' ' . ($u_row['last_name'] ?? ''));
-                $admin_name = !empty($full) ? $full : ($u_row['username'] ?? '');
+                $admin_name = !empty($full) ? $full : ($u_row['username'] ?? 'Barangay Officer');
+                $admin_brgy_label = !empty($u_row['barangay']) ? "Brgy. " . $u_row['barangay'] : "Local Command";
             }
         }
         if (empty($admin_name)) {
-            $admin_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? ''));
-            if (empty($admin_name)) { $admin_name = $_SESSION['username'] ?? 'Officer'; }
+            $admin_name = $_SESSION['username'] ?? 'Barangay Admin';
+            $admin_brgy_label = !empty($_SESSION['barangay']) ? "Brgy. " . $_SESSION['barangay'] : "Local Command";
         }
 
-        $reject_reason = "Rejected by {$admin_name} (False Alarm)";
+        // Tag the exact officer, their barangay, and the categorized reason
+        $reject_summary = "Rejected by {$admin_name} ({$admin_brgy_label}) [{$reason_category}]" . (!empty($custom_notes) ? ": {$custom_notes}" : "");
 
-        // Update incidents status and admin_remarks with the actual officer name
+        // 1. Mark incident as rejected
         $stmt_inc = $conn->prepare("UPDATE incidents SET status = 'rejected', is_verified = 0, admin_remarks = ? WHERE id IN ($id_list)");
-        $stmt_inc->bind_param("s", $reject_reason);
+        $stmt_inc->bind_param("s", $reject_summary);
         $stmt_inc->execute();
         $stmt_inc->close();
 
-        // Release attached response units
-        $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'available' WHERE current_incident_id IN ($id_list)");
+        // 2. Free any assigned units back to operational
+        $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'operational' WHERE current_incident_id IN ($id_list)");
 
-        // Sync directly to spam_reports
+        // 3. Insert or update spam/rejection records
         foreach ($ids_array as $inc_id) {
             $stmt_sr = $conn->prepare("INSERT INTO spam_reports (incident_id, reason) VALUES (?, ?) ON DUPLICATE KEY UPDATE reason = VALUES(reason)");
             if ($stmt_sr) {
-                $stmt_sr->bind_param("is", $inc_id, $reject_reason);
+                $stmt_sr->bind_param("is", $inc_id, $reject_summary);
                 $stmt_sr->execute();
                 $stmt_sr->close();
             }
         }
 
-        // Insert incident log
-        $log_msg = "Incident rejected as false alarm by {$admin_name}.";
+        // 4. Record audit log
+        $log_msg = "Incident rejected as {$reason_category} by {$admin_name} ({$admin_brgy_label})." . (!empty($custom_notes) ? " Notes: {$custom_notes}" : "");
         $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
         if ($stmt_log) {
             foreach ($ids_array as $inc_id) {
@@ -398,10 +402,63 @@ if (isset($_POST['action']) && $_POST['action'] === 'verify_incident') {
 }
 
 // =========================================================================================
-// 🚀 GET REQUESTS
+// GET REQUESTS
 // =========================================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     
+    // 4. DATABASE BACKUP EXPORTER
+    if ($action === 'download_db_backup') {
+        requireRole(['superadmin'], $role);
+        while (ob_get_level() > 0) { ob_end_clean(); }
+
+        $tables = ['users', 'user_profiles', 'incidents', 'incident_logs', 'response_teams', 'evacuation_centers', 'broadcasts', 'spam_reports', 'announcements'];
+        $filename = 'dasma_alert_backup_' . date('Y-m-d_H-i-s') . '.sql';
+
+        header('Content-Type: application/sql');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+        header('Pragma: public');
+
+        $out = fopen('php://output', 'w');
+
+        fwrite($out, "-- ========================================================\n");
+        fwrite($out, "-- DASMA ALERT SYSTEM BACKUP\n");
+        fwrite($out, "-- Generated: " . date('Y-m-d H:i:s') . "\n");
+        fwrite($out, "-- ========================================================\n\n");
+        fwrite($out, "SET FOREIGN_KEY_CHECKS=0;\n\n");
+
+        foreach ($tables as $table) {
+            $check = $conn->query("SHOW TABLES LIKE '$table'");
+            if (!$check || $check->num_rows === 0) continue;
+
+            $create_res = $conn->query("SHOW CREATE TABLE `$table`");
+            if ($create_res && $row = $create_res->fetch_row()) {
+                fwrite($out, "-- Table structure for `$table`\n");
+                fwrite($out, "DROP TABLE IF EXISTS `$table`;\n");
+                fwrite($out, $row[1] . ";\n\n");
+            }
+
+            $data_res = $conn->query("SELECT * FROM `$table`");
+            if ($data_res && $data_res->num_rows > 0) {
+                fwrite($out, "-- Dumping data for `$table`\n");
+                while ($row = $data_res->fetch_assoc()) {
+                    $cols = array_map(function($col) { return "`$col`"; }, array_keys($row));
+                    $vals = array_map(function($val) use ($conn) {
+                        if (is_null($val)) return "NULL";
+                        return "'" . $conn->real_escape_string($val) . "'";
+                    }, array_values($row));
+
+                    fwrite($out, "INSERT INTO `$table` (" . implode(', ', $cols) . ") VALUES (" . implode(', ', $vals) . ");\n");
+                }
+                fwrite($out, "\n");
+            }
+        }
+
+        fwrite($out, "SET FOREIGN_KEY_CHECKS=1;\n");
+        fclose($out);
+        exit();
+    }
+
     if ($action === 'get_active_incidents') {
         requireRole($ADMIN_TIER_ROLES, $role);
         ob_end_clean();
@@ -434,345 +491,345 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     }
     
     // =========================================================================================
-// 🚀 MASTER SYNC COMPILER & SSE STREAM
-// =========================================================================================
-
-function compileMasterSync(mysqli $conn, string $role, string $admin_brgy, string $target_brgy, string $type): array {
-    if (!function_exists('getStrictBarangay')) {
-        function getStrictBarangay($lat, $lng, $fallbackText = '') {
-            global $conn;
-            return resolveBarangaySector($conn, (float)$lat, (float)$lng, $fallbackText ?: 'Unassigned Sector');
+    // MASTER SYNC COMPILER & SSE STREAM
+    // =========================================================================================
+    function compileMasterSync(mysqli $conn, string $role, string $admin_brgy, string $target_brgy, string $type): array {
+        if (!function_exists('getStrictBarangay')) {
+            function getStrictBarangay($lat, $lng, $fallbackText = '') {
+                global $conn;
+                return resolveBarangaySector($conn, (float)$lat, (float)$lng, $fallbackText ?: 'Unassigned Sector');
+            }
         }
-    }
 
-    if (!function_exists('getDistanceMeters')) {
-        function getDistanceMeters($lat1, $lon1, $lat2, $lon2) {
-            $earth_radius = 6371000; 
-            $dLat = deg2rad($lat2 - $lat1);
-            $dLon = deg2rad($lon2 - $lon1);
-            $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon/2) * sin($dLon/2);
-            return $earth_radius * (2 * asin(sqrt($a)));
+        if (!function_exists('getDistanceMeters')) {
+            function getDistanceMeters($lat1, $lon1, $lat2, $lon2) {
+                $earth_radius = 6371000; 
+                $dLat = deg2rad($lat2 - $lat1);
+                $dLon = deg2rad($lon2 - $lon1);
+                $a = sin($dLat/2) * sin($dLat/2) + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLon/2) * sin($dLon/2);
+                return $earth_radius * (2 * asin(sqrt($a)));
+            }
         }
-    }
 
-    $response = ['kpi' => [], 'kpi_details' => [], 'map' => [], 'evac_centers' => [], 'table' => ''];
-    $params = []; $types = "";
-    $evac_params = []; $evac_types = "";
-    $brgy_filter = "";
-    $evac_brgy_filter = ""; 
-    $type_clause = "";
+        $response = ['kpi' => [], 'kpi_details' => [], 'map' => [], 'evac_centers' => [], 'table' => ''];
+        $params = []; $types = "";
+        $evac_params = []; $evac_types = "";
+        $brgy_filter = "";
+        $evac_brgy_filter = ""; 
+        $type_clause = "";
 
-    if ($type !== 'all' && !empty($type)) {
-        $type_clause = " AND i.incident_type LIKE ? ";
-        $types .= "s"; $params[] = "%" . $type . "%";
-    }
-
-    $type_clause .= " AND (i.latitude BETWEEN 14.2500 AND 14.3900 AND i.longitude BETWEEN 120.8900 AND 121.0200) ";
-
-    $target = !empty($target_brgy) ? trim($target_brgy) : trim($admin_brgy);
-if (strcasecmp($target, 'Burol Main') === 0) {
-    $target = 'Burol';
-}
-if (!empty($target) && strtolower($target) !== 'all barangays' && strtolower($target) !== 'all') {
-    $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
-    $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-    $types .= "ss"; $params[] = $target; $params[] = "%" . $target . "%";
-    $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = "%" . $target . "%";
-}
-
-    if (!function_exists('executeSyncQuery')) {
-        function executeSyncQuery($conn, $sql, $types, $params) {
-            $stmt = $conn->prepare($sql);
-            if (!empty($params)) { $stmt->bind_param($types, ...$params); }
-            $stmt->execute();
-            $res = $stmt->get_result();
-            $stmt->close();
-            return $res;
+        if ($type !== 'all' && !empty($type)) {
+            $type_clause = " AND i.incident_type LIKE ? ";
+            $types .= "s"; $params[] = "%" . $type . "%";
         }
-    }
 
-    // KPIs
-    $res1 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
-    $response['kpi']['active'] = $res1 ? (int)$res1->fetch_assoc()['c'] : 0;
+        $type_clause .= " AND (i.latitude BETWEEN 14.2500 AND 14.3900 AND i.longitude BETWEEN 120.8900 AND 121.0200) ";
 
-    $res2 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
-    $response['kpi']['deployed'] = $res2 ? (int)$res2->fetch_assoc()['c'] : 0;
+        $target = !empty($target_brgy) ? trim($target_brgy) : trim($admin_brgy);
+        if (strcasecmp($target, 'Burol Main') === 0) {
+            $target = 'Burol';
+        }
+        if (!empty($target) && strtolower($target) !== 'all barangays' && strtolower($target) !== 'all') {
+            $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
+            $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
+            $types .= "ss"; $params[] = $target; $params[] = "%" . $target . "%";
+            $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = "%" . $target . "%";
+        }
 
-    $res3 = executeSyncQuery($conn, "SELECT SUM(current_occupants) as total FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
-    $response['kpi']['evacuees'] = $res3 ? (int)($res3->fetch_assoc()['total'] ?? 0) : 0;
+        if (!function_exists('executeSyncQuery')) {
+            function executeSyncQuery($conn, $sql, $types, $params) {
+                $stmt = $conn->prepare($sql);
+                if (!empty($params)) { $stmt->bind_param($types, ...$params); }
+                $stmt->execute();
+                $res = $stmt->get_result();
+                $stmt->close();
+                return $res;
+            }
+        }
 
-    $act_details = [];
-    $r1 = executeSyncQuery($conn, "SELECT incident_type, barangay FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 10", $types, $params);
-    if ($r1) { while($row = $r1->fetch_assoc()) { $act_details[] = "<b>{$row['incident_type']}</b> • {$row['barangay']}"; } }
+        // KPIs
+        $res1 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
+        $response['kpi']['active'] = $res1 ? (int)$res1->fetch_assoc()['c'] : 0;
 
-    $dep_details = [];
-    $r2 = executeSyncQuery($conn, "SELECT rt.team_name, i.barangay FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
-    if ($r2) { while($row = $r2->fetch_assoc()) { $dep_details[] = "<b>{$row['team_name']}</b> • {$row['barangay']}"; } }
+        $res2 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
+        $response['kpi']['deployed'] = $res2 ? (int)$res2->fetch_assoc()['c'] : 0;
 
-    $evac_details = [];
-    $r3 = executeSyncQuery($conn, "SELECT name, current_occupants FROM evacuation_centers WHERE current_occupants > 0 $evac_brgy_filter", $evac_types, $evac_params);
-    if ($r3) { while($row = $r3->fetch_assoc()) { $evac_details[] = "<b>{$row['current_occupants']} Pax</b> • {$row['name']}"; } }
+        $res3 = executeSyncQuery($conn, "SELECT SUM(current_occupants) as total FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
+        $response['kpi']['evacuees'] = $res3 ? (int)($res3->fetch_assoc()['total'] ?? 0) : 0;
 
-    $response['kpi_details'] = ['active' => $act_details, 'deployed' => $dep_details, 'evacuees' => $evac_details];
+        $act_details = [];
+        $r1 = executeSyncQuery($conn, "SELECT incident_type, barangay FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 10", $types, $params);
+        if ($r1) { while($row = $r1->fetch_assoc()) { $act_details[] = "<b>{$row['incident_type']}</b> • {$row['barangay']}"; } }
 
-    $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
-    if ($resMap) { while ($row = $resMap->fetch_assoc()) { $response['map'][] = $row; } }
+        $dep_details = [];
+        $r2 = executeSyncQuery($conn, "SELECT rt.team_name, i.barangay FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
+        if ($r2) { while($row = $r2->fetch_assoc()) { $dep_details[] = "<b>{$row['team_name']}</b> • {$row['barangay']}"; } }
 
-    $resEvac = executeSyncQuery($conn, "SELECT id, name, barangay, latitude, longitude, capacity, current_occupants, status FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
-    if ($resEvac) { while ($row = $resEvac->fetch_assoc()) { $response['evac_centers'][] = $row; } }
+        $evac_details = [];
+        $r3 = executeSyncQuery($conn, "SELECT name, current_occupants FROM evacuation_centers WHERE current_occupants > 0 $evac_brgy_filter", $evac_types, $evac_params);
+        if ($r3) { while($row = $r3->fetch_assoc()) { $evac_details[] = "<b>{$row['current_occupants']} Pax</b> • {$row['name']}"; } }
 
-    // Triage Table Data
-    $query = "SELECT i.*, i.backup_requested, i.is_verified, i.verified_by, u.username, u.first_name, u.last_name, u.barangay as reporter_home,
-                     (SELECT position FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_pos, 
-                     (SELECT phone_number FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_phone,
-                     (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as user_logs
-              FROM incidents i 
-              LEFT JOIN users u ON i.reported_by = u.id 
-              WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause
-              ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 50"; 
+        $response['kpi_details'] = ['active' => $act_details, 'deployed' => $dep_details, 'evacuees' => $evac_details];
 
-    $resTab = executeSyncQuery($conn, $query, $types, $params);
-    $html = "";
+        $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
+        if ($resMap) { while ($row = $resMap->fetch_assoc()) { $response['map'][] = $row; } }
 
-    if ($resTab && $resTab->num_rows > 0) {
-        $clustered_data = [];
+        $resEvac = executeSyncQuery($conn, "SELECT id, name, barangay, latitude, longitude, capacity, current_occupants, status FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
+        if ($resEvac) { while ($row = $resEvac->fetch_assoc()) { $response['evac_centers'][] = $row; } }
 
-        while ($inc = $resTab->fetch_assoc()) {// Inside while ($inc = $resTab->fetch_assoc())
-            $raw_brgy = trim((string)($inc['barangay'] ?? ''));
-            $fallback_brgy = !empty($raw_brgy) ? $raw_brgy : ($inc['reporter_home'] ?? 'Unknown Location');
-            $resolved_brgy = getStrictBarangay($inc['latitude'], $inc['longitude'], $fallback_brgy);
+        // Triage Table Data
+        $query = "SELECT i.*, i.backup_requested, i.is_verified, i.verified_by, u.username, u.first_name, u.last_name, u.barangay as reporter_home,
+                         (SELECT position FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_pos, 
+                         (SELECT phone_number FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_phone,
+                         (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as user_logs
+                  FROM incidents i 
+                  LEFT JOIN users u ON i.reported_by = u.id 
+                  WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause
+                  ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 50"; 
 
-            $inc['display_brgy'] = (strcasecmp(trim($resolved_brgy), 'Burol Main') === 0) ? 'Burol' : $resolved_brgy;
-            $lat = (float)$inc['latitude'];
-            $lng = (float)$inc['longitude'];
-            $found_cluster = false;
+        $resTab = executeSyncQuery($conn, $query, $types, $params);
+        $html = "";
+
+        if ($resTab && $resTab->num_rows > 0) {
+            $clustered_data = [];
+
+            while ($inc = $resTab->fetch_assoc()) {
+                $raw_brgy = trim((string)($inc['barangay'] ?? ''));
+                $fallback_brgy = !empty($raw_brgy) ? $raw_brgy : ($inc['reporter_home'] ?? 'Unknown Location');
+                $resolved_brgy = getStrictBarangay($inc['latitude'], $inc['longitude'], $fallback_brgy);
+
+                $inc['display_brgy'] = (strcasecmp(trim($resolved_brgy), 'Burol Main') === 0) ? 'Burol' : $resolved_brgy;
+                $lat = (float)$inc['latitude'];
+                $lng = (float)$inc['longitude'];
+                $found_cluster = false;
+
+                foreach ($clustered_data as $key => $group) {
+                    $main = $group[0];
+                    if (trim($main['incident_type']) === trim($inc['incident_type'])) {
+                        $dist = getDistanceMeters($lat, $lng, (float)$main['latitude'], (float)$main['longitude']);
+                        if ($dist <= 100) {
+                            $clustered_data[$key][] = $inc;
+                            $found_cluster = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!$found_cluster) {
+                    $clustered_data["cluster_" . $inc['id']] = [$inc];
+                }
+            }
+
+            $renderRow = function($inc, $role, $extraClass, $extraStyle, $targetIds = null, $isParent = false, $duplicateCount = 0, $clusterKey = '') {
+                $status = $inc['status'] ?? 'active';
+                $coords = $inc['latitude'] . ", " . $inc['longitude'];
+                $exact_time = date('h:i A', strtotime($inc['created_at']));
+                $exact_date = date('M d, Y', strtotime($inc['created_at']));
+                $user_logs = $inc['user_logs'] ?? 'No additional details provided by the reporter.';
+
+                $full_name = trim(($inc['first_name'] ?? '') . ' ' . ($inc['last_name'] ?? ''));
+                $reporter_display = !empty($full_name) ? $full_name : ($inc['username'] ?? 'Anonymous');
+                $extra_info = (!empty($inc['reporter_pos']) ? $inc['reporter_pos'] . " | " : "") . ($inc['reporter_phone'] ?? "No Contact");
+
+                $safe_img = htmlspecialchars(addslashes($inc['image_path'] ?? ''), ENT_QUOTES);
+                $safe_type = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
+                $safe_brgy = htmlspecialchars(addslashes($inc['display_brgy']), ENT_QUOTES);
+                $safe_rep = htmlspecialchars(addslashes($reporter_display), ENT_QUOTES);
+                $safe_logs = htmlspecialchars(addslashes(preg_replace('/\s+/', ' ', $user_logs)), ENT_QUOTES);
+                $safe_extra = htmlspecialchars(addslashes($extra_info), ENT_QUOTES);
+                $safe_backup = (int)$inc['backup_requested'];
+
+                $dispatch_id = $targetIds ?: $inc['id'];
+
+                $btn_color = (!empty($safe_img) && $safe_img !== 'NULL') ? '#424242' : '#999999';
+                $btn_icon = (!empty($safe_img) && $safe_img !== 'NULL') ? 'bx-camera' : 'bx-info-circle';
+                $evidence_btn = "<button class='btn-sm' style='background:$btn_color; margin: 0 auto;' onclick='event.stopPropagation(); viewEvidence(\"$safe_img\", \"$safe_type\", \"$safe_brgy\", \"$exact_date\", \"$exact_time\", \"$safe_rep\", \"$safe_logs\", \"$safe_extra\", $safe_backup)'><i class='bx $btn_icon'></i></button>";
+
+                $sev_badge = ($inc['severity'] === 'Critical') ? 'critical' : (($inc['severity'] === 'Major') ? 'major' : 'warning');
+                $display_sev = htmlspecialchars(strtoupper($inc['severity'] ?? 'PENDING'));
+
+                $status_html = "";
+                if ($inc['backup_requested'] == 1) { $status_html .= "<span class='badge' style='background:#b10000; animation: blink 1s infinite; width:100%; justify-content:center; margin-top:5px;'>🚨 BACKUP NEEDED</span><style>@keyframes blink { 50% { opacity: 0; } }</style>"; }
+
+                $status_lower = strtolower($status);
+                if ($status_lower === 'on-scene') { $status_html .= "<span class='badge on-scene' style='margin-top:6px; font-size:9px; width:100%; justify-content:center;'><i class='bx bx-check-circle'></i> ON SCENE</span>"; } 
+                elseif ($status_lower === 'dispatched') { $status_html .= "<span class='badge info' style='margin-top:6px; font-size:9px; width:100%; justify-content:center;'><i class='bx bxs-truck'></i> EN ROUTE</span>"; } 
+                else { $status_html .= "<small style='font-size:10px; display:block; margin-top:6px; font-weight:800; color:#666;'>Status: ".strtoupper($status)."</small>"; }
+
+                $is_pending_verification = ($inc['is_verified'] == 0);
+                $verified_by_name = htmlspecialchars($inc['verified_by'] ?? 'N/A');
+
+                $action_btns = "<div class='action-btn-container' data-incident-ids='$dispatch_id' style='display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center;'>";
+                if ($status_lower === 'active' || $status_lower === 'pending') {
+                    if ($role === 'superadmin') {
+                        if ($inc['backup_requested'] == 0) { 
+                            $action_btns .= "<span style='color:#f57c00; font-size:0.75rem; font-weight:bold; font-style:italic; text-align:center;'><i class='bx bx-radar bx-burst'></i> Awaiting Local</span>"; 
+                        } else { 
+                            $action_btns .= "<span style='color:#d32f2f; font-size:0.75rem; font-weight:bold; font-style:italic; text-align:center;'><i class='bx bxs-error bx-flashing'></i> Backup Needed</span>"; 
+                        }
+
+                        if (!$is_pending_verification) {
+                            $action_btns .= "<div class='verified-by-text' style='color: #666; font-size: 0.75rem; font-weight: 700; margin-top: 4px; text-align: center;'>Verified by:<br><span style='color: #8e24aa;'>$verified_by_name</span></div>";
+                        }
+                    } else {
+                        if ($is_pending_verification) {
+                            $action_btns .= "
+                                <div class='verify-btn-wrapper' style='width:100%; position: relative;'>
+                                    <button class='btn-sm verify-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); toggleVerifyDropdown(this)'><i class='bx bx-check-shield' style='font-size: 1.1rem;'></i> Verify</button>
+                                    <div class='verify-dropdown' style='display:none; position: absolute; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 100; width:150px; left:50%; transform:translateX(-50%); padding:5px;'>
+                                        <button class='btn-sm confirm-verify-btn' style='background:#388e3c; color: white !important; width: 100%; justify-content: center; margin-bottom: 5px;' onclick='event.stopPropagation(); confirmVerifyIncident(\"$dispatch_id\", this)' data-confirm-ids='$dispatch_id'>Confirm</button>
+                                        <button class='btn-sm cancel-verify-btn' style='background:#555555; color: white !important; width: 100%; justify-content: center;' onclick='event.stopPropagation(); hideVerifyDropdown(this)'>Cancel</button>
+                                    </div>
+                                </div>
+                            ";
+                            $action_btns .= "<button class='btn-sm reject-btn' style='background:#555555; width: 100%; justify-content: center;' onclick='event.stopPropagation(); rejectIncident(\"$dispatch_id\")'><i class='bx bx-x-circle' style='font-size: 1.1rem;'></i> Reject</button>";
+                        } else {
+                            $action_btns .= "<button class='btn-sm sev-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openVerifyModal(\"$dispatch_id\")'><i class='bx bx-slider' style='font-size: 1.1rem;'></i> Change Severity</button>";
+                            $action_btns .= "<button class='btn-sm dispatch-btn' style='background:#388e3c; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type\")'><i class='bx bxs-truck' style='font-size: 1.1rem;'></i> Dispatch</button>";
+                        }
+                    }
+                } elseif ($status_lower === 'dispatched' || $status_lower === 'en route' || $status_lower === 'en_route' || $status_lower === 'on-scene') {
+                    $action_btns .= "<button class='btn-sm' style='background:#d32f2f; padding: 10px 15px; font-size: 0.9rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); cancelDispatch(\"$dispatch_id\")'><i class='bx bx-undo' style='font-size: 1.1rem;'></i> Recall</button>";
+                    if ($role !== 'superadmin' && $inc['backup_requested'] == 0) { $action_btns .= "<button class='btn-sm' style='background:#f57c00; padding: 10px 15px; width: 100%; justify-content: center;' onclick='event.stopPropagation(); requestBackup(\"$dispatch_id\")'><i class='bx bxs-error-circle'></i> Need Backup</button>"; }
+                } else {
+                    $action_btns .= "<span style='color:#888; font-size:0.85rem; font-weight:bold; font-style:italic;'>No Actions</span>";
+                }
+                $action_btns .= "</div>";
+
+                if ($extraClass != "" && strpos($extraClass, 'cluster-row') !== false) {
+                    $action_btns = "<span style='color: var(--text-muted, #888); font-size: 0.8rem; font-weight: bold; background: var(--surface-subtle, rgba(128,128,128,0.15)); border: 1px solid var(--border-color, rgba(128,128,128,0.2)); padding: 5px 10px; border-radius: 8px;'><i class='bx bx-link'></i> Merged to Primary</span>";
+                }
+
+                $incident_info = "<span style='font-weight:700;'>".htmlspecialchars($inc['incident_type'])."</span><br>
+                                  <small style='color:#666; font-style:italic;'>\"".htmlspecialchars(substr($user_logs, 0, 45))."...\"</small>";
+
+                if ($isParent && $duplicateCount > 0) {
+                    $incident_info .= "<div style='margin-top: 8px;'><span style='background: rgba(25,118,210,0.1); color: #1976d2; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; border: 1px solid rgba(255,255,255,0.3); display: inline-flex; align-items: center; gap: 4px;'><i id='icon_$clusterKey' class='bx bx-folder-plus' style='font-size: 1rem;'></i> +$duplicateCount DUPLICATE</span> <small style='color: #888; margin-left: 5px; font-weight: bold;'>Click to expand</small></div>";
+                }
+
+                $clusterCall = ($isParent && $duplicateCount > 0) ? "toggleCluster(\"$clusterKey\");" : "";
+                $onclick = "onclick='openMobileModal(this); toggleBackupRow({$inc['id']}); $clusterCall'";
+
+                $rowHtml = "<tr class='$extraClass' style='cursor: pointer; $extraStyle' $onclick>
+                    <td style='vertical-align: middle;'><div style='font-weight: 800; font-size: 1.1rem; color: #d32f2f;'>{$exact_time}</div><div style='font-size: 0.85rem; color: #888; font-weight: 600;'>{$exact_date}</div></td>
+                    <td style='vertical-align: middle;'><div><b>".htmlspecialchars($inc['display_brgy'])."</b><br><small style='color:#d32f2f; font-weight:700;'>$coords</small><br><small style='color:#555;'>Rep: ".htmlspecialchars($reporter_display)."</small></div></td>
+                    <td class='mobile-hide' style='vertical-align: middle;'>$incident_info</td>
+                    <td class='mobile-hide' style='text-align:center; vertical-align: middle;'>$evidence_btn</td>
+                    <td class='mobile-hide' style='text-align:center; vertical-align: middle;'><span class='badge $sev_badge' style='width:100%; justify-content:center;'>$display_sev</span><br>$status_html</td>
+                    <td class='mobile-hide' style='vertical-align: middle; width: 150px; padding-right: 25px;'>$action_btns</td>
+                </tr>";
+
+                $assigned_text = (string)($inc['assigned_to'] ?? '');
+                $has_city_backup = (strpos($assigned_text, '[City Backup:') !== false);
+                $is_backup_requested = ((int)$inc['backup_requested'] === 1);
+
+                if (($is_backup_requested || $has_city_backup) && (!strpos($extraClass, 'cluster-row'))) {
+                    $safe_type_backup = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
+
+                    if ($has_city_backup) {
+                        preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
+                        $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
+
+                        $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
+                        $backup_action = ($role === 'superadmin') 
+                            ? "<div style='display: flex; gap: 8px; align-items: center;'><button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button></div>"
+                            : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>";
+                    } else {
+                        $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
+                        $desc_html = "<b style='color: #ff9800;'>Local responders requested additional support.</b>";
+                        $backup_action = ($role === 'superadmin') 
+                            ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
+                            : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
+                    }
+
+                    $rowHtml .= "
+                    <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.08);'>
+                        <td colspan='6' style='padding: 10px 18px; border-left: 4px solid #f57c00;'>
+                            <div style='display: flex; align-items: center; justify-content: space-between;'>
+                                <div style='display: flex; align-items: center; gap: 12px;'>
+                                    " . ($badge_html ?? '') . "
+                                    <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
+                                        " . $desc_html . "
+                                    </div>
+                                </div>
+                                <div>
+                                    " . $backup_action . "
+                                </div>
+                            </div>
+                        </td>
+                    </tr>";
+                }
+                return $rowHtml;
+            };
 
             foreach ($clustered_data as $key => $group) {
-                $main = $group[0];
-                if (trim($main['incident_type']) === trim($inc['incident_type'])) {
-                    $dist = getDistanceMeters($lat, $lng, (float)$main['latitude'], (float)$main['longitude']);
-                    if ($dist <= 100) {
-                        $clustered_data[$key][] = $inc;
-                        $found_cluster = true;
-                        break;
-                    }
-                }
-            }
+                $count = count($group);
+                if ($count > 1) {
+                    $cluster_ids = array_map(function($i) { return $i['id']; }, $group);
+                    $cluster_ids_str = implode(",", $cluster_ids);
 
-            if (!$found_cluster) {
-                $clustered_data["cluster_" . $inc['id']] = [$inc];
-            }
-        }
-
-        $renderRow = function($inc, $role, $extraClass, $extraStyle, $targetIds = null, $isParent = false, $duplicateCount = 0, $clusterKey = '') {
-            $status = $inc['status'] ?? 'active';
-            $coords = $inc['latitude'] . ", " . $inc['longitude'];
-            $exact_time = date('h:i A', strtotime($inc['created_at']));
-            $exact_date = date('M d, Y', strtotime($inc['created_at']));
-            $user_logs = $inc['user_logs'] ?? 'No additional details provided by the reporter.';
-
-            $full_name = trim(($inc['first_name'] ?? '') . ' ' . ($inc['last_name'] ?? ''));
-            $reporter_display = !empty($full_name) ? $full_name : ($inc['username'] ?? 'Anonymous');
-            $extra_info = (!empty($inc['reporter_pos']) ? $inc['reporter_pos'] . " | " : "") . ($inc['reporter_phone'] ?? "No Contact");
-
-            $safe_img = htmlspecialchars(addslashes($inc['image_path'] ?? ''), ENT_QUOTES);
-            $safe_type = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
-            $safe_brgy = htmlspecialchars(addslashes($inc['display_brgy']), ENT_QUOTES);
-            $safe_rep = htmlspecialchars(addslashes($reporter_display), ENT_QUOTES);
-            $safe_logs = htmlspecialchars(addslashes(preg_replace('/\s+/', ' ', $user_logs)), ENT_QUOTES);
-            $safe_extra = htmlspecialchars(addslashes($extra_info), ENT_QUOTES);
-            $safe_backup = (int)$inc['backup_requested'];
-
-            $dispatch_id = $targetIds ?: $inc['id'];
-
-            $btn_color = (!empty($safe_img) && $safe_img !== 'NULL') ? '#424242' : '#999999';
-            $btn_icon = (!empty($safe_img) && $safe_img !== 'NULL') ? 'bx-camera' : 'bx-info-circle';
-            $evidence_btn = "<button class='btn-sm' style='background:$btn_color; margin: 0 auto;' onclick='event.stopPropagation(); viewEvidence(\"$safe_img\", \"$safe_type\", \"$safe_brgy\", \"$exact_date\", \"$exact_time\", \"$safe_rep\", \"$safe_logs\", \"$safe_extra\", $safe_backup)'><i class='bx $btn_icon'></i></button>";
-
-            $sev_badge = ($inc['severity'] === 'Critical') ? 'critical' : (($inc['severity'] === 'Major') ? 'major' : 'warning');
-            $display_sev = htmlspecialchars(strtoupper($inc['severity'] ?? 'PENDING'));
-
-            $status_html = "";
-            if ($inc['backup_requested'] == 1) { $status_html .= "<span class='badge' style='background:#b10000; animation: blink 1s infinite; width:100%; justify-content:center; margin-top:5px;'>🚨 BACKUP NEEDED</span><style>@keyframes blink { 50% { opacity: 0; } }</style>"; }
-
-            $status_lower = strtolower($status);
-            if ($status_lower === 'on-scene') { $status_html .= "<span class='badge on-scene' style='margin-top:6px; font-size:9px; width:100%; justify-content:center;'><i class='bx bx-check-circle'></i> ON SCENE</span>"; } 
-            elseif ($status_lower === 'dispatched') { $status_html .= "<span class='badge info' style='margin-top:6px; font-size:9px; width:100%; justify-content:center;'><i class='bx bxs-truck'></i> EN ROUTE</span>"; } 
-            else { $status_html .= "<small style='font-size:10px; display:block; margin-top:6px; font-weight:800; color:#666;'>Status: ".strtoupper($status)."</small>"; }
-
-            $is_pending_verification = ($inc['is_verified'] == 0);
-            $verified_by_name = htmlspecialchars($inc['verified_by'] ?? 'N/A');
-
-            $action_btns = "<div class='action-btn-container' data-incident-ids='$dispatch_id' style='display:flex; flex-direction:column; gap:6px; align-items:center; justify-content:center;'>";
-            if ($status_lower === 'active' || $status_lower === 'pending') {
-                if ($role === 'superadmin') {
-                    if ($inc['backup_requested'] == 0) { 
-                        $action_btns .= "<span style='color:#f57c00; font-size:0.75rem; font-weight:bold; font-style:italic; text-align:center;'><i class='bx bx-radar bx-burst'></i> Awaiting Local</span>"; 
-                    } else { 
-                        $action_btns .= "<span style='color:#d32f2f; font-size:0.75rem; font-weight:bold; font-style:italic; text-align:center;'><i class='bx bxs-error bx-flashing'></i> Backup Needed</span>"; 
-                    }
-
-                    if (!$is_pending_verification) {
-                        $action_btns .= "<div class='verified-by-text' style='color: #666; font-size: 0.75rem; font-weight: 700; margin-top: 4px; text-align: center;'>Verified by:<br><span style='color: #8e24aa;'>$verified_by_name</span></div>";
+                    $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", $cluster_ids_str, true, $count - 1, $key);
+                    for ($i = 1; $i < $count; $i++) {
+                        $html .= $renderRow($group[$i], $role, "cluster-row-$key cluster-child", "display: none; background: var(--surface-subtle); border-left: 4px solid var(--color-info, #1976d2);", null, false, 0, "");
                     }
                 } else {
-                    if ($is_pending_verification) {
-                        $action_btns .= "
-                            <div class='verify-btn-wrapper' style='width:100%; position: relative;'>
-                                <button class='btn-sm verify-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); toggleVerifyDropdown(this)'><i class='bx bx-check-shield' style='font-size: 1.1rem;'></i> Verify</button>
-                                <div class='verify-dropdown' style='display:none; position: absolute; background: white; border: 1px solid #ccc; border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); z-index: 100; width:150px; left:50%; transform:translateX(-50%); padding:5px;'>
-                                    <button class='btn-sm confirm-verify-btn' style='background:#388e3c; color: white !important; width: 100%; justify-content: center; margin-bottom: 5px;' onclick='event.stopPropagation(); confirmVerifyIncident(\"$dispatch_id\", this)' data-confirm-ids='$dispatch_id'>Confirm</button>
-                                    <button class='btn-sm cancel-verify-btn' style='background:#555555; color: white !important; width: 100%; justify-content: center;' onclick='event.stopPropagation(); hideVerifyDropdown(this)'>Cancel</button>
-                                </div>
-                            </div>
-                        ";
-                        $action_btns .= "<button class='btn-sm reject-btn' style='background:#555555; width: 100%; justify-content: center;' onclick='event.stopPropagation(); rejectIncident(\"$dispatch_id\")'><i class='bx bx-x-circle' style='font-size: 1.1rem;'></i> Reject</button>";
-                    } else {
-                        $action_btns .= "<button class='btn-sm sev-btn' style='background:#8e24aa; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openVerifyModal(\"$dispatch_id\")'><i class='bx bx-slider' style='font-size: 1.1rem;'></i> Change Severity</button>";
-                        $action_btns .= "<button class='btn-sm dispatch-btn' style='background:#388e3c; width: 100%; justify-content: center;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type\")'><i class='bx bxs-truck' style='font-size: 1.1rem;'></i> Dispatch</button>";
-                    }
+                    $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");
                 }
-            } elseif ($status_lower === 'dispatched' || $status_lower === 'en route' || $status_lower === 'en_route' || $status_lower === 'on-scene') {
-                $action_btns .= "<button class='btn-sm' style='background:#d32f2f; padding: 10px 15px; font-size: 0.9rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); cancelDispatch(\"$dispatch_id\")'><i class='bx bx-undo' style='font-size: 1.1rem;'></i> Recall</button>";
-                if ($role !== 'superadmin' && $inc['backup_requested'] == 0) { $action_btns .= "<button class='btn-sm' style='background:#f57c00; padding: 10px 15px; width: 100%; justify-content: center;' onclick='event.stopPropagation(); requestBackup(\"$dispatch_id\")'><i class='bx bxs-error-circle'></i> Need Backup</button>"; }
-            } else {
-                $action_btns .= "<span style='color:#888; font-size:0.85rem; font-weight:bold; font-style:italic;'>No Actions</span>";
             }
-            $action_btns .= "</div>";
-
-            if ($extraClass != "" && strpos($extraClass, 'cluster-row') !== false) {
-                $action_btns = "<span style='color: var(--text-muted, #888); font-size: 0.8rem; font-weight: bold; background: var(--surface-subtle, rgba(128,128,128,0.15)); border: 1px solid var(--border-color, rgba(128,128,128,0.2)); padding: 5px 10px; border-radius: 8px;'><i class='bx bx-link'></i> Merged to Primary</span>";
-            }
-
-            $incident_info = "<span style='font-weight:700;'>".htmlspecialchars($inc['incident_type'])."</span><br>
-                              <small style='color:#666; font-style:italic;'>\"".htmlspecialchars(substr($user_logs, 0, 45))."...\"</small>";
-
-            if ($isParent && $duplicateCount > 0) {
-                $incident_info .= "<div style='margin-top: 8px;'><span style='background: rgba(25,118,210,0.1); color: #1976d2; padding: 4px 8px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; border: 1px solid rgba(255,255,255,0.3); display: inline-flex; align-items: center; gap: 4px;'><i id='icon_$clusterKey' class='bx bx-folder-plus' style='font-size: 1rem;'></i> +$duplicateCount DUPLICATE</span> <small style='color: #888; margin-left: 5px; font-weight: bold;'>Click to expand</small></div>";
-            }
-
-            $clusterCall = ($isParent && $duplicateCount > 0) ? "toggleCluster(\"$clusterKey\");" : "";
-            $onclick = "onclick='openMobileModal(this); toggleBackupRow({$inc['id']}); $clusterCall'";
-
-            $rowHtml = "<tr class='$extraClass' style='cursor: pointer; $extraStyle' $onclick>
-                <td style='vertical-align: middle;'><div style='font-weight: 800; font-size: 1.1rem; color: #d32f2f;'>{$exact_time}</div><div style='font-size: 0.85rem; color: #888; font-weight: 600;'>{$exact_date}</div></td>
-                <td style='vertical-align: middle;'><div><b>".htmlspecialchars($inc['display_brgy'])."</b><br><small style='color:#d32f2f; font-weight:700;'>$coords</small><br><small style='color:#555;'>Rep: ".htmlspecialchars($reporter_display)."</small></div></td>
-                <td class='mobile-hide' style='vertical-align: middle;'>$incident_info</td>
-                <td class='mobile-hide' style='text-align:center; vertical-align: middle;'>$evidence_btn</td>
-                <td class='mobile-hide' style='text-align:center; vertical-align: middle;'><span class='badge $sev_badge' style='width:100%; justify-content:center;'>$display_sev</span><br>$status_html</td>
-                <td class='mobile-hide' style='vertical-align: middle; width: 150px; padding-right: 25px;'>$action_btns</td>
-            </tr>";
-
-            $assigned_text = (string)($inc['assigned_to'] ?? '');
-            $has_city_backup = (strpos($assigned_text, '[City Backup:') !== false);
-            $is_backup_requested = ((int)$inc['backup_requested'] === 1);
-
-            if (($is_backup_requested || $has_city_backup) && (!strpos($extraClass, 'cluster-row'))) {
-                $safe_type_backup = htmlspecialchars(addslashes($inc['incident_type']), ENT_QUOTES);
-
-                if ($has_city_backup) {
-                    preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
-                    $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
-
-                    $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
-                    $backup_action = ($role === 'superadmin') 
-                        ? "<div style='display: flex; gap: 8px; align-items: center;'><button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup({$inc['id']})'><i class='bx bx-undo'></i> Recall City Backup</button></div>"
-                        : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>";
-                } else {
-                    $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>🚨 BACKUP NEEDED</span>";
-                    $desc_html = "<b style='color: #ff9800;'>Local responders requested additional support.</b>";
-                    $backup_action = ($role === 'superadmin') 
-                        ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>" 
-                        : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
-                }
-
-                $rowHtml .= "
-                <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.08);'>
-                    <td colspan='6' style='padding: 10px 18px; border-left: 4px solid #f57c00;'>
-                        <div style='display: flex; align-items: center; justify-content: space-between;'>
-                            <div style='display: flex; align-items: center; gap: 12px;'>
-                                " . ($badge_html ?? '') . "
-                                <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
-                                    " . $desc_html . "
-                                </div>
-                            </div>
-                            <div>
-                                " . $backup_action . "
-                            </div>
-                        </div>
-                    </td>
-                </tr>";
-            }
-            return $rowHtml;
-        };
-
-        foreach ($clustered_data as $key => $group) {
-            $count = count($group);
-            if ($count > 1) {
-                $cluster_ids = array_map(function($i) { return $i['id']; }, $group);
-                $cluster_ids_str = implode(",", $cluster_ids);
-
-                $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", $cluster_ids_str, true, $count - 1, $key);
-                for ($i = 1; $i < $count; $i++) {
-                    $html .= $renderRow($group[$i], $role, "cluster-row-$key cluster-child", "display: none; background: var(--surface-subtle); border-left: 4px solid var(--color-info, #1976d2);", null, false, 0, "");
-                }
-            } else {
-                $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");
-            }
+        } else {
+            $html = "<tr><td colspan='6' style='text-align:center; padding:40px; color:#888; font-weight:600;'>No active reports.</td></tr>";
         }
-    } else {
-        $html = "<tr><td colspan='6' style='text-align:center; padding:40px; color:#888; font-weight:600;'>No active reports.</td></tr>";
+
+        $response['table'] = $html;
+        return $response;
     }
 
-    $response['table'] = $html;
-    return $response;
-}
+    if ($action === 'master_sync') {
+        requireRole($ADMIN_TIER_ROLES, $role);
+        session_write_close(); 
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
 
-if ($action === 'master_sync') {
-    requireRole($ADMIN_TIER_ROLES, $role);
-    session_write_close(); 
-    while (ob_get_level() > 0) { ob_end_clean(); }
-    header('Content-Type: application/json');
-
-    $target_brgy = $_GET['brgy'] ?? '';
-    $type        = $_GET['type'] ?? 'all';
-    echo json_encode(compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type));
-    exit();
-}
-
-if ($action === 'sse_stream') {
-    requireRole($ADMIN_TIER_ROLES, $role);
-    session_write_close(); 
-    while (ob_get_level() > 0) { ob_end_clean(); }
-
-    header('Content-Type: text/event-stream');
-    header('Cache-Control: no-cache');
-    header('Connection: keep-alive');
-    header('X-Accel-Buffering: no');
-
-    set_time_limit(0);
-    ignore_user_abort(false);
-
-    $target_brgy = $_GET['brgy'] ?? '';
-    $type        = $_GET['type'] ?? 'all';
-
-    while (!connection_aborted()) {
-        $payload = compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type);
-        echo "data: " . json_encode($payload) . "\n\n";
-
-        while (ob_get_level() > 0) {
-            ob_end_flush();
-        }
-        flush();
-
-        if (connection_aborted()) {
-            break;
-        }
-        sleep(3);
+        $target_brgy = $_GET['brgy'] ?? '';
+        $type        = $_GET['type'] ?? 'all';
+        echo json_encode(compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type));
+        exit();
     }
-    exit();
-}
+
+    if ($action === 'sse_stream') {
+        requireRole($ADMIN_TIER_ROLES, $role);
+        session_write_close(); 
+        while (ob_get_level() > 0) { ob_end_clean(); }
+
+        header('Content-Type: text/event-stream');
+        header('Cache-Control: no-cache');
+        header('Connection: keep-alive');
+        header('X-Accel-Buffering: no');
+
+        set_time_limit(0);
+        ignore_user_abort(false);
+
+        $target_brgy = $_GET['brgy'] ?? '';
+        $type        = $_GET['type'] ?? 'all';
+
+        while (!connection_aborted()) {
+            $payload = compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type);
+            echo "data: " . json_encode($payload) . "\n\n";
+
+            while (ob_get_level() > 0) {
+                ob_end_flush();
+            }
+            flush();
+
+            if (connection_aborted()) {
+                break;
+            }
+            sleep(3);
+        }
+        exit();
+    }
     
+    // 2. FETCH AVAILABLE/OPERATIONAL TEAMS (ON DUTY)
     if ($action === 'get_available_teams') {
         requireRole($ADMIN_TIER_ROLES, $role);
         ob_end_clean();
@@ -796,7 +853,7 @@ if ($action === 'sse_stream') {
         
         $query = "SELECT id, team_name, team_type, assigned_barangay 
                   FROM response_teams 
-                  WHERE LOWER(TRIM(status)) = 'available' " . $team_brgy_filter;
+                  WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty') " . $team_brgy_filter;
                   
         $stmt = $conn->prepare($query);
         if (!empty($params)) { $stmt->bind_param($types, ...$params); }
@@ -895,7 +952,7 @@ if ($action === 'sse_stream') {
 }
 
 // =========================================================================================
-// 🚀 POST REQUESTS
+// POST REQUESTS
 // =========================================================================================
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
@@ -949,7 +1006,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             exit();
         }
 
-        $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'available', current_incident_id = NULL WHERE current_incident_id = ?");
+        // Return to operational
+        $stmt_rt = $conn->prepare("UPDATE response_teams SET status = 'operational', current_incident_id = NULL WHERE current_incident_id = ?");
         $stmt_rt->bind_param("i", $incident_id);
         $stmt_rt->execute();
         $stmt_rt->close();
@@ -977,12 +1035,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
         $status = $_POST['status'];
-        if ($status === 'available' || $status === 'maintenance') {
+        if ($status === 'available' || $status === 'operational' || $status === 'maintenance') {
+            $save_status = ($status === 'available') ? 'operational' : $status;
             $stmt = $conn->prepare("UPDATE response_teams SET status = ?, current_incident_id = NULL WHERE id = ?");
+            $stmt->bind_param("si", $save_status, $id);
         } else {
             $stmt = $conn->prepare("UPDATE response_teams SET status = ? WHERE id = ?");
+            $stmt->bind_param("si", $status, $id);
         }
-        $stmt->bind_param("si", $status, $id);
         if ($stmt->execute()) { ob_end_clean(); echo "success"; } else { ob_end_clean(); echo "error"; }
         $stmt->close();
         exit();
@@ -994,7 +1054,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $type = $_POST['team_type'] ?? '';
         $assigned_brgy = $_POST['assigned_barangay'] ?? ''; 
         
-        $stmt = $conn->prepare("INSERT INTO response_teams (team_name, team_type, assigned_barangay, status) VALUES (?, ?, ?, 'available')");
+        $stmt = $conn->prepare("INSERT INTO response_teams (team_name, team_type, assigned_barangay, status) VALUES (?, ?, ?, 'operational')");
         $stmt->bind_param("sss", $name, $type, $assigned_brgy);
         if ($stmt->execute()) { ob_end_clean(); echo "success"; } else { ob_end_clean(); echo "error"; }
         $stmt->close();
@@ -1126,7 +1186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!empty($ids_array)) {
             $id_list = implode(',', $ids_array);
             $conn->query("UPDATE incidents SET status = 'archived' WHERE id IN ($id_list)");
-            $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'available' WHERE current_incident_id IN ($id_list)");
+            $conn->query("UPDATE response_teams SET current_incident_id = NULL, status = 'operational' WHERE current_incident_id IN ($id_list)");
         }
         ob_end_clean(); echo "success"; exit();
     }
@@ -1156,7 +1216,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $placeholders = implode(',', array_fill(0, count($backup_team_names), '?'));
                         $types = str_repeat('s', count($backup_team_names));
                         
-                        $rt_sql = "UPDATE response_teams SET current_incident_id = NULL, status = 'available' 
+                        $rt_sql = "UPDATE response_teams SET current_incident_id = NULL, status = 'operational' 
                                    WHERE current_incident_id = ? AND team_name IN ($placeholders)";
                         $stmt_rt = $conn->prepare($rt_sql);
                         $bind_params = array_merge([$incident_id], $backup_team_names);
@@ -1187,7 +1247,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ob_end_clean(); echo "success"; exit();
     }
 
-    // 🚀 SECURED: Update Admin Account (Cloudinary Multi-format with JFIF support)
     if ($action === 'update_admin_account') {
         while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json');
@@ -1432,7 +1491,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         
         $stmt = $conn->prepare("UPDATE users SET role = ? WHERE id = ?");
-        $stmt->bind_param("si", $new_role, $target_user);
+        $stmt->bind_param("si", $target_user);
         
         if ($stmt->execute()) { 
             ob_end_clean(); echo json_encode(['success' => true]); 
