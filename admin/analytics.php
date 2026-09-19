@@ -618,8 +618,17 @@ foreach ($archived_incidents as $inc) {
                 </div>
             </div>
 
-            <!-- 4. Scope & Content -->
-            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: #555; text-transform: uppercase;">Include Sections</label>
+           <!-- 4. Incident / Accident Type Filter -->
+            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: var(--text-muted, #555); text-transform: uppercase;">Incident / Accident Type</label>
+            <select id="rep_incident_type" class="filter-select" style="width: 100%; margin-bottom: 16px;">
+                <option value="all">All Incident & Accident Types</option>
+                <?php foreach($unique_types as $type): ?>
+                    <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars($type) ?></option>
+                <?php endforeach; ?>
+            </select>
+
+            <!-- 5. Scope & Content -->
+            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: var(--text-muted, #555); text-transform: uppercase;">Include Sections</label>
             <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
                     <input type="checkbox" id="inc_vault" checked> Incident Archive Vault (Resolved Emergencies)

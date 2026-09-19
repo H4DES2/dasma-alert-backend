@@ -196,7 +196,6 @@ function openReportModal() {
     const weekEnd = document.getElementById('rep_week_end');
     const monthInput = document.getElementById('rep_month');
 
-    // Strict future lock
     if (dayInput) { dayInput.max = b.dateStr; dayInput.value = b.dateStr; }
     if (weekStart) { weekStart.max = b.dateStr; }
     if (weekEnd) { weekEnd.max = b.dateStr; weekEnd.value = b.dateStr; }
@@ -219,6 +218,22 @@ function openReportModal() {
             sel.appendChild(opt);
         }
     });
+
+    // Populate Incident / Accident Types dynamically
+    const typeSelect = document.getElementById('rep_incident_type');
+    if (typeSelect) {
+        const typesSet = new Set();
+        allIncidents.forEach(i => { if (i.incident_type) typesSet.add(i.incident_type.trim()); });
+        binIncidents.forEach(b => { if (b.incident_type) typesSet.add(b.incident_type.trim()); });
+
+        typeSelect.innerHTML = '<option value="all">All Incident & Accident Types</option>';
+        Array.from(typesSet).sort().forEach(typeName => {
+            const opt = document.createElement('option');
+            opt.value = typeName;
+            opt.textContent = typeName;
+            typeSelect.appendChild(opt);
+        });
+    }
 
     updateQuarterOptions();
     handlePeriodChange();
@@ -338,28 +353,37 @@ function processReportGeneration() {
     const format = document.querySelector('input[name="rep_format"]:checked')?.value || 'pdf';
     const incVault = document.getElementById('inc_vault')?.checked ?? true;
     const incBin = document.getElementById('inc_bin')?.checked ?? true;
+    const selectedType = document.getElementById('rep_incident_type')?.value || 'all';
+
+    const matchType = (itemType) => {
+        if (selectedType === 'all') return true;
+        return (itemType || '').toLowerCase() === selectedType.toLowerCase();
+    };
 
     const filteredVault = incVault ? allIncidents.filter(i => {
         const d = new Date(i.created_at.replace(' ', 'T'));
-        return d >= range.start && d <= range.end;
+        return d >= range.start && d <= range.end && matchType(i.incident_type);
     }) : [];
 
     const filteredBin = incBin ? binIncidents.filter(i => {
         const d = new Date(i.created_at.replace(' ', 'T'));
-        return d >= range.start && d <= range.end;
+        return d >= range.start && d <= range.end && matchType(b.incident_type);
     }) : [];
 
     if (filteredVault.length === 0 && filteredBin.length === 0) {
-        alert(`No incident or rejection records found for: ${range.label}`);
+        const typeLabel = selectedType === 'all' ? '' : ` for "${selectedType}"`;
+        alert(`No records found for: ${range.label}${typeLabel}`);
         return;
     }
 
     closeModal('customReportModal');
 
+    const metaLabel = `${range.label}${selectedType === 'all' ? '' : ' | Type: ' + selectedType}`;
+
     if (format === 'csv') {
-        generateCustomCSV(filteredVault, filteredBin, range.label);
+        generateCustomCSV(filteredVault, filteredBin, metaLabel);
     } else {
-        generateCustomPDF(filteredVault, filteredBin, range.label);
+        generateCustomPDF(filteredVault, filteredBin, metaLabel);
     }
 }
 
