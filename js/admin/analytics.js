@@ -15,7 +15,6 @@ document.addEventListener("DOMContentLoaded", function() {
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
     const textColor = isDarkMode ? '#8b949e' : '#888';
 
-    // Pie Chart
     const pieCanvas = document.getElementById('typePieChart');
     if (pieCanvas) {
         new Chart(pieCanvas.getContext('2d'), {
@@ -53,7 +52,6 @@ document.addEventListener("DOMContentLoaded", function() {
 
     renderSeasonality();
 
-    // Evacuation Overflow Bar Chart
     const evacCanvas = document.getElementById('evacOverflowChart');
     if (evacCanvas) {
         new Chart(evacCanvas.getContext('2d'), {
@@ -77,7 +75,6 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // Leaflet Heatmap
     const heatmapEl = document.getElementById('heatmap');
     if (heatmapEl) {
         let dasmaBounds = L.latLngBounds([14.2700, 120.9150], [14.3750, 121.0100]);
@@ -172,7 +169,7 @@ function renderSeasonality() {
 }
 
 // -----------------------------------------------------
-// 3. REPORT BUILDER: STRICT FUTURE-LOCKED TIMEFRAME
+// 3. REPORT BUILDER: TIMEFRAME & INCIDENT TYPE LOGIC
 // -----------------------------------------------------
 function getTodayBounds() {
     const now = new Date();
@@ -196,6 +193,7 @@ function openReportModal() {
     const weekEnd = document.getElementById('rep_week_end');
     const monthInput = document.getElementById('rep_month');
 
+    // Future-date locks
     if (dayInput) { dayInput.max = b.dateStr; dayInput.value = b.dateStr; }
     if (weekStart) { weekStart.max = b.dateStr; }
     if (weekEnd) { weekEnd.max = b.dateStr; weekEnd.value = b.dateStr; }
@@ -219,20 +217,44 @@ function openReportModal() {
         }
     });
 
-    // Populate Incident / Accident Types dynamically
+    // Populate Incident & Accident Types Dropdown
     const typeSelect = document.getElementById('rep_incident_type');
     if (typeSelect) {
         const typesSet = new Set();
         allIncidents.forEach(i => { if (i.incident_type) typesSet.add(i.incident_type.trim()); });
         binIncidents.forEach(b => { if (b.incident_type) typesSet.add(b.incident_type.trim()); });
 
-        typeSelect.innerHTML = '<option value="all">All Incident & Accident Types</option>';
-        Array.from(typesSet).sort().forEach(typeName => {
-            const opt = document.createElement('option');
-            opt.value = typeName;
-            opt.textContent = typeName;
-            typeSelect.appendChild(opt);
+        const categoriesSet = new Set();
+        typesSet.forEach(t => {
+            const mainCat = t.split('-')[0].trim();
+            if (mainCat) categoriesSet.add(mainCat);
         });
+
+        // Ensure primary accident/emergency categories are present if matched
+        ['Accident', 'Vehicular Accident', 'Fire', 'Medical', 'Rescue', 'Crime'].forEach(cat => {
+            let hasMatch = false;
+            typesSet.forEach(t => {
+                if (t.toLowerCase().includes(cat.toLowerCase())) hasMatch = true;
+            });
+            if (hasMatch) categoriesSet.add(cat);
+        });
+
+        let html = '<option value="all">All Incident & Accident Types</option>';
+        if (categoriesSet.size > 0) {
+            html += '<optgroup label="Broad Incident Categories">';
+            Array.from(categoriesSet).sort().forEach(cat => {
+                html += `<option value="cat:${cat}">All ${cat} Incidents</option>`;
+            });
+            html += '</optgroup>';
+        }
+        if (typesSet.size > 0) {
+            html += '<optgroup label="Specific Subtypes">';
+            Array.from(typesSet).sort().forEach(t => {
+                html += `<option value="${t}">${t}</option>`;
+            });
+            html += '</optgroup>';
+        }
+        typeSelect.innerHTML = html;
     }
 
     updateQuarterOptions();
@@ -346,6 +368,22 @@ function getDateFilterRange() {
     return { start, end, label };
 }
 
+function matchIncidentType(itemType, filterVal) {
+    if (!filterVal || filterVal === 'all') return true;
+    if (!itemType) return false;
+    const iType = itemType.toLowerCase().trim();
+
+    if (filterVal.startsWith('cat:')) {
+        const cat = filterVal.replace('cat:', '').toLowerCase().trim();
+        if (cat === 'accident' || cat === 'vehicular accident') {
+            return iType.includes('accident') || iType.includes('crash') || iType.includes('collision') || iType.includes('vehicular');
+        }
+        return iType.startsWith(cat) || iType.includes(cat);
+    }
+
+    return iType === filterVal.toLowerCase().trim();
+}
+
 function processReportGeneration() {
     const range = getDateFilterRange();
     if (!range) return;
@@ -353,82 +391,275 @@ function processReportGeneration() {
     const format = document.querySelector('input[name="rep_format"]:checked')?.value || 'pdf';
     const incVault = document.getElementById('inc_vault')?.checked ?? true;
     const incBin = document.getElementById('inc_bin')?.checked ?? true;
+    const groupByType = document.getElementById('inc_group_type')?.checked ?? true;
     const selectedType = document.getElementById('rep_incident_type')?.value || 'all';
 
-    const matchType = (itemType) => {
-        if (selectedType === 'all') return true;
-        return (itemType || '').toLowerCase() === selectedType.toLowerCase();
-    };
+    const typeSelectEl = document.getElementById('rep_incident_type');
+    const selectedTypeLabel = typeSelectEl && typeSelectEl.selectedIndex >= 0 
+        ? typeSelectEl.options[typeSelectEl.selectedIndex].text 
+        : 'All Incident Types';
 
     const filteredVault = incVault ? allIncidents.filter(i => {
         const d = new Date(i.created_at.replace(' ', 'T'));
-        return d >= range.start && d <= range.end && matchType(i.incident_type);
+        return d >= range.start && d <= range.end && matchIncidentType(i.incident_type, selectedType);
     }) : [];
 
-    const filteredBin = incBin ? binIncidents.filter(i => {
-        const d = new Date(i.created_at.replace(' ', 'T'));
-        return d >= range.start && d <= range.end && matchType(b.incident_type);
+    const filteredBin = incBin ? binIncidents.filter(b => {
+        const d = new Date(b.created_at.replace(' ', 'T'));
+        return d >= range.start && d <= range.end && matchIncidentType(b.incident_type, selectedType);
     }) : [];
 
     if (filteredVault.length === 0 && filteredBin.length === 0) {
-        const typeLabel = selectedType === 'all' ? '' : ` for "${selectedType}"`;
-        alert(`No records found for: ${range.label}${typeLabel}`);
+        alert(`No records found for timeframe: ${range.label} with filter "${selectedTypeLabel}".`);
         return;
     }
 
     closeModal('customReportModal');
 
-    const metaLabel = `${range.label}${selectedType === 'all' ? '' : ' | Type: ' + selectedType}`;
-
     if (format === 'csv') {
-        generateCustomCSV(filteredVault, filteredBin, metaLabel);
+        generateCustomCSV(filteredVault, filteredBin, range.label, selectedTypeLabel, groupByType);
     } else {
-        generateCustomPDF(filteredVault, filteredBin, metaLabel);
+        generateCustomPDF(filteredVault, filteredBin, range.label, selectedTypeLabel, groupByType);
     }
 }
 
-// -----------------------------------------------------
-// 4. GRANULAR EXPORT LOGIC (CSV & PDF)
-// -----------------------------------------------------
-function generateCustomCSV(vaultRows, binRows, rangeLabel) {
+function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, groupByType) {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF('landscape');
+
+    doc.setFontSize(18);
+    doc.setTextColor(25, 118, 210);
+    doc.text('CDRRMO Dasmariñas Incident Report', 14, 15);
+
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text(`Timeframe: ${rangeLabel}  |  Filter: ${selectedTypeLabel}  |  Generated: ${new Date().toLocaleString()}`, 14, 22);
+
+    let startY = 30;
+
+    // 1. INCIDENT ARCHIVE VAULT
+    if (vaultRows.length > 0) {
+        doc.setFontSize(14);
+        doc.setTextColor(33, 33, 33);
+        doc.text(`Incident Archive Vault (${vaultRows.length} Total Records)`, 14, startY);
+        startY += 6;
+
+        if (groupByType) {
+            const vaultByType = {};
+            vaultRows.forEach(i => {
+                const t = i.incident_type || 'Uncategorized';
+                if (!vaultByType[t]) vaultByType[t] = [];
+                vaultByType[t].push(i);
+            });
+
+            Object.keys(vaultByType).sort().forEach(typeKey => {
+                const rows = vaultByType[typeKey];
+                if (startY > 165) { doc.addPage(); startY = 20; }
+
+                doc.setFontSize(10);
+                doc.setTextColor(25, 118, 210);
+                doc.text(`• ${typeKey} (${rows.length} ${rows.length === 1 ? 'Record' : 'Records'})`, 14, startY);
+
+                const vData = rows.map(i => [
+                    i.id,
+                    i.severity,
+                    i.barangay,
+                    i.created_at,
+                    i.resolved_at || 'N/A',
+                    i.initial_log || 'No details'
+                ]);
+
+                doc.autoTable({
+                    startY: startY + 3,
+                    head: [['ID', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Description']],
+                    body: vData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [25, 118, 210] },
+                    styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+                });
+
+                startY = doc.lastAutoTable.finalY + 8;
+            });
+        } else {
+            const vData = vaultRows.map(i => [
+                i.id,
+                i.incident_type,
+                i.severity,
+                i.barangay,
+                i.created_at,
+                i.resolved_at || 'N/A',
+                i.initial_log || 'No details'
+            ]);
+
+            doc.autoTable({
+                startY: startY + 2,
+                head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Description']],
+                body: vData,
+                theme: 'grid',
+                headStyles: { fillColor: [25, 118, 210] },
+                styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+            });
+
+            startY = doc.lastAutoTable.finalY + 12;
+        }
+    }
+
+    // 2. REPORT BIN & REJECTION AUDIT
+    if (binRows.length > 0) {
+        if (startY > 155) { doc.addPage(); startY = 20; }
+
+        doc.setFontSize(14);
+        doc.setTextColor(211, 47, 47);
+        doc.text(`Report Bin & Rejection Audit (${binRows.length} Total Records)`, 14, startY);
+        startY += 6;
+
+        if (groupByType) {
+            const binByType = {};
+            binRows.forEach(b => {
+                const t = b.incident_type || 'Uncategorized';
+                if (!binByType[t]) binByType[t] = [];
+                binByType[t].push(b);
+            });
+
+            Object.keys(binByType).sort().forEach(typeKey => {
+                const rows = binByType[typeKey];
+                if (startY > 165) { doc.addPage(); startY = 20; }
+
+                doc.setFontSize(10);
+                doc.setTextColor(211, 47, 47);
+                doc.text(`• ${typeKey} — Rejections (${rows.length} ${rows.length === 1 ? 'Record' : 'Records'})`, 14, startY);
+
+                const bData = rows.map(b => [
+                    b.id,
+                    b.barangay,
+                    b.parsed_category || 'False Alarm',
+                    b.parsed_officer || 'Officer',
+                    b.parsed_notes || b.spam_reason || 'N/A'
+                ]);
+
+                doc.autoTable({
+                    startY: startY + 3,
+                    head: [['ID', 'Barangay', 'Rejection Category', 'Audited By', 'Official Explanation']],
+                    body: bData,
+                    theme: 'grid',
+                    headStyles: { fillColor: [211, 47, 47] },
+                    styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+                });
+
+                startY = doc.lastAutoTable.finalY + 8;
+            });
+        } else {
+            const bData = binRows.map(b => [
+                b.id,
+                b.incident_type,
+                b.barangay,
+                b.parsed_category || 'False Alarm',
+                b.parsed_officer || 'Officer',
+                b.parsed_notes || b.spam_reason || 'N/A'
+            ]);
+
+            doc.autoTable({
+                startY: startY + 2,
+                head: [['ID', 'Type', 'Barangay', 'Rejection Category', 'Audited By', 'Official Explanation']],
+                body: bData,
+                theme: 'grid',
+                headStyles: { fillColor: [211, 47, 47] },
+                styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+            });
+        }
+    }
+
+    doc.save(`Dasma_Alert_Report_${rangeLabel.replace(/[^a-z0-9]/gi, '_')}.pdf`);
+}
+
+function generateCustomCSV(vaultRows, binRows, rangeLabel, selectedTypeLabel, groupByType) {
     let csv = `\uFEFF--- DASMARINAS CITY CDRRMO AUDIT REPORT ---\n`;
     csv += `TIMEFRAME: ${rangeLabel}\n`;
+    csv += `FILTER: ${selectedTypeLabel}\n`;
+    csv += `GROUPED BY INCIDENT TYPE: ${groupByType ? 'YES' : 'NO'}\n`;
     csv += `GENERATED: ${new Date().toLocaleString()}\n\n`;
 
     if (vaultRows.length > 0) {
-        csv += `--- INCIDENT ARCHIVE VAULT (${vaultRows.length} Records) ---\n`;
-        csv += `ID,Type,Severity,Barangay,Reported Date,Resolved Date,Citizen Input,Full Timeline\n`;
-        vaultRows.forEach(i => {
-            csv += [
-                i.id,
-                `"${i.incident_type}"`,
-                i.severity,
-                `"${i.barangay}"`,
-                `"${i.created_at}"`,
-                `"${i.resolved_at || 'N/A'}"`,
-                `"${(i.initial_log || '').replace(/"/g, '""')}"`,
-                `"${(i.all_logs || '').replace(/\|\|\|/g, ' | ').replace(/\|-\|/g, ': ').replace(/"/g, '""')}"`
-            ].join(',') + '\n';
-        });
+        csv += `--- INCIDENT ARCHIVE VAULT (${vaultRows.length} Total Records) ---\n`;
+        if (groupByType) {
+            const vaultByType = {};
+            vaultRows.forEach(i => {
+                const t = i.incident_type || 'Uncategorized';
+                if (!vaultByType[t]) vaultByType[t] = [];
+                vaultByType[t].push(i);
+            });
+
+            Object.keys(vaultByType).sort().forEach(typeKey => {
+                csv += `\n[TYPE: ${typeKey.toUpperCase()}]\n`;
+                csv += `ID,Severity,Barangay,Reported Date,Resolved Date,Citizen Description\n`;
+                vaultByType[typeKey].forEach(i => {
+                    csv += [
+                        i.id,
+                        i.severity,
+                        `"${i.barangay}"`,
+                        `"${i.created_at}"`,
+                        `"${i.resolved_at || 'N/A'}"`,
+                        `"${(i.initial_log || '').replace(/"/g, '""')}"`
+                    ].join(',') + '\n';
+                });
+            });
+        } else {
+            csv += `ID,Type,Severity,Barangay,Reported Date,Resolved Date,Citizen Description\n`;
+            vaultRows.forEach(i => {
+                csv += [
+                    i.id,
+                    `"${i.incident_type}"`,
+                    i.severity,
+                    `"${i.barangay}"`,
+                    `"${i.created_at}"`,
+                    `"${i.resolved_at || 'N/A'}"`,
+                    `"${(i.initial_log || '').replace(/"/g, '""')}"`
+                ].join(',') + '\n';
+            });
+        }
         csv += '\n';
     }
 
     if (binRows.length > 0) {
-        csv += `--- REPORT BIN REJECTION AUDIT (${binRows.length} Records) ---\n`;
-        csv += `ID,Type,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation,Audit Logs\n`;
-        binRows.forEach(b => {
-            csv += [
-                b.id,
-                `"${b.incident_type}"`,
-                `"${b.barangay}"`,
-                `"${b.created_at}"`,
-                `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
-                `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
-                `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
-                `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`,
-                `"${(b.all_logs || '').replace(/\|\|\|/g, ' | ').replace(/\|-\|/g, ': ').replace(/"/g, '""')}"`
-            ].join(',') + '\n';
-        });
+        csv += `--- REPORT BIN REJECTION AUDIT (${binRows.length} Total Records) ---\n`;
+        if (groupByType) {
+            const binByType = {};
+            binRows.forEach(b => {
+                const t = b.incident_type || 'Uncategorized';
+                if (!binByType[t]) binByType[t] = [];
+                binByType[t].push(b);
+            });
+
+            Object.keys(binByType).sort().forEach(typeKey => {
+                csv += `\n[REJECTED TYPE: ${typeKey.toUpperCase()}]\n`;
+                csv += `ID,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation\n`;
+                binByType[typeKey].forEach(b => {
+                    csv += [
+                        b.id,
+                        `"${b.barangay}"`,
+                        `"${b.created_at}"`,
+                        `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
+                        `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
+                        `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
+                        `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`
+                    ].join(',') + '\n';
+                });
+            });
+        } else {
+            csv += `ID,Type,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation\n`;
+            binRows.forEach(b => {
+                csv += [
+                    b.id,
+                    `"${b.incident_type}"`,
+                    `"${b.barangay}"`,
+                    `"${b.created_at}"`,
+                    `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
+                    `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
+                    `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
+                    `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`
+                ].join(',') + '\n';
+            });
+        }
     }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -442,82 +673,6 @@ function generateCustomCSV(vaultRows, binRows, rangeLabel) {
     URL.revokeObjectURL(url);
 }
 
-function generateCustomPDF(vaultRows, binRows, rangeLabel) {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF('landscape');
-
-    doc.setFontSize(18);
-    doc.setTextColor(25, 118, 210);
-    doc.text('CDRRMO Dasmariñas Incident Report', 14, 15);
-
-    doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
-    doc.text(`Timeframe: ${rangeLabel}  |  Generated: ${new Date().toLocaleString()}`, 14, 22);
-
-    let startY = 30;
-
-    if (vaultRows.length > 0) {
-        doc.setFontSize(13);
-        doc.setTextColor(33, 33, 33);
-        doc.text(`Incident Archive Vault (${vaultRows.length} Records)`, 14, startY);
-
-        const vData = vaultRows.map(i => [
-            i.id,
-            i.incident_type,
-            i.severity,
-            i.barangay,
-            i.created_at,
-            i.resolved_at || 'N/A',
-            i.initial_log || 'No details'
-        ]);
-
-        doc.autoTable({
-            startY: startY + 4,
-            head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Note']],
-            body: vData,
-            theme: 'grid',
-            headStyles: { fillColor: [25, 118, 210] },
-            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
-        });
-
-        startY = doc.lastAutoTable.finalY + 12;
-    }
-
-    if (binRows.length > 0) {
-        if (startY > 155) {
-            doc.addPage();
-            startY = 20;
-        }
-
-        doc.setFontSize(13);
-        doc.setTextColor(211, 47, 47);
-        doc.text(`Report Bin & Rejection Audit (${binRows.length} Records)`, 14, startY);
-
-        const bData = binRows.map(b => [
-            b.id,
-            b.incident_type,
-            b.barangay,
-            b.parsed_category || 'False Alarm',
-            b.parsed_officer || 'Officer',
-            b.parsed_notes || b.spam_reason || 'N/A'
-        ]);
-
-        doc.autoTable({
-            startY: startY + 4,
-            head: [['ID', 'Type', 'Barangay', 'Category', 'Audited By', 'Official Reason']],
-            body: bData,
-            theme: 'grid',
-            headStyles: { fillColor: [211, 47, 47] },
-            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
-        });
-    }
-
-    doc.save(`Dasma_Alert_Report_${rangeLabel.replace(/[^a-z0-9]/gi, '_')}.pdf`);
-}
-
-// -----------------------------------------------------
-// 5. COLD STORAGE: REPORT BACKUP (OFFLINE SNAPSHOT)
-// -----------------------------------------------------
 function backupAllReports() {
     if (!confirm('Download a complete offline report backup snapshot (Archive Vault + Report Bin + Audit Logs)?')) {
         return;

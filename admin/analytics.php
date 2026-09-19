@@ -636,6 +636,9 @@ foreach ($archived_incidents as $inc) {
                 <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
                     <input type="checkbox" id="inc_bin" checked> Report Bin (False Alarms & Rejections Audit)
                 </label>
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+                    <input type="checkbox" id="inc_group_type" checked> Categorize & Filter by Incident Type (Separate Tables per Emergency)
+                </label>
             </div>
 
             <button type="button" class="btn-action" style="width: 100%; background: #1976d2; padding: 14px; font-size: 1rem;" onclick="processReportGeneration()">
