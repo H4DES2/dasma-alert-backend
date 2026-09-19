@@ -14,16 +14,15 @@ $role = $_SESSION['role'];
 $user_id = $_SESSION['user_id'];
 
 // --- GET LOCAL BARANGAY ---
-// PATCH: prepared stmt for user_id
 $u_stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
-$u_stmt->bind_param("i",$user_id);
+$u_stmt->bind_param("i", $user_id);
 $u_stmt->execute();
 $u_data = $u_stmt->get_result()->fetch_assoc();
 $u_stmt->close();
-$my_brgy = $u_data['barangay'] ?? '';
+$my_brgy = trim($u_data['barangay'] ?? '');
 $safe_brgy = $conn->real_escape_string($my_brgy);
 
-// 🚀 THE FIX: Geofence the database queries based on the Admin's jurisdiction
+// Geofence the database queries based on the Admin's jurisdiction
 $team_filter = "";
 if ($role === 'admin' || $role === 'barangay_admin') {
     $team_filter = " AND (
@@ -34,18 +33,17 @@ if ($role === 'admin' || $role === 'barangay_admin') {
     )";
 }
 
-// --- FETCH KPI DATA (Now accurately filtered for Local Admins) ---
+// --- FETCH KPI DATA (Correctly includes 'operational' as available units) ---
 $res_total = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE 1=1 $team_filter");
 $total_teams = $res_total->fetch_assoc()['count'] ?? 0;
 
-$res_avail = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(status) = 'available' $team_filter");
+$res_avail = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(TRIM(status)) IN ('available', 'operational') $team_filter");
 $avail_teams = $res_avail->fetch_assoc()['count'] ?? 0;
 
-// 🚀 THE FIX: Catch 'deployed', 'on-scene', and 'dispatched' statuses
-$res_dep = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(status) IN ('deployed', 'on-scene', 'dispatched') $team_filter");
+$res_dep = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(TRIM(status)) IN ('deployed', 'on-scene', 'dispatched') $team_filter");
 $dep_teams = $res_dep->fetch_assoc()['count'] ?? 0;
 
-$res_maint = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(status) = 'maintenance' $team_filter");
+$res_maint = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(TRIM(status)) = 'maintenance' $team_filter");
 $maint_teams = $res_maint->fetch_assoc()['count'] ?? 0;
 
 // --- FETCH ALL TEAMS FOR THE TABLE AND HOVER LISTS ---
@@ -59,8 +57,8 @@ $maint_list = [];
 if ($teams_result && $teams_result->num_rows > 0) {
     $teams = $teams_result->fetch_all(MYSQLI_ASSOC);
     foreach($teams as $t) {
-        $stat = strtolower($t['status']);
-        if($stat === 'available') $avail_list[] = $t;
+        $stat = strtolower(trim($t['status']));
+        if($stat === 'available' || $stat === 'operational') $avail_list[] = $t;
         if($stat === 'deployed' || $stat === 'on-scene' || $stat === 'dispatched') $dep_list[] = $t;
         if($stat === 'maintenance') $maint_list[] = $t;
     }
@@ -81,7 +79,9 @@ if ($teams_result && $teams_result->num_rows > 0) {
 
     <main class="main-content">
         <header style="margin-bottom: 35px;">
-            <h1 style="color: #333; margin: 0; font-weight: 900; letter-spacing: -1px; font-size: 2.2rem;">City Resource Tracking</h1>
+            <h1 style="color: #333; margin: 0; font-weight: 900; letter-spacing: -1px; font-size: 2.2rem;">
+                Sector Resource Tracking <?php echo !empty($my_brgy) ? "— " . htmlspecialchars($my_brgy) : ""; ?>
+            </h1>
         </header>
 
         <div class="kpi-grid">
@@ -149,7 +149,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
         <div class="table-container">
             <div class="header-flex">
                 <h2 style="margin: 0;">Response Unit Directory</h2>
-                </div>
+            </div>
             
             <div class="table-wrapper">
                 <table class="data-table">
@@ -172,19 +172,22 @@ if ($teams_result && $teams_result->num_rows > 0) {
                                 elseif(strpos($t_lower, 'fire') !== false) $type_icon = 'bxs-flame';
                                 elseif(strpos($t_lower, 'police') !== false) $type_icon = 'bxs-badge-check';
                                 elseif(strpos($t_lower, 'rescue') !== false) $type_icon = 'bxs-ambulance';
+
+                                $st_clean = strtolower(trim($team['status']));
+                                $badge_class = ($st_clean === 'operational' || $st_clean === 'available') ? 'available' : $st_clean;
                             ?>
                              <tr class="clickable-row" onclick="viewTeamMembers(<?php echo $team['id']; ?>, '<?php echo addslashes($team['team_name']); ?>')">
                                 <td><strong><?php echo htmlspecialchars($team['team_name']); ?></strong> <i class='bx bx-chevron-right mobile-expand-icon'></i></td>
                                 <td><i class='bx <?php echo $type_icon; ?>' style="font-size: 1.2rem; vertical-align: middle; margin-right: 8px; opacity: 0.7;"></i> <?php echo htmlspecialchars($team['team_type']); ?></td>
-                                <td><span class="badge <?php echo $team['status']; ?>"><?php echo strtoupper($team['status']); ?></span></td>
+                                <td><span class="badge <?php echo $badge_class; ?>"><?php echo strtoupper($team['status']); ?></span></td>
                                 
                                 <td style="text-align: center;" onclick="event.stopPropagation();">
-                                    <?php if (strtolower($team['status']) === 'available'): ?>
-                                        <button class="btn-sm" style="background: #f57c00; margin: 0 auto;" onclick="updateStatus(<?php echo $team['id']; ?>, 'maintenance')">
+                                    <?php if ($st_clean === 'available' || $st_clean === 'operational'): ?>
+                                        <button class="btn-sm" style="background: #f57c00; margin: 0 auto; padding: 8px 14px; font-weight: 700; border-radius: 8px;" onclick="updateStatus(<?php echo $team['id']; ?>, 'maintenance')">
                                             <i class='bx bxs-wrench'></i> Maintenance
                                         </button>
-                                    <?php elseif (strtolower($team['status']) === 'maintenance'): ?>
-                                        <button class="btn-sm" style="background: #388e3c; margin: 0 auto;" onclick="updateStatus(<?php echo $team['id']; ?>, 'available')">
+                                    <?php elseif ($st_clean === 'maintenance'): ?>
+                                        <button class="btn-sm" style="background: #388e3c; margin: 0 auto; padding: 8px 14px; font-weight: 700; border-radius: 8px;" onclick="updateStatus(<?php echo $team['id']; ?>, 'operational')">
                                             <i class='bx bx-check-circle'></i> Done
                                         </button>
                                     <?php else: ?>
@@ -235,6 +238,16 @@ if ($teams_result && $teams_result->num_rows > 0) {
             <div class="modal-body" id="tm_content" style="max-height: 350px; overflow-y: auto;">
                 <div style="text-align:center; padding: 20px; opacity:0.6;"><i class="bx bx-loader-alt bx-spin"></i> Loading personnel...</div>
             </div>
+        </div>
+    </div>
+
+    <!-- Universal Confirmation & Alert Modal -->
+    <div id="universalModal" class="modal">
+        <div class="modal-content" style="text-align: center; width: 360px; padding: 35px; border-radius: 18px;">
+            <i id="uniModalIcon" class='bx bxs-help-circle' style="font-size: 4rem; margin-bottom: 12px; color: #1976d2;"></i>
+            <h3 id="uniModalTitle" style="margin-bottom: 10px; font-weight: 800; font-size: 1.3rem;">Confirm</h3>
+            <p id="uniModalText" style="margin-bottom: 22px; color: #666; font-weight: 600; font-size: 0.95rem; line-height: 1.4;"></p>
+            <div style="display: flex; gap: 10px;" id="uniModalButtons"></div>
         </div>
     </div>
 

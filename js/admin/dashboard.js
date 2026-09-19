@@ -8,7 +8,7 @@ let eventSource = null;
 
 const API_PATH = window.location.pathname.includes('/alert/') 
     ? '/alert/admin/admin_actions.php' 
-    : '../admin/admin_actions.php';
+    : 'admin_actions.php';
 
 function initAudio() {
     if (!audioCtx) {
@@ -276,7 +276,6 @@ function initSSE() {
     };
 }
 
-// Retain one-shot sync for instant user interaction updates
 function syncDashboard() { 
     const brgyNode = document.getElementById('table-filter-brgy');
     const typeNode = document.getElementById('map-filter-incident');
@@ -413,11 +412,14 @@ function openDeployModal(ids, name) {
     document.getElementById('dispatchModal').style.display = 'flex';
 
     fetch(API_PATH + "?action=get_available_teams&incident_type=" + encodeURIComponent(name))
-        .then(r => r.json())
+        .then(async r => {
+            if (!r.ok) throw new Error("HTTP " + r.status);
+            return r.json();
+        })
         .then(data => {
             let html = '';
             if (!data || data.length === 0) {
-                html = "<div style='text-align:center; color:var(--color-critical); font-weight:bold; padding: 15px;'>No units currently available.</div>";
+                html = "<div style='text-align:center; color:var(--color-critical); font-weight:bold; padding: 15px;'>No operational units currently available.</div>";
             } else {
                 data.forEach(t => {
                     let recBadge = t.is_recommended ? `<span style="background:var(--color-success); color:white; padding: 2px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; margin-left: 8px; vertical-align: middle;">⭐ RECOMMENDED</span>` : "";
@@ -430,6 +432,10 @@ function openDeployModal(ids, name) {
                 });
             }
             document.getElementById('available_teams_list').innerHTML = html;
+        })
+        .catch(err => {
+            console.error("Error fetching operational units:", err);
+            document.getElementById('available_teams_list').innerHTML = "<div style='text-align:center; color:var(--color-critical); padding: 15px;'>Failed to load operational response teams.</div>";
         });
 }
 
@@ -481,7 +487,11 @@ function cancelDispatch(ids) {
         fd.append('incident_id', ids);
 
         fetch(API_PATH, { method: 'POST', body: fd })
-            .then(r => r.json())
+            .then(async r => {
+                const raw = await r.text();
+                try { return JSON.parse(raw); } 
+                catch(e) { throw new Error(raw); }
+            })
             .then(d => {
                 if (d.success) {
                     syncDashboard();
@@ -512,7 +522,11 @@ function recallCityBackup(incidentId) {
             fd.append('incident_id', incidentId);
 
             fetch(API_PATH, { method: 'POST', body: fd })
-                .then(r => r.json())
+                .then(async r => {
+                    const raw = await r.text();
+                    try { return JSON.parse(raw); } 
+                    catch(e) { throw new Error(raw); }
+                })
                 .then(d => {
                     if (d.success) {
                         syncDashboard();
@@ -528,30 +542,80 @@ function recallCityBackup(incidentId) {
     );
 }
 
-function rejectIncident(ids) {
-    customConfirm("Reject Incident", "Are you sure you want to reject this incident as a False Alarm?", "bx-x-circle", "#ef4444", function() {
-        let fd = new FormData(); 
-        fd.append('action', 'reject_incident'); 
-        fd.append('incident_id', ids);
+function rejectIncident(ids, typeName = '') {
+    const rejectModal = document.getElementById('rejectModal');
+    if (rejectModal) {
+        const idInput = document.getElementById('reject_incident_ids');
+        const disp = document.getElementById('reject_incident_display');
+        const cat = document.getElementById('reject_category');
+        const notes = document.getElementById('reject_notes');
+        
+        if (idInput) idInput.value = ids;
+        if (disp) disp.innerText = typeName ? `"${typeName}" (ID #${ids})` : `Incident #${ids}`;
+        if (cat) cat.value = 'False Alarm';
+        if (notes) notes.value = '';
+        
+        rejectModal.style.display = 'flex';
+    } else {
+        customConfirm("Reject Incident", "Are you sure you want to reject this incident as a False Alarm?", "bx-x-circle", "#ef4444", function() {
+            let fd = new FormData(); 
+            fd.append('action', 'reject_incident'); 
+            fd.append('incident_id', ids);
+            fd.append('reason_category', 'False Alarm');
 
-        fetch(API_PATH, { method: 'POST', body: fd })
-            .then(async r => {
-                const raw = await r.text();
-                try { return JSON.parse(raw); } 
-                catch (e) { throw new Error("Server output was not JSON"); }
-            })
-            .then(d => {
-                if (d.success) {
+            fetch(API_PATH, { method: 'POST', body: fd })
+                .then(async r => {
+                    const raw = await r.text();
+                    try { return JSON.parse(raw); } 
+                    catch (e) { throw new Error("Server output was not JSON"); }
+                })
+                .then(d => {
+                    if (d.success) {
+                        syncDashboard();
+                    } else {
+                        customAlert("Error", d.message || "Could not reject report.", "bx-error", "#ef4444");
+                    }
+                })
+                .catch(e => {
+                    console.error(e);
                     syncDashboard();
-                } else {
-                    customAlert("Error", d.message || "Could not reject report.", "bx-error", "#ef4444");
-                }
-            })
-            .catch(e => {
-                console.error(e);
+                });
+        });
+    }
+}
+
+function submitRejectIncident() {
+    const id = document.getElementById('reject_incident_ids')?.value;
+    const reasonCategory = document.getElementById('reject_category')?.value || 'False Alarm';
+    const notes = document.getElementById('reject_notes')?.value.trim() || '';
+
+    if (!id) return;
+
+    closeModal('rejectModal');
+
+    const fd = new FormData();
+    fd.append('action', 'reject_incident');
+    fd.append('incident_id', id);
+    fd.append('reason_category', reasonCategory);
+    fd.append('notes', notes);
+
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async r => {
+            const raw = await r.text();
+            try { return JSON.parse(raw); } 
+            catch(e) { throw new Error(raw.substring(0, 100)); }
+        })
+        .then(d => {
+            if (d.success) {
                 syncDashboard();
-            });
-    });
+            } else {
+                customAlert("Reject Failed", d.message || "Could not reject report.", "bx-error", "#ef4444");
+            }
+        })
+        .catch(err => {
+            console.error("Reject error:", err);
+            customAlert("Server Error", "Failed to communicate with server.", "bx-error", "#ef4444");
+        });
 }
 
 function resolveIncident(ids) {
@@ -566,7 +630,11 @@ function resolveIncident(ids) {
             fd.append('incident_id', ids);
 
             fetch(API_PATH, { method: 'POST', body: fd })
-                .then(r => r.json())
+                .then(async r => {
+                    const raw = await r.text();
+                    try { return JSON.parse(raw); } 
+                    catch(e) { throw new Error(raw); }
+                })
                 .then(d => {
                     if (d.success) {
                         syncDashboard(); 
@@ -582,22 +650,29 @@ function resolveIncident(ids) {
     );
 }
 
-function viewEvidence(imagePath) { 
+function viewEvidence(imagePath, incidentType = '', brgy = '', date = '', time = '', reporter = '', logs = '', extra = '', backupRequested = 0) { 
     const imgEl = document.getElementById('evidenceImageFull');
     if (!imgEl) return;
 
-    if (imagePath && imagePath !== 'NULL' && imagePath !== '') {
-        let cleanPath = imagePath.replace(/^\/?(dasma_api\/)?/, '');
-        const API_BASE_URL = 'https://dasma-api-l9ql.onrender.com';
+    if (imagePath && imagePath !== 'NULL' && imagePath !== 'null' && imagePath.trim() !== '') {
+        let cleanPath = imagePath.trim();
+        if (cleanPath.startsWith('/http')) cleanPath = cleanPath.substring(1);
 
-        if (cleanPath.startsWith('http')) {
+        if (cleanPath.startsWith('http://') || cleanPath.startsWith('https://')) {
             imgEl.src = cleanPath;
         } else {
-            imgEl.src = API_BASE_URL + '/' + cleanPath.replace(/^\/+/, '');
+            const stripped = cleanPath.replace(/^\/?(dasma_api\/|dasma-api\/)?/, '');
+            imgEl.src = 'https://res.cloudinary.com/wyxsiraw/image/upload/' + stripped;
         }
 
         const mod = document.getElementById('evidenceModal');
         if (mod) mod.style.display = 'flex';
+
+        if (backupRequested == 1) {
+            setTimeout(() => {
+                customAlert("🚨 URGENT: BACKUP REQUESTED 🚨", "Immediate assistance requested by local responders!", "bxs-error", "#ef4444");
+            }, 300);
+        }
     } else {
         customAlert("No Evidence", "No image evidence was submitted for this report.", "bx-image-alt", "#71717a");
     }
@@ -710,6 +785,7 @@ window.recallIncident = recallIncident;
 window.recallCityBackup = recallCityBackup;
 window.resolveIncident = resolveIncident;
 window.rejectIncident = rejectIncident;
+window.submitRejectIncident = submitRejectIncident;
 window.viewEvidence = viewEvidence;
 window.toggleCluster = toggleCluster;
 window.toggleBackupRow = toggleBackupRow;

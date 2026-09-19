@@ -2,10 +2,10 @@ const assignedBrgy = window.ASSIGNED_BRGY || "";
 let map, markerLayer;
 let lastTableHTML = "", lastMapHash = "";
 
-// Dynamic API path: handles root hosting and subfolder hosting (/alert/)
+// Dynamic API path: works across root and subfolder environments
 const API_PATH = window.location.pathname.includes('/alert/') 
     ? '/alert/admin/admin_actions.php' 
-    : '/admin/admin_actions.php';
+    : '../admin/admin_actions.php';
 
 function closeModal(id) { 
     const el = document.getElementById(id);
@@ -13,28 +13,56 @@ function closeModal(id) {
 }
 
 function customAlert(title, message, iconClass = 'bx-info-circle', color = '#1976d2') {
-    document.getElementById('uniModalIcon').className = 'bx ' + iconClass;
-    document.getElementById('uniModalIcon').style.color = color;
-    document.getElementById('uniModalTitle').innerText = title;
-    document.getElementById('uniModalText').innerText = message;
-    document.getElementById('uniModalButtons').innerHTML = `<button onclick="closeModal('universalModal')" class="btn-sm" style="flex: 1; padding: 12px; background: ${color}; justify-content: center; box-shadow: none;">OK</button>`;
-    document.getElementById('universalModal').style.display = 'flex';
+    const icon = document.getElementById('uniModalIcon');
+    const titleEl = document.getElementById('uniModalTitle');
+    const textEl = document.getElementById('uniModalText');
+    const buttons = document.getElementById('uniModalButtons');
+    const modal = document.getElementById('universalModal');
+
+    if (!modal) {
+        alert(`${title}: ${message}`);
+        return;
+    }
+
+    if (icon) { icon.className = 'bx ' + iconClass; icon.style.color = color; }
+    if (titleEl) titleEl.innerText = title;
+    if (textEl) textEl.innerText = message;
+    if (buttons) {
+        buttons.innerHTML = `<button onclick="closeModal('universalModal')" class="btn-sm" style="flex: 1; padding: 12px; background: ${color}; justify-content: center; box-shadow: none;">OK</button>`;
+    }
+    modal.style.display = 'flex';
 }
 
 function customConfirm(title, message, iconClass, color, confirmCallback) {
-    document.getElementById('uniModalIcon').className = 'bx ' + iconClass;
-    document.getElementById('uniModalIcon').style.color = color;
-    document.getElementById('uniModalTitle').innerText = title;
-    document.getElementById('uniModalText').innerText = message;
-    document.getElementById('uniModalButtons').innerHTML = `
-        <button onclick="closeModal('universalModal')" style="flex:1; padding:12px; border-radius:10px; cursor:pointer; border:1px solid #ccc; background:transparent; font-weight:800;">Cancel</button>
-        <button id="uniConfirmBtn" class="btn-sm" style="flex: 1; padding: 12px; background: ${color}; justify-content: center;">Proceed</button>
-    `;
-    document.getElementById('universalModal').style.display = 'flex';
-    document.getElementById('uniConfirmBtn').onclick = function() { 
-        closeModal('universalModal'); 
-        confirmCallback(); 
-    };
+    const icon = document.getElementById('uniModalIcon');
+    const titleEl = document.getElementById('uniModalTitle');
+    const textEl = document.getElementById('uniModalText');
+    const buttons = document.getElementById('uniModalButtons');
+    const modal = document.getElementById('universalModal');
+
+    if (!modal) {
+        if (confirm(`${title}\n\n${message}`)) confirmCallback();
+        return;
+    }
+
+    if (icon) { icon.className = 'bx ' + iconClass; icon.style.color = color; }
+    if (titleEl) titleEl.innerText = title;
+    if (textEl) textEl.innerText = message;
+    if (buttons) {
+        buttons.innerHTML = `
+            <button onclick="closeModal('universalModal')" style="flex:1; padding:12px; border-radius:10px; cursor:pointer; border:1px solid #ccc; background:transparent; font-weight:800;">Cancel</button>
+            <button id="uniConfirmBtn" class="btn-sm" style="flex: 1; padding: 12px; background: ${color}; justify-content: center;">Proceed</button>
+        `;
+    }
+    modal.style.display = 'flex';
+    
+    const confirmBtn = document.getElementById('uniConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.onclick = function() { 
+            closeModal('universalModal'); 
+            confirmCallback(); 
+        };
+    }
 }
 
 function getIncidentIcon(type) {
@@ -58,12 +86,10 @@ function dismissBroadcast(id) {
     const banner = document.getElementById('global-broadcast-banner');
     if (banner) banner.remove();
 
-    // Cookie fallback
     const date = new Date();
     date.setTime(date.getTime() + (30 * 24 * 60 * 60 * 1000));
     document.cookie = `dismissed_broadcast_id=${id}; expires=${date.toUTCString()}; path=/; SameSite=Lax`;
 
-    // Persist via backend
     const fd = new FormData();
     fd.append('action', 'dismiss_broadcast');
     fd.append('broadcast_id', id);
@@ -129,23 +155,20 @@ function fetchLocalData() {
             catch (e) { throw new Error("PHP Output was not JSON."); }
         })
         .then(data => {
-            if (data.table) {
-                let newTableHTML = data.table;
-                newTableHTML = newTableHTML.replace(/<tr /g, '<tr class="clickable-row" onclick="openMobileModal(this)" ');
-                
-                if (newTableHTML !== lastTableHTML) {
-                    const tbl = document.getElementById('local-incident-table');
-                    if (tbl) {
-                        tbl.innerHTML = newTableHTML;
-                        document.querySelectorAll('#local-incident-table tr.clickable-row').forEach(row => {
-                            let firstCell = row.querySelector('td:first-child');
-                            if (firstCell && !firstCell.querySelector('.mobile-expand-icon') && !row.innerHTML.includes('No active reports')) {
-                                firstCell.innerHTML += "<i class='bx bx-chevron-right mobile-expand-icon'></i>";
-                            }
-                        });
-                    }
-                    lastTableHTML = newTableHTML;
+            if (data.table && data.table !== lastTableHTML) {
+                const tbl = document.getElementById('local-incident-table');
+                if (tbl) {
+                    tbl.innerHTML = data.table;
+                    // Safely apply helper class and mobile indicators without replacing HTML attributes
+                    tbl.querySelectorAll('tr').forEach(row => {
+                        row.classList.add('clickable-row');
+                        let firstCell = row.querySelector('td:first-child');
+                        if (firstCell && !firstCell.querySelector('.mobile-expand-icon') && !row.innerText.includes('No active reports')) {
+                            firstCell.innerHTML += "<i class='bx bx-chevron-right mobile-expand-icon'></i>";
+                        }
+                    });
                 }
+                lastTableHTML = data.table;
             }
             if (data.map && JSON.stringify(data.map) !== lastMapHash) {
                 markerLayer.clearLayers();
@@ -190,8 +213,9 @@ function fetchLocalData() {
 
 function toggleVerifyDropdown(btn) {
     const wrapper = btn.closest('.verify-btn-wrapper');
-    const dropdown = wrapper.querySelector('.verify-dropdown');
-    const isHidden = dropdown.style.display === 'none';
+    const dropdown = wrapper ? wrapper.querySelector('.verify-dropdown') : null;
+    if (!dropdown) return;
+    const isHidden = dropdown.style.display === 'none' || dropdown.style.display === '';
     
     document.querySelectorAll('.verify-dropdown').forEach(d => d.style.display = 'none');
     dropdown.style.display = isHidden ? 'block' : 'none';
@@ -202,36 +226,36 @@ function hideVerifyDropdown(btn) {
     if (drop) drop.style.display = 'none'; 
 }
 
-document.addEventListener('click', function(event) {
-    if (event.target.classList.contains('confirm-verify-btn')) {
-        const ids = event.target.getAttribute('data-confirm-ids');
-        const fd = new FormData();
-        fd.append('action', 'confirm_verify');
-        fd.append('incident_id', ids);
-
-        fetch(API_PATH, { method: 'POST', body: fd })
-            .then(async r => {
-                const rawText = await r.text();
-                try {
-                    return JSON.parse(rawText);
-                } catch (e) {
-                    console.error("Server output:", rawText);
-                    throw new Error("Server returned HTML: " + rawText.substring(0, 150));
-                }
-            })
-            .then(d => { 
-                if (d.success) {
-                    fetchLocalData(); 
-                } else {
-                    customAlert("Error", d.message || "Failed to verify.", "bx-error", "#d32f2f"); 
-                }
-            })
-            .catch(err => {
-                console.error("Verify error:", err);
-                customAlert("Server Error", err.message, "bx-error", "#d32f2f");
-            });
+function confirmVerifyIncident(ids, btn = null) {
+    if (btn) {
+        const drop = btn.closest('.verify-dropdown');
+        if (drop) drop.style.display = 'none';
     }
-});
+    const fd = new FormData();
+    fd.append('action', 'confirm_verify');
+    fd.append('incident_id', ids);
+
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async r => {
+            const rawText = await r.text();
+            try {
+                return JSON.parse(rawText);
+            } catch (e) {
+                throw new Error("Server output: " + rawText.substring(0, 120));
+            }
+        })
+        .then(d => { 
+            if (d.success) {
+                fetchLocalData(); 
+            } else {
+                customAlert("Error", d.message || "Failed to verify.", "bx-error", "#d32f2f"); 
+            }
+        })
+        .catch(err => {
+            console.error("Verify error:", err);
+            customAlert("Server Error", err.message, "bx-error", "#d32f2f");
+        });
+}
 
 function openVerifyModal(ids) {
     document.getElementById('verify_incident_ids').value = ids;
@@ -267,7 +291,7 @@ function openDeployModal(id, name) {
         .then(data => {
             let html = '';
             if (!data || data.length === 0) { 
-                html = "<div style='text-align:center; color:#d32f2f; font-weight:bold; padding: 15px;'>No units currently available.</div>"; 
+                html = "<div style='text-align:center; color:#d32f2f; font-weight:bold; padding: 15px;'>No operational units currently available.</div>"; 
             } else {
                 data.forEach(t => {
                     let recBadge = t.is_recommended ? `<span style="background:#388e3c; color:white; padding: 2px 8px; border-radius: 8px; font-size: 0.65rem; font-weight: 900; margin-left: 8px;">⭐ RECOMMENDED</span>` : "";
@@ -289,7 +313,7 @@ function openDeployModal(id, name) {
         })
         .catch(err => {
             console.error("Error fetching units:", err);
-            document.getElementById('available_teams_list').innerHTML = "<div style='text-align:center; color:#d32f2f; padding: 15px;'>Failed to load teams.</div>";
+            document.getElementById('available_teams_list').innerHTML = "<div style='text-align:center; color:#d32f2f; padding: 15px;'>Failed to load operational units.</div>";
         });
 }
 
@@ -325,12 +349,7 @@ function submitDispatch() {
             })
             .then(d => {
                 if (d.success) {
-                    // Safe refresh regardless of whether this is Admin or Barangay dashboard
-                    if (typeof syncDashboard === 'function') {
-                        syncDashboard();
-                    } else if (typeof fetchLocalData === 'function') {
-                        fetchLocalData();
-                    }
+                    if (typeof fetchLocalData === 'function') fetchLocalData();
                 } else {
                     customAlert("Dispatch Failed", d.message || "Could not deploy team.", "bx-error", "#ef4444");
                 }
@@ -354,8 +373,7 @@ function cancelDispatch(ids) {
                 try {
                     return JSON.parse(rawText);
                 } catch (e) {
-                    console.error("Server output:", rawText);
-                    throw new Error("Server returned HTML: " + rawText.substring(0, 150));
+                    throw new Error("Server output: " + rawText.substring(0, 150));
                 }
             })
             .then(d => {
@@ -412,16 +430,15 @@ function resolveIncident(id) {
 
 function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs, extra, backupRequested) { 
     const imgEl = document.getElementById('evidenceImageFull');
-    if (imagePath && imagePath !== 'NULL' && imagePath !== '') {
-        let finalUrl = imagePath;
-        if (imagePath.startsWith('http://') || imagePath.startsWith('https://')) {
-            finalUrl = imagePath;
-        } else {
-            let cleanPath = imagePath.startsWith('/') ? imagePath.substring(1) : imagePath;
-            finalUrl = '/dasma_api/' + cleanPath;
+    if (imagePath && imagePath !== 'NULL' && imagePath !== 'null' && imagePath.trim() !== '') {
+        let cleanUrl = imagePath.trim();
+        if (cleanUrl.startsWith('/http')) cleanUrl = cleanUrl.substring(1);
+        if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+            const path = cleanUrl.replace(/^\/?(dasma_api\/|dasma-api\/)?/, '');
+            cleanUrl = 'https://res.cloudinary.com/wyxsiraw/image/upload/' + path;
         }
         if (imgEl) {
-            imgEl.src = finalUrl;
+            imgEl.src = cleanUrl;
             imgEl.style.display = 'inline-block';
         }
     } else { 
@@ -445,33 +462,53 @@ function viewEvidence(imagePath, incidentType, brgy, date, time, reporter, logs,
     }
 }
 
-function rejectIncident(id) {
-    customConfirm("Reject Incident?", "Mark this report as false alarm / rejected?", "bx-x-circle", "#555555", function() {
-        let fd = new FormData(); 
-        fd.append('action', 'reject_incident'); 
-        fd.append('incident_id', id);
+function rejectIncident(id, typeName = '') {
+    const idsInput = document.getElementById('reject_incident_ids');
+    const display = document.getElementById('reject_incident_display');
+    const catSelect = document.getElementById('reject_category');
+    const notes = document.getElementById('reject_notes');
+    
+    if (idsInput) idsInput.value = id;
+    if (display) display.innerText = typeName ? `"${typeName}" (ID #${id})` : `Incident #${id}`;
+    if (catSelect) catSelect.value = 'False Alarm';
+    if (notes) notes.value = '';
 
-        fetch(API_PATH, { method: 'POST', body: fd })
-            .then(async r => {
-                const rawText = await r.text();
-                try {
-                    return JSON.parse(rawText);
-                } catch (e) {
-                    throw new Error("Server output: " + rawText.substring(0, 120));
-                }
-            })
-            .then(d => { 
-                if (d.success) {
-                    fetchLocalData(); 
-                } else {
-                    customAlert("Reject Failed", d.message || "Could not reject report.", "bx-error", "#d32f2f");
-                }
-            })
-            .catch(err => {
-                console.error("Reject error:", err);
-                customAlert("Server Error", err.message, "bx-error", "#d32f2f");
-            });
-    });
+    const modal = document.getElementById('rejectModal');
+    if (modal) modal.style.display = 'flex';
+}
+
+function submitRejectIncident() {
+    const id = document.getElementById('reject_incident_ids')?.value;
+    const reasonCategory = document.getElementById('reject_category')?.value || 'False Alarm';
+    const notes = document.getElementById('reject_notes')?.value.trim() || '';
+
+    if (!id) return;
+
+    closeModal('rejectModal');
+
+    const fd = new FormData();
+    fd.append('action', 'reject_incident');
+    fd.append('incident_id', id);
+    fd.append('reason_category', reasonCategory);
+    fd.append('notes', notes);
+
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async r => {
+            const raw = await r.text();
+            try { return JSON.parse(raw); } 
+            catch(e) { throw new Error(raw.substring(0, 100)); }
+        })
+        .then(d => {
+            if (d.success) {
+                fetchLocalData();
+            } else {
+                customAlert("Reject Failed", d.message || "Could not reject report.", "bx-error", "#d32f2f");
+            }
+        })
+        .catch(err => {
+            console.error("Reject error:", err);
+            customAlert("Server Error", "Failed to communicate with server.", "bx-error", "#d32f2f");
+        });
 }
 
 function requestBackup(id) {
@@ -530,37 +567,7 @@ function openMobileModal(row) {
     bodyEl.querySelectorAll('.mobile-expand-icon').forEach(icon => icon.style.display = 'none');
     document.getElementById('mobileIncidentModal').style.display = 'flex';
 }
-// Verification Confirmation Handler
-function confirmVerifyIncident(ids, btn = null) {
-    if (btn) {
-        const drop = btn.closest('.verify-dropdown');
-        if (drop) drop.style.display = 'none';
-    }
-    const fd = new FormData();
-    fd.append('action', 'confirm_verify');
-    fd.append('incident_id', ids);
 
-    fetch(API_PATH, { method: 'POST', body: fd })
-        .then(async r => {
-            const rawText = await r.text();
-            try {
-                return JSON.parse(rawText);
-            } catch (e) {
-                throw new Error("Server output: " + rawText.substring(0, 120));
-            }
-        })
-        .then(d => { 
-            if (d.success) {
-                fetchLocalData(); 
-            } else {
-                customAlert("Error", d.message || "Failed to verify.", "bx-error", "#d32f2f"); 
-            }
-        })
-        .catch(err => {
-            console.error("Verify error:", err);
-            customAlert("Server Error", err.message, "bx-error", "#d32f2f");
-        });
-}
 function toggleCluster(key) {
     const rows = document.querySelectorAll(`.cluster-row-${key}`);
     const icon = document.getElementById(`icon_${key}`);
@@ -575,62 +582,15 @@ function toggleCluster(key) {
         }
     }
 }
+
 function toggleBackupRow(id) {
     const row = document.getElementById(`backup-row-${id}`);
     if (row) {
         row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
     }
 }
-function rejectIncident(id, typeName = '') {
-    const idsInput = document.getElementById('reject_incident_ids');
-    const display = document.getElementById('reject_incident_display');
-    const catSelect = document.getElementById('reject_category');
-    const notes = document.getElementById('reject_notes');
-    
-    if (idsInput) idsInput.value = id;
-    if (display) display.innerText = typeName ? `"${typeName}" (ID #${id})` : `Incident #${id}`;
-    if (catSelect) catSelect.value = 'False Alarm';
-    if (notes) notes.value = '';
 
-    const modal = document.getElementById('rejectModal');
-    if (modal) modal.style.display = 'flex';
-}
-
-function submitRejectIncident() {
-    const id = document.getElementById('reject_incident_ids')?.value;
-    const reasonCategory = document.getElementById('reject_category')?.value || 'False Alarm';
-    const notes = document.getElementById('reject_notes')?.value.trim() || '';
-
-    if (!id) return;
-
-    closeModal('rejectModal');
-
-    const fd = new FormData();
-    fd.append('action', 'reject_incident');
-    fd.append('incident_id', id);
-    fd.append('reason_category', reasonCategory);
-    fd.append('notes', notes);
-
-    fetch(API_PATH, { method: 'POST', body: fd })
-        .then(async r => {
-            const raw = await r.text();
-            try { return JSON.parse(raw); } 
-            catch(e) { throw new Error(raw.substring(0, 100)); }
-        })
-        .then(d => {
-            if (d.success) {
-                fetchLocalData();
-            } else {
-                customAlert("Reject Failed", d.message || "Could not reject report.", "bx-error", "#d32f2f");
-            }
-        })
-        .catch(err => {
-            console.error("Reject error:", err);
-            customAlert("Server Error", "Failed to communicate with server.", "bx-error", "#d32f2f");
-        });
-}
-
-window.submitRejectIncident = submitRejectIncident;
+// Window bindings
 window.openDeployModal = openDeployModal;
 window.submitDispatch = submitDispatch;
 window.cancelDispatch = cancelDispatch;
@@ -641,6 +601,7 @@ window.submitVerify = submitVerify;
 window.toggleVerifyDropdown = toggleVerifyDropdown;
 window.hideVerifyDropdown = hideVerifyDropdown;
 window.rejectIncident = rejectIncident;
+window.submitRejectIncident = submitRejectIncident;
 window.requestBackup = requestBackup;
 window.resolveIncident = resolveIncident;
 window.viewEvidence = viewEvidence;
@@ -649,3 +610,4 @@ window.closeModal = closeModal;
 window.confirmVerifyIncident = confirmVerifyIncident;
 window.toggleCluster = toggleCluster;
 window.toggleBackupRow = toggleBackupRow;
+window.dismissBroadcast = dismissBroadcast;

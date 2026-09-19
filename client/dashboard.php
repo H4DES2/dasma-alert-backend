@@ -249,40 +249,41 @@ $show_banner = ($active_broadcast && (int)$active_broadcast['id'] !== $dismissed
             </div>
         </div>
 
+        <!-- REJECT MODAL WITH AUDIT CATEGORIES -->
         <div id="rejectModal" class="modal">
-    <div class="modal-content" style="max-width: 460px;">
-        <div class="close-modal" onclick="closeModal('rejectModal')"><i class='bx bx-x'></i></div>
-        <div class="modal-header">
-            <h3 style="margin:0; color:#d32f2f; display:flex; align-items:center; gap:8px;">
-                <i class='bx bx-x-circle'></i> Reject Incident Report
-            </h3>
-        </div>
-        <div class="modal-body" style="margin-top: 15px;">
-            <input type="hidden" id="reject_incident_ids">
-            <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">
-                Specify the reason for rejecting <b id="reject_incident_display" style="color: #222;">this incident</b>. This will be sent to the Report Bin and logged under your officer credentials.
-            </p>
-            
-            <label style="display:block; margin-bottom:6px; font-weight:800; color:#444; text-transform:uppercase; font-size:0.75rem;">Rejection Category</label>
-            <select id="reject_category" class="filter-dropdown" style="width:100%; margin-bottom:15px; padding:10px; border-radius:10px; border:1px solid #ccc; font-weight:700;">
-                <option value="False Alarm">False Alarm</option>
-                <option value="Out of Jurisdiction">Out of Jurisdiction / Out of Range</option>
-                <option value="Duplicate Report">Duplicate Report</option>
-                <option value="Prank / Spam">Prank / Spam Report</option>
-                <option value="Incomplete Information">Incomplete / Invalid Information</option>
-                <option value="Other / Unspecified">Other Reason</option>
-            </select>
+            <div class="modal-content" style="max-width: 460px;">
+                <div class="close-modal" onclick="closeModal('rejectModal')"><i class='bx bx-x'></i></div>
+                <div class="modal-header">
+                    <h3 style="margin:0; color:#d32f2f; display:flex; align-items:center; gap:8px;">
+                        <i class='bx bx-x-circle'></i> Reject Incident Report
+                    </h3>
+                </div>
+                <div class="modal-body" style="margin-top: 15px;">
+                    <input type="hidden" id="reject_incident_ids">
+                    <p style="font-size: 0.85rem; color: #666; margin-bottom: 15px;">
+                        Specify the reason for rejecting <b id="reject_incident_display" style="color: #222;">this incident</b>. This will be sent to the Report Bin and logged under your officer credentials.
+                    </p>
+                    
+                    <label style="display:block; margin-bottom:6px; font-weight:800; color:#444; text-transform:uppercase; font-size:0.75rem;">Rejection Category</label>
+                    <select id="reject_category" class="filter-dropdown" style="width:100%; margin-bottom:15px; padding:10px; border-radius:10px; border:1px solid #ccc; font-weight:700;">
+                        <option value="False Alarm">False Alarm</option>
+                        <option value="Out of Jurisdiction">Out of Jurisdiction / Out of Range</option>
+                        <option value="Duplicate Report">Duplicate Report</option>
+                        <option value="Prank / Spam">Prank / Spam Report</option>
+                        <option value="Incomplete Information">Incomplete / Invalid Information</option>
+                        <option value="Other / Unspecified">Other / Unspecified</option>
+                    </select>
 
-            <label style="display:block; margin-bottom:6px; font-weight:800; color:#444; text-transform:uppercase; font-size:0.75rem;">Officer Remarks / Explanation</label>
-            <textarea id="reject_notes" class="filter-dropdown" style="width:100%; height:80px; margin-bottom:20px; resize:none; padding:10px; border-radius:10px; border:1px solid #ccc;" placeholder="Provide brief verification notes or reason for rejection..."></textarea>
+                    <label style="display:block; margin-bottom:6px; font-weight:800; color:#444; text-transform:uppercase; font-size:0.75rem;">Officer Remarks / Explanation</label>
+                    <textarea id="reject_notes" class="filter-dropdown" style="width:100%; height:80px; margin-bottom:20px; resize:none; padding:10px; border-radius:10px; border:1px solid #ccc;" placeholder="Provide brief verification notes or reason for rejection..."></textarea>
 
-            <div style="display:flex; gap:10px;">
-                <button type="button" class="btn-sm" style="background:#777; flex:1; padding:12px; font-size:0.95rem;" onclick="closeModal('rejectModal')">Cancel</button>
-                <button type="button" class="btn-sm" style="background:#d32f2f; flex:1; padding:12px; font-size:0.95rem; font-weight:800;" onclick="submitRejectIncident()">Confirm Reject</button>
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" class="btn-sm" style="background:#777; flex:1; padding:12px; font-size:0.95rem;" onclick="closeModal('rejectModal')">Cancel</button>
+                        <button type="button" class="btn-sm" style="background:#d32f2f; flex:1; padding:12px; font-size:0.95rem; font-weight:800;" onclick="submitRejectIncident()">Confirm Reject</button>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
         <div id="verifyModal" class="modal">
             <div class="modal-content" style="max-width: 450px;">

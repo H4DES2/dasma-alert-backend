@@ -1,189 +1,225 @@
+const API_PATH = window.location.pathname.includes('/alert/') 
+    ? '/alert/admin/admin_actions.php' 
+    : 'admin_actions.php';
 
-    function customAlert(title, message, iconClass = 'bx-info-circle', color = '#1976d2') {
-        document.getElementById('uniModalIcon').className = 'bx ' + iconClass;
-        document.getElementById('uniModalIcon').style.color = color;
-        document.getElementById('uniModalTitle').innerText = title;
-        document.getElementById('uniModalText').innerText = message;
-        document.getElementById('uniModalButtons').innerHTML = `<button onclick="closeModal()" class="btn-status" style="flex: 1; background: ${color}; justify-content: center; height: 50px;">OK</button>`;
-        document.getElementById('universalModal').style.display = 'flex';
+function customAlert(title, message, iconClass = 'bx-info-circle', color = '#1976d2') {
+    const icon = document.getElementById('uniModalIcon');
+    const titleEl = document.getElementById('uniModalTitle');
+    const textEl = document.getElementById('uniModalText');
+    const buttons = document.getElementById('uniModalButtons');
+    const modal = document.getElementById('universalModal');
+
+    if (!modal) {
+        alert(`${title}: ${message}`);
+        return;
     }
 
-    function customConfirm(title, message, iconClass, color, confirmCallback, cancelCallback = null) {
-        document.getElementById('uniModalIcon').className = 'bx ' + iconClass;
-        document.getElementById('uniModalIcon').style.color = color;
-        document.getElementById('uniModalTitle').innerText = title;
-        document.getElementById('uniModalText').innerText = message;
-        
-        let cancelBtn = `<button id="uniCancelBtn" class="modal-cancel-btn" style="height: 50px;">Cancel</button>`;
-        let confirmBtn = `<button id="uniConfirmBtn" class="btn-status" style="flex: 1; background: ${color}; justify-content: center; height: 50px;">Proceed</button>`;
-        
-        document.getElementById('uniModalButtons').innerHTML = cancelBtn + confirmBtn;
-        document.getElementById('universalModal').style.display = 'flex';
-        
-        document.getElementById('uniCancelBtn').onclick = function() { 
-            closeModal(); 
-            if (cancelCallback) cancelCallback(); 
+    if (icon) { icon.className = 'bx ' + iconClass; icon.style.color = color; }
+    if (titleEl) titleEl.innerText = title;
+    if (textEl) textEl.innerText = message;
+    if (buttons) {
+        buttons.innerHTML = `<button onclick="closeModal('universalModal')" class="btn-sm" style="flex: 1; background: ${color}; justify-content: center; height: 50px;">OK</button>`;
+    }
+    modal.style.display = 'flex';
+}
+
+function customConfirm(title, message, iconClass, color, confirmCallback) {
+    const icon = document.getElementById('uniModalIcon');
+    const titleEl = document.getElementById('uniModalTitle');
+    const textEl = document.getElementById('uniModalText');
+    const buttons = document.getElementById('uniModalButtons');
+    const modal = document.getElementById('universalModal');
+
+    if (!modal) {
+        if (confirm(`${title}\n\n${message}`)) confirmCallback();
+        return;
+    }
+
+    if (icon) { icon.className = 'bx ' + iconClass; icon.style.color = color; }
+    if (titleEl) titleEl.innerText = title;
+    if (textEl) textEl.innerText = message;
+    if (buttons) {
+        let cancelBtn = `<button onclick="closeModal('universalModal')" class="modal-cancel-btn" style="height: 50px;">Cancel</button>`;
+        let confirmBtn = `<button id="uniConfirmBtn" class="btn-sm" style="flex: 1; background: ${color}; justify-content: center; height: 50px;">Proceed</button>`;
+        buttons.innerHTML = cancelBtn + confirmBtn;
+    }
+    modal.style.display = 'flex';
+
+    const confirmBtn = document.getElementById('uniConfirmBtn');
+    if (confirmBtn) {
+        confirmBtn.onclick = function() {
+            closeModal('universalModal');
+            confirmCallback();
         };
-        
-        document.getElementById('uniConfirmBtn').onclick = function() { 
-            closeModal(); 
-            confirmCallback(); 
-        };
     }
+}
 
-    function closeModal() { 
-        document.getElementById('universalModal').style.display = 'none'; 
-    }
+function closeModal(id) { 
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none'; 
+}
 
-    function toggleUserStatus(userId, currentStatus) {
-        const actionText = (currentStatus === 'Active') ? 'suspend' : 'activate/approve';
-        const color = (currentStatus === 'Active') ? '#d32f2f' : '#228b22';
-        const icon = (currentStatus === 'Active') ? 'bx-user-x' : 'bx-user-check';
-
-        customConfirm("Confirm Action", `Are you sure you want to ${actionText} this user?`, icon, color, function() {
-            let fd = new FormData();
-            fd.append('action', 'toggle_user_status');
-            fd.append('user_id', userId);
-            fd.append('current_status', currentStatus);
-
-            fetch('admin_actions.php', { method: 'POST', body: fd })
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) location.reload();
-                else customAlert("Error", data.message, "bx-x-circle", "#d32f2f");
-            });
-        });
-    }
-
-    function handleRoleChange(userId, newRole, username) {
-        let roleDisplay = newRole === 'user' ? 'CITIZEN' : newRole.toUpperCase();
-        
-        customConfirm(
-            "Change User Role", 
-            `Change ${username}'s access level to ${roleDisplay}?`, 
-            "bx-shield-quarter", 
-            "#1976d2", 
-            function() {
-                let fd = new FormData();
-                fd.append('action', 'update_role');
-                fd.append('user_id', userId);
-                fd.append('role', newRole);
-
-                fetch('admin_actions.php', { method: 'POST', body: fd })
-                .then(res => res.json())
-                .then(data => {
-                    if(data.success) location.reload();
-                    else {
-                        customAlert("Error", data.message, "bx-x-circle", "#d32f2f");
-                        setTimeout(() => location.reload(), 1500);
-                    }
-                });
-            }, 
-            function() { location.reload(); }
-        );
-    }
-
-    function rejectUser(userId) {
-        customConfirm("Reject Admin", "Are you sure you want to reject and delete this registration?", "bx-trash", "#d32f2f", function() {
-            let fd = new FormData();
-            fd.append('action', 'delete_user');
-            fd.append('user_id', userId);
-
-            fetch('admin_actions.php', { method: 'POST', body: fd })
-            .then(res => res.json())
-            .then(data => {
-                if(data.success) location.reload();
-                else customAlert("Error", data.message, "bx-x-circle", "#d32f2f");
-            });
-        });
-    }
-
-    function filterUsers() {
-        let input = document.getElementById('userSearchInput');
-        let filter = input.value.toLowerCase();
-        let boxes = document.querySelectorAll('.role-box');
-
-        boxes.forEach(box => {
-            let rows = box.querySelectorAll('tbody tr');
-            let visibleCount = 0;
-
-            rows.forEach(row => {
-                let text = row.innerText.toLowerCase();
-                let matches = text.includes(filter);
-                row.style.display = matches ? '' : 'none';
-                if (matches) visibleCount++;
-            });
-
-            box.style.display = (filter === '' || visibleCount > 0) ? '' : 'none';
-        });
-    }
-
-    // -----------------------------------------------------
-    // MOBILE MODAL LOGIC
-    // -----------------------------------------------------
-    function openMobileModal(row) {
-        if (window.innerWidth > 768) return; 
-
-        const cells = row.querySelectorAll('td');
-        if (cells.length < 7) return;
-
-        const titleEl = document.getElementById('m-user-title');
-        const bodyEl = document.getElementById('m-user-body');
-
-        // Extract Title from Username column (hide chevron)
-        titleEl.innerHTML = cells[1].innerHTML; 
-        
-        let html = '';
-        html += `<div class="mobile-detail-box"><small class="mobile-label">User ID</small>${cells[0].innerHTML}</div>`;
-        html += `<div class="mobile-detail-box"><small class="mobile-label">Current Role</small>${cells[2].innerHTML}</div>`;
-        html += `<div class="mobile-detail-box"><small class="mobile-label">Email Contact</small>${cells[3].innerHTML}</div>`;
-        html += `<div class="mobile-detail-box"><small class="mobile-label">Joined Date</small>${cells[4].innerHTML}</div>`;
-        html += `<div class="mobile-detail-box"><small class="mobile-label">Status</small>${cells[5].innerHTML}</div>`;
-        html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container" style="display:flex; flex-direction:column; gap:10px; width:100%;">${cells[6].innerHTML}</div></div>`;
-
-        bodyEl.innerHTML = html;
-
-        // Force buttons and dropdowns inside modal to stretch
-        let actionContainer = bodyEl.querySelector('.m-actions-container');
-        if (actionContainer) {
-            let buttons = actionContainer.querySelectorAll('button, select, span');
-            buttons.forEach(el => {
-                if(el.tagName === 'BUTTON' || el.tagName === 'SELECT') {
-                    el.style.width = '100%';
-                    if (el.tagName === 'BUTTON') el.style.justifyContent = 'center';
-                }
-            });
+function handleServerResponse(fetchPromise) {
+    fetchPromise.then(res => res.text()).then(text => {
+        let data = text.trim();
+        if (!data) throw new Error("Empty response from server.");
+        if (data.startsWith('{')) { 
+            let json = JSON.parse(data);
+            if (json.success) location.reload();
+            else customAlert("Error", json.message || json.error || "Action failed.", "bx-x-circle", "#d32f2f");
+        } else { 
+            if (data === 'success') location.reload();
+            else customAlert("Server Alert", data, "bx-info-circle", "#f57c00");
         }
+    }).catch(err => {
+        customAlert("System Error", err.toString(), "bx-error", "#d32f2f");
+    });
+}
 
-        // Hide expanding arrows inside the modal copy
-        titleEl.querySelectorAll('.mobile-expand-icon').forEach(icon => icon.style.display = 'none');
-        bodyEl.querySelectorAll('.mobile-expand-icon').forEach(icon => icon.style.display = 'none');
+function openAddUnitModal() {
+    const input = document.getElementById('new_team_name');
+    if (input) input.value = "";
+    const modal = document.getElementById('addUnitModal');
+    if (modal) modal.style.display = 'flex';
+}
 
-        document.getElementById('mobileUserModal').style.display = 'flex';
-    }
-    function deleteUserAccount(userId, username) {
+function submitNewUnit() {
+    let name = document.getElementById('new_team_name')?.value.trim();
+    let type = document.getElementById('new_team_type')?.value;
+    let brgy = document.getElementById('new_team_brgy')?.value || '';
+
+    if (!name) return customAlert("Missing Name", "Please enter a name for the unit.", "bx-error-circle", "#d32f2f");
+    
+    let brgyText = brgy ? `assigned to ${brgy}` : "as a City-Wide unit";
+
+    customConfirm("Register Unit?", `Are you sure you want to register ${name} (${type}) ${brgyText}?`, "bx-check-shield", "#228b22", function() {
+        let formData = new FormData();
+        formData.append('action', 'add_team'); 
+        formData.append('team_name', name); 
+        formData.append('team_type', type);
+        formData.append('assigned_barangay', brgy); 
+        handleServerResponse(fetch(API_PATH, { method: 'POST', body: formData }));
+    });
+}
+
+function updateStatus(id, newStatus) {
+    const displayStatus = (newStatus === 'operational' || newStatus === 'available') ? 'OPERATIONAL' : newStatus.toUpperCase();
+    customConfirm("Update Status?", `Mark this unit as ${displayStatus}?`, "bx-refresh", "#1976d2", function() {
+        let formData = new FormData();
+        formData.append('action', 'update_team_status'); 
+        formData.append('id', id); 
+        formData.append('status', newStatus);
+        
+        handleServerResponse(fetch(API_PATH, { method: 'POST', body: formData }));
+    });
+}
+
+function deleteTeam(teamId, teamName) {
     customConfirm(
-        "Delete User Account",
-        `Are you sure you want to permanently delete user "${username}"? All associated profile data will be permanently removed from the database. This action cannot be undone.`,
+        "Delete Response Unit?",
+        `Are you sure you want to permanently delete "${teamName}"? This action cannot be undone.`,
         "bx-trash",
         "#d32f2f",
         function() {
-            let fd = new FormData();
-            fd.append('action', 'delete_user');
-            fd.append('user_id', userId);
+            let formData = new FormData();
+            formData.append('action', 'delete_team');
+            formData.append('id', teamId);
 
-            fetch('admin_actions.php', { method: 'POST', body: fd })
-            .then(res => res.json())
-            .then(data => {
+            fetch(API_PATH, {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.text())
+            .then(text => {
+                let data;
+                try {
+                    data = JSON.parse(text);
+                } catch (e) {
+                    throw new Error("Invalid response: " + text.substring(0, 100));
+                }
+
                 if (data.success) {
                     location.reload();
                 } else {
-                    customAlert("Delete Failed", data.message, "bx-x-circle", "#d32f2f");
+                    customAlert("Delete Failed", data.message || "Could not delete unit.", "bx-error", "#d32f2f");
                 }
             })
             .catch(err => {
-                customAlert("Network Error", "Could not complete deletion.", "bx-x-circle", "#d32f2f");
+                console.error("Delete error:", err);
+                customAlert("Server Error", err.message || "An error occurred while deleting the unit.", "bx-error", "#d32f2f");
             });
         }
     );
 }
+
+function viewTeamMembers(teamId, teamName) {
+    const modal = document.getElementById('teamMembersModal');
+    const title = document.getElementById('tm_title');
+    const content = document.getElementById('tm_content');
+
+    if (!modal || !title || !content) return;
+
+    title.innerText = teamName;
+    content.innerHTML = '<div style="text-align:center; padding: 25px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin" style="font-size: 1.8rem;"></i><br>Loading personnel...</div>';
+    modal.style.display = 'flex';
+
+    fetch(`${API_PATH}?action=get_team_members&team_id=${encodeURIComponent(teamId)}`)
+    .then(res => res.json())
+    .then(data => {
+        if (!Array.isArray(data) || data.length === 0) {
+            content.innerHTML = '<div style="text-align:center; padding: 30px; font-weight: 700; color: #888;">No responders assigned to this unit yet.</div>';
+            return;
+        }
+
+        let html = '';
+        data.forEach(user => {
+            const isOnline = (user.is_online == 1 || user.is_online === '1');
+            const statusColor = isOnline ? '#3ada38' : '#888888';
+            const statusText = isOnline ? 'Online' : 'Offline';
+            const statusBg = isOnline ? 'rgba(58, 218, 56, 0.15)' : 'rgba(136, 136, 136, 0.15)';
+            const displayName = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'Responder';
+
+            html += `
+            <div style="background: #252628; padding: 14px 16px; border-radius: 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 14px;">
+                <div style="background: #1e1e1e; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0;">
+                    <i class='bx bxs-user-badge' style="font-size: 1.6rem; color: #1976d2;"></i>
+                    <span style="position: absolute; bottom: 0px; right: 0px; width: 12px; height: 12px; background: ${statusColor}; border: 2px solid #252628; border-radius: 50%;"></span>
+                </div>
+                <div style="flex: 1; min-width: 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+                        <div style="font-weight: 800; color: #fff; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</div>
+                        <div style="background: ${statusBg}; color: ${statusColor}; padding: 3px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.5px; flex-shrink: 0;">${statusText}</div>
+                    </div>
+                    <div style="font-size: 0.8rem; color: #aaa; font-weight: 700; margin-top: 3px;">
+                        <i class='bx bx-radio' style="vertical-align: middle;"></i> ${user.radio_callsign || 'Unit Responder'}
+                    </div>
+                </div>
+            </div>`;
+        });
+
+        content.innerHTML = html;
+    })
+    .catch(err => {
+        console.error("Failed to fetch unit members:", err);
+        content.innerHTML = '<div style="text-align:center; padding: 20px; color: #d32f2f; font-weight: bold;">Failed to load personnel.</div>';
+    });
+}
+
+// KPI card mobile toggle
+document.querySelectorAll('.kpi-card').forEach(card => {
+    card.addEventListener('click', function() {
+        if (window.innerWidth <= 768) {
+            const isExpanded = this.classList.contains('mobile-expanded');
+            document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('mobile-expanded'));
+            if (!isExpanded) this.classList.add('mobile-expanded');
+        }
+    });
+});
+
+// Explicit window bindings for inline onclicks
+window.openAddUnitModal = openAddUnitModal;
+window.submitNewUnit = submitNewUnit;
+window.updateStatus = updateStatus;
+window.deleteTeam = deleteTeam;
+window.viewTeamMembers = viewTeamMembers;
+window.closeModal = closeModal;
