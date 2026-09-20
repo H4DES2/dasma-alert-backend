@@ -419,15 +419,24 @@ function openDeployModal(ids, name) {
         .then(data => {
             let html = '';
             if (!data || data.length === 0) {
-                html = "<div style='text-align:center; color:var(--color-critical); font-weight:bold; padding: 15px;'>No operational units currently available.</div>";
+                html = "<div style='text-align:center; color:var(--color-critical); font-weight:bold; padding: 20px; background:var(--surface-subtle); border-radius:var(--radius-md);'>No operational units currently available.</div>";
             } else {
                 data.forEach(t => {
                     let recBadge = t.is_recommended ? `<span style="background:var(--color-success); color:white; padding: 2px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; margin-left: 8px; vertical-align: middle;">⭐ RECOMMENDED</span>` : "";
                     let recClass = t.is_recommended ? "recommended" : "";
                     
                     html += `<label class="team-label ${recClass}">
-                        <input type="checkbox" class="dispatch-team-cb" value="${t.id}" data-name="${t.team_name}" style="transform: scale(1.2);">
-                        <span style="font-size:1rem;"><b>${t.team_name}</b> <small style="color:var(--text-muted); font-weight:bold;">(${t.team_type})</small> ${recBadge}<br><small style="color:var(--color-info); font-weight:bold;">📍 ${t.assigned_barangay || 'City-Wide'}</small></span>
+                        <input type="checkbox" class="dispatch-team-cb" value="${t.id}" data-name="${t.team_name}">
+                        <div style="flex: 1; line-height: 1.35;">
+                            <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 4px;">
+                                <strong style="color: var(--text-primary); font-size: 0.95rem;">${t.team_name}</strong>
+                                <span style="color: var(--text-muted); font-size: 0.8rem; font-weight: 700;">(${t.team_type})</span>
+                                ${recBadge}
+                            </div>
+                            <div style="color: var(--color-info); font-size: 0.78rem; font-weight: 700; margin-top: 3px;">
+                                📍 ${t.assigned_barangay || 'City-Wide'}
+                            </div>
+                        </div>
                     </label>`;
                 });
             }

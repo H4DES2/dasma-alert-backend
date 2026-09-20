@@ -670,3 +670,55 @@ html.global-dark-mode .leaflet-control-zoom a {
 .dark-map-tiles {
     filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7) !important;
 }
+/* 🚀 DISPATCH MODAL TEAM SELECTION */
+.team-list-container {
+    max-height: 250px;
+    overflow-y: auto;
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-right: 4px;
+}
+
+.team-label {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 12px 16px;
+    background: var(--surface-subtle);
+    border: 1.5px solid var(--border-color);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.team-label:hover {
+    border-color: var(--color-success);
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.team-label input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--color-success);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+.team-label.recommended {
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.08);
+}
+
+html.global-dark-mode .team-label {
+    background: #27272a;
+    border-color: #3f3f46;
+}
+
+html.global-dark-mode .team-label:hover,
+html.global-dark-mode .team-label.recommended {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: var(--color-success);
+}
