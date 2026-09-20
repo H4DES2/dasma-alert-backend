@@ -17,7 +17,23 @@ if (!$auth->isSuperAdmin()) {
 
 session_write_close();
 
-$users_result = $conn->query("SELECT id, username, email, created_at, status, role FROM users ORDER BY created_at DESC");
+// Join user_profiles to retrieve full name and contact number
+$users_result = $conn->query("
+    SELECT 
+        u.id, 
+        u.username, 
+        u.first_name, 
+        u.last_name, 
+        u.email, 
+        u.barangay, 
+        u.created_at, 
+        u.status, 
+        u.role,
+        p.phone_number
+    FROM users u
+    LEFT JOIN user_profiles p ON u.id = p.user_id
+    ORDER BY u.created_at DESC
+");
 
 $pending_users = [];
 $superadmin_users = [];
@@ -122,22 +138,49 @@ $role_sections = [
                                 <tr>
                                     <th>ID</th>
                                     <th>Account (Username)</th>
-                                    <th>Current Role</th>
+                                    <th>Full Name</th>
+                                    <th>Contact Number</th>
                                     <th>Email Contact</th>
+                                    <th>Current Role</th>
                                     <th>Joined Date</th>
                                     <th>Status</th>
                                     <th style="text-align: center;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                <?php foreach ($sec['users'] as $row): ?>
+                                <?php foreach ($sec['users'] as $row): 
+                                    $full_name = trim(($row['first_name'] ?? '') . ' ' . ($row['last_name'] ?? ''));
+                                    $phone_num = trim($row['phone_number'] ?? '');
+                                    $brgy_val  = trim($row['barangay'] ?? '');
+                                ?>
                                 <tr class="user-row clickable-row" onclick="openMobileModal(this)">
                                     <td><small style="font-weight: 800; color: #888;">#<?php echo $row['id']; ?></small></td>
                                     <td>
                                         <strong><?php echo htmlspecialchars($row['username']); ?></strong>
                                         <i class='bx bx-chevron-right mobile-expand-icon'></i>
                                     </td>
-                                    
+                                    <td>
+                                        <?php if (!empty($full_name)): ?>
+                                            <strong style="color: var(--text-primary);"><?php echo htmlspecialchars($full_name); ?></strong>
+                                        <?php else: ?>
+                                            <span style="color: #aaa; font-style: italic;">Not Set</span>
+                                        <?php endif; ?>
+                                        <?php if (!empty($brgy_val)): ?>
+                                            <small style="display: block; color: #1976d2; font-weight: 700; font-size: 0.75rem; margin-top: 2px;">
+                                                <i class='bx bxs-map-pin'></i> Brgy. <?php echo htmlspecialchars($brgy_val); ?>
+                                            </small>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td>
+                                        <?php if (!empty($phone_num)): ?>
+                                            <span style="font-weight: 700; color: var(--text-primary); display: inline-flex; align-items: center; gap: 4px;">
+                                                <i class='bx bx-phone' style="color: #388e3c; font-size: 1rem;"></i> <?php echo htmlspecialchars($phone_num); ?>
+                                            </span>
+                                        <?php else: ?>
+                                            <span style="color: #aaa; font-style: italic;">No Number</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td><i class='bx bx-envelope' style="color: #888; margin-right: 5px;"></i> <?php echo htmlspecialchars($row['email'] ?? 'N/A'); ?></td>
                                     <td>
                                         <?php if($row['role'] === 'superadmin'): ?>
                                             <span class="role-badge" style="color: #8e24aa;"><i class='bx bxs-crown'></i> Superadmin</span>
@@ -149,10 +192,7 @@ $role_sections = [
                                             <span class="role-badge" style="color: #757575;"><i class='bx bxs-user'></i> App Citizen</span>
                                         <?php endif; ?>
                                     </td>
-                                    
-                                    <td><i class='bx bx-envelope' style="color: #888; margin-right: 5px;"></i> <?php echo htmlspecialchars($row['email'] ?? 'N/A'); ?></td>
                                     <td><?php echo date('M d, Y', strtotime($row['created_at'])); ?></td>
-                                    
                                     <td>
                                         <?php 
                                             $sColor = '#757575';
@@ -164,7 +204,7 @@ $role_sections = [
                                             <i class='bx bxs-circle' style="font-size: 0.6rem;"></i> <?php echo strtoupper($row['status']); ?>
                                         </span>
                                     </td>
-                                        <td class="action-cell">
+                                    <td class="action-cell">
                                         <div class="action-btn-group">
                                             <?php if ((int)$row['id'] === (int)$_SESSION['user_id']): ?>
                                                 <span style="color: #8e24aa; font-size: 0.8rem; font-weight: 700;"><i class='bx bxs-user-check'></i> Your Account</span>

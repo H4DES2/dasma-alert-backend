@@ -313,7 +313,6 @@ html.global-dark-mode .role-selector {
     border-color: var(--border-color); 
 }
 
-/* Mobile Overrides */
 @media (max-width: 768px) {
     .header-flex { 
         flex-direction: column; 
@@ -346,17 +345,14 @@ html.global-dark-mode .role-selector {
         border-radius: var(--radius-lg); 
         margin-bottom: 10px; 
         padding: 12px;
-        box-shadow: var(--shadow-sm);
+        box-shadow: var(--shadow-sm); 
         cursor: pointer; 
         position: relative; 
     }
     
-    /* Show first two info points & action bar cleanly on mobile */
-    .data-table td:nth-child(3),
-    .data-table td:nth-child(4),
-    .data-table td:nth-child(5),
-    .data-table td:nth-child(6) { 
-        display: none; 
+    /* Keep ID, Username, and Action Cell visible; hide the rest on mobile cards */
+    .data-table td:not(:nth-child(1)):not(:nth-child(2)):not(.action-cell) { 
+        display: none !important; 
     }
     
     .data-table td { 

@@ -2,6 +2,11 @@ const API_PATH = window.location.pathname.includes('/alert/')
     ? '/alert/admin/admin_actions.php' 
     : 'admin_actions.php';
 
+function closeModal(id) { 
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none'; 
+}
+
 function customAlert(title, message, iconClass = 'bx-info-circle', color = '#1976d2') {
     const icon = document.getElementById('uniModalIcon');
     const titleEl = document.getElementById('uniModalTitle');
@@ -18,12 +23,12 @@ function customAlert(title, message, iconClass = 'bx-info-circle', color = '#197
     if (titleEl) titleEl.innerText = title;
     if (textEl) textEl.innerText = message;
     if (buttons) {
-        buttons.innerHTML = `<button onclick="closeModal('universalModal')" class="btn-sm" style="flex: 1; background: ${color}; justify-content: center; height: 50px;">OK</button>`;
+        buttons.innerHTML = `<button onclick="closeModal('universalModal')" class="btn-sm" style="flex: 1; background: ${color}; justify-content: center; height: 46px; border-radius: 10px; color: white; border: none; font-weight: 800; cursor: pointer;">OK</button>`;
     }
     modal.style.display = 'flex';
 }
 
-function customConfirm(title, message, iconClass, color, confirmCallback) {
+function customConfirm(title, message, iconClass, color, confirmCallback, cancelCallback = null) {
     const icon = document.getElementById('uniModalIcon');
     const titleEl = document.getElementById('uniModalTitle');
     const textEl = document.getElementById('uniModalText');
@@ -32,6 +37,7 @@ function customConfirm(title, message, iconClass, color, confirmCallback) {
 
     if (!modal) {
         if (confirm(`${title}\n\n${message}`)) confirmCallback();
+        else if (cancelCallback) cancelCallback();
         return;
     }
 
@@ -39,187 +45,157 @@ function customConfirm(title, message, iconClass, color, confirmCallback) {
     if (titleEl) titleEl.innerText = title;
     if (textEl) textEl.innerText = message;
     if (buttons) {
-        let cancelBtn = `<button onclick="closeModal('universalModal')" class="modal-cancel-btn" style="height: 50px;">Cancel</button>`;
-        let confirmBtn = `<button id="uniConfirmBtn" class="btn-sm" style="flex: 1; background: ${color}; justify-content: center; height: 50px;">Proceed</button>`;
-        buttons.innerHTML = cancelBtn + confirmBtn;
+        buttons.innerHTML = `
+            <button id="uniCancelBtn" style="flex: 1; height: 46px; border-radius: 10px; border: 1px solid #ccc; background: transparent; font-weight: 700; cursor: pointer;">Cancel</button>
+            <button id="uniConfirmBtn" style="flex: 1; background: ${color}; color: white; border: none; justify-content: center; height: 46px; border-radius: 10px; font-weight: 800; cursor: pointer;">Proceed</button>
+        `;
     }
     modal.style.display = 'flex';
 
-    const confirmBtn = document.getElementById('uniConfirmBtn');
-    if (confirmBtn) {
-        confirmBtn.onclick = function() {
-            closeModal('universalModal');
-            confirmCallback();
-        };
-    }
+    document.getElementById('uniConfirmBtn').onclick = function() {
+        closeModal('universalModal');
+        confirmCallback();
+    };
+
+    document.getElementById('uniCancelBtn').onclick = function() {
+        closeModal('universalModal');
+        if (cancelCallback) cancelCallback();
+    };
 }
 
-function closeModal(id) { 
-    const el = document.getElementById(id);
-    if (el) el.style.display = 'none'; 
-}
+function handleRoleChange(userId, newRole, username) {
+    const roleLabels = {
+        'superadmin': 'Super Administrator',
+        'admin': 'Official (Admin)',
+        'responder': 'Emergency Responder',
+        'user': 'App Citizen'
+    };
 
-function handleServerResponse(fetchPromise) {
-    fetchPromise.then(res => res.text()).then(text => {
-        let data = text.trim();
-        if (!data) throw new Error("Empty response from server.");
-        if (data.startsWith('{')) { 
-            let json = JSON.parse(data);
-            if (json.success) location.reload();
-            else customAlert("Error", json.message || json.error || "Action failed.", "bx-x-circle", "#d32f2f");
-        } else { 
-            if (data === 'success') location.reload();
-            else customAlert("Server Alert", data, "bx-info-circle", "#f57c00");
-        }
-    }).catch(err => {
-        customAlert("System Error", err.toString(), "bx-error", "#d32f2f");
-    });
-}
+    const targetLabel = roleLabels[newRole] || newRole.toUpperCase();
 
-function openAddUnitModal() {
-    const input = document.getElementById('new_team_name');
-    if (input) input.value = "";
-    const modal = document.getElementById('addUnitModal');
-    if (modal) modal.style.display = 'flex';
-}
-
-function submitNewUnit() {
-    let name = document.getElementById('new_team_name')?.value.trim();
-    let type = document.getElementById('new_team_type')?.value;
-    let brgy = document.getElementById('new_team_brgy')?.value || '';
-
-    if (!name) return customAlert("Missing Name", "Please enter a name for the unit.", "bx-error-circle", "#d32f2f");
-    
-    let brgyText = brgy ? `assigned to ${brgy}` : "as a City-Wide unit";
-
-    customConfirm("Register Unit?", `Are you sure you want to register ${name} (${type}) ${brgyText}?`, "bx-check-shield", "#228b22", function() {
-        let formData = new FormData();
-        formData.append('action', 'add_team'); 
-        formData.append('team_name', name); 
-        formData.append('team_type', type);
-        formData.append('assigned_barangay', brgy); 
-        handleServerResponse(fetch(API_PATH, { method: 'POST', body: formData }));
-    });
-}
-
-function updateStatus(id, newStatus) {
-    const displayStatus = (newStatus === 'operational' || newStatus === 'available') ? 'OPERATIONAL' : newStatus.toUpperCase();
-    customConfirm("Update Status?", `Mark this unit as ${displayStatus}?`, "bx-refresh", "#1976d2", function() {
-        let formData = new FormData();
-        formData.append('action', 'update_team_status'); 
-        formData.append('id', id); 
-        formData.append('status', newStatus);
-        
-        handleServerResponse(fetch(API_PATH, { method: 'POST', body: formData }));
-    });
-}
-
-function deleteTeam(teamId, teamName) {
     customConfirm(
-        "Delete Response Unit?",
-        `Are you sure you want to permanently delete "${teamName}"? This action cannot be undone.`,
-        "bx-trash",
-        "#d32f2f",
+        "Change User Role?",
+        `Are you sure you want to change the role of "${username}" to ${targetLabel}?`,
+        "bx-user-pin",
+        "#8e24aa",
         function() {
-            let formData = new FormData();
-            formData.append('action', 'delete_team');
-            formData.append('id', teamId);
+            const fd = new FormData();
+            fd.append('action', 'update_role');
+            fd.append('user_id', userId);
+            fd.append('role', newRole);
 
-            fetch(API_PATH, {
-                method: 'POST',
-                body: formData
-            })
-            .then(res => res.text())
-            .then(text => {
-                let data;
-                try {
-                    data = JSON.parse(text);
-                } catch (e) {
-                    throw new Error("Invalid response: " + text.substring(0, 100));
-                }
-
-                if (data.success) {
-                    location.reload();
-                } else {
-                    customAlert("Delete Failed", data.message || "Could not delete unit.", "bx-error", "#d32f2f");
-                }
-            })
-            .catch(err => {
-                console.error("Delete error:", err);
-                customAlert("Server Error", err.message || "An error occurred while deleting the unit.", "bx-error", "#d32f2f");
-            });
+            fetch(API_PATH, { method: 'POST', body: fd })
+                .then(async r => {
+                    const text = await r.text();
+                    try { return JSON.parse(text); } 
+                    catch (e) { throw new Error("Invalid server output: " + text.substring(0, 100)); }
+                })
+                .then(d => {
+                    if (d.success) {
+                        location.reload();
+                    } else {
+                        customAlert("Role Change Failed", d.message || "Could not update user role.", "bx-error", "#d32f2f");
+                    }
+                })
+                .catch(err => {
+                    console.error("Role change error:", err);
+                    customAlert("Server Error", err.message, "bx-error", "#d32f2f");
+                });
+        },
+        function() {
+            location.reload();
         }
     );
 }
 
-function viewTeamMembers(teamId, teamName) {
-    const modal = document.getElementById('teamMembersModal');
-    const title = document.getElementById('tm_title');
-    const content = document.getElementById('tm_content');
+function toggleUserStatus(userId, currentStatus) {
+    const isActivating = (currentStatus !== 'Active');
+    const actionLabel = isActivating ? 'Activate' : 'Suspend';
+    const actionColor = isActivating ? '#388e3c' : '#f57c00';
 
-    if (!modal || !title || !content) return;
+    customConfirm(
+        `${actionLabel} Account?`,
+        `Are you sure you want to ${actionLabel.toLowerCase()} user #${userId}?`,
+        isActivating ? "bx-check-circle" : "bx-error-circle",
+        actionColor,
+        function() {
+            const fd = new FormData();
+            fd.append('action', 'toggle_user_status');
+            fd.append('user_id', userId);
+            fd.append('current_status', currentStatus);
 
-    title.innerText = teamName;
-    content.innerHTML = '<div style="text-align:center; padding: 25px; opacity:0.6; color:#bbb;"><i class="bx bx-loader-alt bx-spin" style="font-size: 1.8rem;"></i><br>Loading personnel...</div>';
-    modal.style.display = 'flex';
-
-    fetch(`${API_PATH}?action=get_team_members&team_id=${encodeURIComponent(teamId)}`)
-    .then(res => res.json())
-    .then(data => {
-        if (!Array.isArray(data) || data.length === 0) {
-            content.innerHTML = '<div style="text-align:center; padding: 30px; font-weight: 700; color: #888;">No responders assigned to this unit yet.</div>';
-            return;
+            fetch(API_PATH, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) location.reload();
+                    else customAlert("Status Error", d.message || "Failed to update status.", "bx-error", "#d32f2f");
+                })
+                .catch(err => customAlert("Server Error", err.message, "bx-error", "#d32f2f"));
         }
+    );
+}
 
-        let html = '';
-        data.forEach(user => {
-            const isOnline = (user.is_online == 1 || user.is_online === '1');
-            const statusColor = isOnline ? '#3ada38' : '#888888';
-            const statusText = isOnline ? 'Online' : 'Offline';
-            const statusBg = isOnline ? 'rgba(58, 218, 56, 0.15)' : 'rgba(136, 136, 136, 0.15)';
-            const displayName = user.name || `${user.first_name || ''} ${user.last_name || ''}`.trim() || user.username || 'Responder';
+function deleteUserAccount(userId, username) {
+    customConfirm(
+        "Delete User Account?",
+        `Are you sure you want to permanently delete "${username}"? All associated profiles will be removed.`,
+        "bx-trash",
+        "#d32f2f",
+        function() {
+            const fd = new FormData();
+            fd.append('action', 'delete_user');
+            fd.append('user_id', userId);
 
-            html += `
-            <div style="background: #252628; padding: 14px 16px; border-radius: 14px; margin-bottom: 12px; border: 1px solid rgba(255,255,255,0.08); display: flex; align-items: center; gap: 14px;">
-                <div style="background: #1e1e1e; width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center; position: relative; flex-shrink: 0;">
-                    <i class='bx bxs-user-badge' style="font-size: 1.6rem; color: #1976d2;"></i>
-                    <span style="position: absolute; bottom: 0px; right: 0px; width: 12px; height: 12px; background: ${statusColor}; border: 2px solid #252628; border-radius: 50%;"></span>
-                </div>
-                <div style="flex: 1; min-width: 0;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                        <div style="font-weight: 800; color: #fff; font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${displayName}</div>
-                        <div style="background: ${statusBg}; color: ${statusColor}; padding: 3px 8px; border-radius: 6px; font-size: 0.65rem; font-weight: 900; letter-spacing: 0.5px; flex-shrink: 0;">${statusText}</div>
-                    </div>
-                    <div style="font-size: 0.8rem; color: #aaa; font-weight: 700; margin-top: 3px;">
-                        <i class='bx bx-radio' style="vertical-align: middle;"></i> ${user.radio_callsign || 'Unit Responder'}
-                    </div>
-                </div>
-            </div>`;
-        });
+            fetch(API_PATH, { method: 'POST', body: fd })
+                .then(r => r.json())
+                .then(d => {
+                    if (d.success) location.reload();
+                    else customAlert("Delete Failed", d.message || "Could not delete user.", "bx-error", "#d32f2f");
+                })
+                .catch(err => customAlert("Server Error", err.message, "bx-error", "#d32f2f"));
+        }
+    );
+}
 
-        content.innerHTML = html;
-    })
-    .catch(err => {
-        console.error("Failed to fetch unit members:", err);
-        content.innerHTML = '<div style="text-align:center; padding: 20px; color: #d32f2f; font-weight: bold;">Failed to load personnel.</div>';
+function filterUsers() {
+    const input = document.getElementById('userSearchInput');
+    const filter = input ? input.value.toLowerCase() : '';
+    const rows = document.querySelectorAll('.user-row');
+
+    rows.forEach(row => {
+        const text = row.innerText.toLowerCase();
+        row.style.display = text.includes(filter) ? '' : 'none';
     });
 }
 
-// KPI card mobile toggle
-document.querySelectorAll('.kpi-card').forEach(card => {
-    card.addEventListener('click', function() {
-        if (window.innerWidth <= 768) {
-            const isExpanded = this.classList.contains('mobile-expanded');
-            document.querySelectorAll('.kpi-card').forEach(c => c.classList.remove('mobile-expanded'));
-            if (!isExpanded) this.classList.add('mobile-expanded');
-        }
-    });
-});
+function openMobileModal(row) {
+    if (window.innerWidth > 768) return;
 
-// Explicit window bindings for inline onclicks
-window.openAddUnitModal = openAddUnitModal;
-window.submitNewUnit = submitNewUnit;
-window.updateStatus = updateStatus;
-window.deleteTeam = deleteTeam;
-window.viewTeamMembers = viewTeamMembers;
+    const cells = row.querySelectorAll('td');
+    if (cells.length < 9) return;
+
+    const titleEl = document.getElementById('m-user-title');
+    const bodyEl = document.getElementById('m-user-body');
+    const modal = document.getElementById('mobileUserModal');
+
+    if (titleEl) titleEl.innerText = cells[1].innerText.trim();
+    if (bodyEl) {
+        bodyEl.innerHTML = `
+            <div style="margin-bottom: 12px;"><small style="color: #888; font-weight: 800; font-size: 0.75rem;">FULL NAME</small><div style="font-weight:700; margin-top:2px;">${cells[2].innerHTML}</div></div>
+            <div style="margin-bottom: 12px;"><small style="color: #888; font-weight: 800; font-size: 0.75rem;">CONTACT NUMBER</small><div style="font-weight:700; margin-top:2px;">${cells[3].innerHTML}</div></div>
+            <div style="margin-bottom: 12px;"><small style="color: #888; font-weight: 800; font-size: 0.75rem;">EMAIL</small><div style="margin-top:2px;">${cells[4].innerHTML}</div></div>
+            <div style="margin-bottom: 12px;"><small style="color: #888; font-weight: 800; font-size: 0.75rem;">ROLE</small><div style="margin-top:2px;">${cells[5].innerHTML}</div></div>
+            <div style="margin-bottom: 12px;"><small style="color: #888; font-weight: 800; font-size: 0.75rem;">DATE REGISTERED</small><div style="margin-top:2px;">${cells[6].innerHTML}</div></div>
+            <div style="margin-bottom: 15px;"><small style="color: #888; font-weight: 800; font-size: 0.75rem;">STATUS</small><div style="margin-top:2px;">${cells[7].innerHTML}</div></div>
+            <div><small style="color: #888; font-weight: 800; font-size: 0.75rem;">ACTIONS</small><div style="margin-top: 6px;">${cells[8].innerHTML}</div></div>
+        `;
+    }
+    if (modal) modal.style.display = 'flex';
+}
+
+window.handleRoleChange = handleRoleChange;
+window.toggleUserStatus = toggleUserStatus;
+window.deleteUserAccount = deleteUserAccount;
+window.filterUsers = filterUsers;
+window.openMobileModal = openMobileModal;
 window.closeModal = closeModal;

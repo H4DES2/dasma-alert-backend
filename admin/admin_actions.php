@@ -1521,24 +1521,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'update_role') {
         requireRole(['superadmin'], $role);
-        $target_user   = (int)$_POST['user_id'];
-        $new_role      = $_POST['role'] ?? '';
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
+
+        $target_user   = (int)($_POST['user_id'] ?? 0);
+        $new_role      = trim($_POST['role'] ?? '');
         $allowed_roles = ['admin', 'user', 'responder', 'superadmin'];
         
-        if (!in_array($new_role, $allowed_roles)) {
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Invalid role.']); exit();
+        if (!in_array($new_role, $allowed_roles, true)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid role specified.']);
+            exit();
         }
         if ($target_user === (int)$user_id) {
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Cannot change your own role.']); exit();
+            echo json_encode(['success' => false, 'message' => 'Cannot change your own role.']);
+            exit();
         }
         
         $stmt = $conn->prepare("UPDATE users SET role = ? WHERE id = ?");
-        $stmt->bind_param("si", $target_user);
+        $stmt->bind_param("si", $new_role, $target_user);
         
         if ($stmt->execute()) { 
-            ob_end_clean(); echo json_encode(['success' => true]); 
+            echo json_encode(['success' => true]); 
         } else { 
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => $stmt->error]); 
+            echo json_encode(['success' => false, 'message' => $stmt->error]); 
         }
         $stmt->close();
         exit();
