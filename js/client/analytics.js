@@ -460,6 +460,11 @@ function viewEvidence(imagePath, incidentType, brgy) {
     document.getElementById('evidenceImageFull').src = cleanUrl; 
     document.getElementById('evidenceCaption').innerText = `Visual Evidence: ${incidentType} in Brgy. ${brgy}`; 
     document.getElementById('evidenceModal').style.display = 'flex'; 
+    document.getElementById('evidenceModal')?.addEventListener('click', function(e) {
+    if (e.target.id === 'evidenceModal') {
+        closeModal('evidenceModal');
+    }
+});
 }
 
 function deleteArchived(id) {

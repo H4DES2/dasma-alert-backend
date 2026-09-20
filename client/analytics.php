@@ -430,11 +430,15 @@ $pie_values   = json_encode(array_values($type_counts));
     </div>
 
     <!-- EVIDENCE MODAL -->
-    <div id="evidenceModal" class="modal" style="background: rgba(0,0,0,0.85);">
-        <div class="modal-content" style="background: transparent; box-shadow: none; text-align: center; max-width: 800px; border: none; position: relative;">
-            <div class="close-modal" onclick="closeModal('evidenceModal')" style="color: white; font-size: 2.5rem; top: -40px; right: 0; background: none; border: none;"><i class='bx bx-x'></i></div>
-            <img id="evidenceImageFull" src="" style="max-width: 100%; max-height: 80vh; border-radius: 12px; border: 3px solid #555;">
-            <p id="evidenceCaption" style="color: white; margin-top: 15px; font-size: 1.2rem; font-weight: bold;"></p>
+    <div id="evidenceModal" class="modal" style="display:none; position:fixed; inset:0; width:100vw; height:100vh; background:rgba(0,0,0,0.88); z-index:20000; align-items:center; justify-content:center; backdrop-filter:blur(8px); padding:20px;">
+        <div class="evidence-modal-box" style="position:relative; max-width:850px; width:100%; background:#18181b; border:1px solid rgba(255,255,255,0.15); border-radius:18px; padding:20px; box-shadow:0 25px 60px rgba(0,0,0,0.6); text-align:center;">
+            <button type="button" class="close-modal" onclick="closeModal('evidenceModal')" style="position:absolute; top:14px; right:14px; width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,0.15); border:1px solid rgba(255,255,255,0.25); color:#fff; display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:1.4rem; z-index:10; transition:0.2s;">
+                <i class='bx bx-x'></i>
+            </button>
+            <div style="margin-top:12px; min-height:200px; max-height:72vh; display:flex; align-items:center; justify-content:center; overflow:hidden; border-radius:12px; background:#09090b;">
+                <img id="evidenceImageFull" src="" alt="Evidence Image" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:8px;">
+            </div>
+            <p id="evidenceCaption" style="color:#f4f4f5; margin:14px 0 4px; font-size:1rem; font-weight:700;"></p>
         </div>
     </div>
 
