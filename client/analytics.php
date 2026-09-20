@@ -15,7 +15,7 @@ if (!$auth->is_logged_in()) {
 $user_id = $_SESSION['user_id'];
 $my_brgy = $_SESSION['barangay'] ?? '';
 
-// If session barangay is empty, fallback to DB fetch
+// Fallback to database if session barangay is missing
 if (empty($my_brgy)) {
     $stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
@@ -26,11 +26,10 @@ if (empty($my_brgy)) {
     $stmt->close();
 }
 
-// Normalize / Handle Barangay Aliases
 $target_brgy = trim($my_brgy);
 $like_brgy   = '%' . $target_brgy . '%';
 
-// Include both 'archived' and 'resolved' incidents, with alias support
+// 1. Fetch Archived & Resolved Incidents
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.created_at, i.image_path,
     DATE_FORMAT(i.created_at, '%M %d, %Y - %h:%i %p') as date_str,
@@ -58,11 +57,35 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// Fix: Assign to $archived_incidents for the HTML table
 $archived_incidents = $incidents;
 
-// Prepare JSON arrays for JS & Chart.js
+// 2. Fetch Report Bin (Rejected / Spam Reports)
+$bin_query = "
+    SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.created_at, i.image_path, i.admin_remarks,
+    DATE_FORMAT(i.created_at, '%M %d, %Y - %h:%i %p') as date_str,
+    sr.reason as spam_reason,
+    (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) SEPARATOR '|||') 
+     FROM incident_logs il 
+     LEFT JOIN users u ON il.user_id = u.id 
+     WHERE il.incident_id = i.id ORDER BY il.created_at ASC) as all_logs
+    FROM incidents i
+    LEFT JOIN spam_reports sr ON sr.incident_id = i.id
+    WHERE i.status = 'rejected'
+      AND (i.barangay = ? OR i.barangay LIKE ?)
+    ORDER BY i.created_at DESC";
+
+$b_stmt = $conn->prepare($bin_query);
+$b_stmt->bind_param("ss", $target_brgy, $like_brgy);
+$b_stmt->execute();
+$b_res = $b_stmt->get_result();
+$rejected_incidents = [];
+while ($brow = $b_res->fetch_assoc()) {
+    $rejected_incidents[] = $brow;
+}
+$b_stmt->close();
+
 $js_incidents = json_encode($incidents);
+$js_rejected  = json_encode($rejected_incidents);
 $pie_labels   = json_encode(array_keys($type_counts));
 $pie_values   = json_encode(array_values($type_counts));
 ?>
@@ -75,22 +98,21 @@ $pie_values   = json_encode(array_values($type_counts));
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="../css/client/navbar.css">
-    <link rel="stylesheet" href="../css/client/analytics.css">
+    <link rel="stylesheet" href="../css/client/analytics.css?v=<?= filemtime('../css/client/analytics.css') ?>">
 </head>
 <body>
 
     <?php include 'navbar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 30px;">
-            <h1 style="color: #333; margin: 0; font-size: 2rem;">Sector Analytics</h1>
-            <p style="color: #666; margin-top: 5px; font-weight: 800;">
+        <header style="margin-bottom: 25px;">
+            <h1 style="margin: 0; font-size: 2rem; font-weight: 900;">Sector Analytics</h1>
+            <p style="color: var(--text-secondary, #666); margin-top: 5px; font-weight: 800;">
                 Sector: <span style="color: #d32f2f;"><?php echo htmlspecialchars($my_brgy ?: 'Unassigned'); ?></span>
             </p>
         </header>
 
         <div class="dashboard-split-layout">
-            
             <div class="left-column">
                 <div class="sitting-panel">
                     <div class="panel-header">
@@ -105,7 +127,7 @@ $pie_values   = json_encode(array_values($type_counts));
                     <div class="panel-header">
                         <h2 style="margin: 0;"><i class='bx bx-line-chart' style="color:#d32f2f;"></i> Disaster Seasonality</h2>
                         <select id="seasonalityFilter" class="filter-dropdown" onchange="renderSeasonality()">
-                            <option value="all">∞ All Time</option>
+                            <option value="all">∞ All Time (12 Months)</option>
                             <option value="year">📅 Past Year</option>
                             <option value="month">📆 Past Month</option>
                             <option value="week">🗓️ Past Week</option>
@@ -118,17 +140,37 @@ $pie_values   = json_encode(array_values($type_counts));
             </div>
 
             <div class="right-column sitting-panel">
-                <div class="panel-header">
-                    <h2 style="margin: 0; display:flex; align-items:center; gap:10px;"><i class='bx bxs-archive' style="color:#607d8b;"></i> Incident Archive Vault</h2>
-                    <div class="vault-controls">
-                        <button class="icon-btn green"><i class='bx bx-table'></i></button>
-                        <button class="icon-btn red"><i class='bx bxs-file-pdf'></i></button>
-                        <select class="filter-dropdown"><option>∞ All Time</option></select>
-                        <select class="filter-dropdown"><option>🌍 All Types</option></select>
+                <div class="panel-header" style="flex-direction: column; align-items: stretch; gap: 14px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+                        <div class="analytics-tab-group">
+                            <button type="button" id="tabVaultBtn" class="analytics-tab-btn active" onclick="switchAnalyticsTab('vault')">
+                                <i class='bx bxs-archive'></i> Archive Vault (<span id="count-vault"><?= count($archived_incidents) ?></span>)
+                            </button>
+                            <button type="button" id="tabBinBtn" class="analytics-tab-btn" onclick="switchAnalyticsTab('bin')">
+                                <i class='bx bxs-trash'></i> Report Bin (<span id="count-bin"><?= count($rejected_incidents) ?></span>)
+                            </button>
+                        </div>
+
+                        <div class="vault-controls">
+                            <button class="icon-btn green" onclick="exportFilteredData('csv')" title="Download CSV (with query)"><i class='bx bx-table'></i></button>
+                            <button class="icon-btn red" onclick="exportFilteredData('pdf')" title="Print / Download PDF Report"><i class='bx bxs-file-pdf'></i></button>
+                            <select id="vaultTimeFilter" class="filter-dropdown" onchange="filterVaultData()">
+                                <option value="all">∞ All Time</option>
+                                <option value="year">📅 Past Year</option>
+                                <option value="quarter">📊 Past Quarter</option>
+                                <option value="month">📆 Past Month</option>
+                                <option value="week">🗓️ Past Week</option>
+                                <option value="today">⚡ Today</option>
+                            </select>
+                            <select id="vaultTypeFilter" class="filter-dropdown" onchange="filterVaultData()">
+                                <option value="all">🌍 All Types</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 
-                <div class="table-scroll-wrapper">
+                <!-- 1. Archive Vault Table -->
+                <div id="vaultTableWrapper" class="table-scroll-wrapper">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -138,20 +180,19 @@ $pie_values   = json_encode(array_values($type_counts));
                                 <th style="text-align:center;">Action</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="vaultTableBody">
                             <?php if (empty($archived_incidents)): ?>
                                 <tr><td colspan="4" style="text-align: center; color: #888; padding: 40px; font-weight: bold;">No historical records found.</td></tr>
                             <?php else: ?>
                                 <?php foreach ($archived_incidents as $inc): 
                                     $badge = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'minor' : 'major');
-                                    $logs_js = htmlspecialchars($inc['all_logs'] ?? '', ENT_QUOTES, 'UTF-8');
                                     $safe_img = addslashes($inc['image_path'] ?? '');
                                     $safe_type = addslashes($inc['incident_type']);
                                     $safe_brgy = addslashes($inc['barangay']);
                                 ?>
                                 <tr class="clickable-row" onclick="openMobileModal(this)">
                                     <td>
-                                        <div class="incident-title-text" style="font-weight: 800; font-size: 1.1rem;"><?php echo htmlspecialchars($inc['incident_type']); ?></div>
+                                        <div class="incident-title-text" style="font-weight: 800; font-size: 1.05rem;"><?php echo htmlspecialchars($inc['incident_type']); ?></div>
                                         <div class="incident-date-text" style="font-size: 0.8rem; font-weight: 600;"><?php echo $inc['date_str']; ?></div>
                                         <i class='bx bx-chevron-right mobile-expand-icon'></i>
                                     </td>
@@ -173,6 +214,58 @@ $pie_values   = json_encode(array_values($type_counts));
                         </tbody>
                     </table>
                 </div>
+
+                <!-- 2. Report Bin (Rejected Reports) Table -->
+                <div id="binTableWrapper" class="table-scroll-wrapper" style="display: none;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Rejected Incident / Date</th>
+                                <th>Reason & Audit Notes</th>
+                                <th style="text-align:center;">Severity</th>
+                                <th style="text-align:center;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="binTableBody">
+                            <?php if (empty($rejected_incidents)): ?>
+                                <tr><td colspan="4" style="text-align: center; color: #888; padding: 40px; font-weight: bold;">Report Bin is empty. No rejected records.</td></tr>
+                            <?php else: ?>
+                                <?php foreach ($rejected_incidents as $rinc): 
+                                    $rbadge = strtolower($rinc['severity']) === 'critical' ? 'critical' : (strtolower($rinc['severity']) === 'minor' ? 'minor' : 'major');
+                                    $safe_img = addslashes($rinc['image_path'] ?? '');
+                                    $safe_type = addslashes($rinc['incident_type']);
+                                    $safe_brgy = addslashes($rinc['barangay']);
+                                    $reject_reason = $rinc['admin_remarks'] ?: ($rinc['spam_reason'] ?: 'Flagged as false alarm or duplicate.');
+                                ?>
+                                <tr class="clickable-row" onclick="openMobileModal(this)">
+                                    <td>
+                                        <div class="incident-title-text" style="font-weight: 800; font-size: 1.05rem; color: #d32f2f;"><?php echo htmlspecialchars($rinc['incident_type']); ?></div>
+                                        <div class="incident-date-text" style="font-size: 0.8rem; font-weight: 600;"><?php echo $rinc['date_str']; ?></div>
+                                        <i class='bx bx-chevron-right mobile-expand-icon'></i>
+                                    </td>
+                                    <td>
+                                        <div style="font-size: 0.85rem; font-weight: 600; line-height: 1.35; color: var(--text-secondary, #555); max-width: 320px;">
+                                            <i class='bx bx-error-circle' style="color: #d32f2f; vertical-align: middle;"></i>
+                                            <?php echo htmlspecialchars($reject_reason); ?>
+                                        </div>
+                                    </td>
+                                    <td style="text-align: center;">
+                                        <span class="badge <?php echo $rbadge; ?>"><?php echo strtoupper($rinc['severity']); ?></span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-action-group">
+                                            <button type="button" class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewEvidence('<?php echo $safe_img; ?>', '<?php echo $safe_type; ?>', '<?php echo $safe_brgy; ?>')"><i class='bx bx-image'></i></button>
+                                            <button type="button" class="btn-table-icon bg-blue" data-logs="<?= htmlspecialchars($rinc['all_logs'] ?? '', ENT_QUOTES, 'UTF-8') ?>" data-type="<?= htmlspecialchars($rinc['incident_type'], ENT_QUOTES, 'UTF-8') ?>" onclick="event.stopPropagation(); openLogModal(this)"><i class='bx bx-list-ul'></i></button>
+                                            <button type="button" class="btn-table-icon bg-red" onclick="event.stopPropagation(); deleteArchived(<?php echo (int)$rinc['id']; ?>)" title="Permanently delete"><i class='bx bx-trash'></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+
             </div>
         </div>
     </main>
@@ -186,7 +279,6 @@ $pie_values   = json_encode(array_values($type_counts));
         </div>
     </div>
 
-    <!-- EXISTING MODALS WITH UPDATED CLOSE BUTTONS -->
     <div id="viewLogsModal" class="modal">
         <div class="modal-content" style="position: relative;">
             <div class="close-modal" onclick="document.getElementById('viewLogsModal').style.display='none'"><i class='bx bx-x'></i></div>
@@ -213,10 +305,13 @@ $pie_values   = json_encode(array_values($type_counts));
             <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
+
 <script>
-    window.allIncidents = <?= $js_incidents ?? '[]' ?>;
-    window.pieLabels    = <?= $pie_labels ?? '[]' ?>;
-    window.pieValues    = <?= $pie_values ?? '[]' ?>;
+    window.allIncidents      = <?= $js_incidents ?? '[]' ?>;
+    window.rejectedIncidents = <?= $js_rejected ?? '[]' ?>;
+    window.pieLabels         = <?= $pie_labels ?? '[]' ?>;
+    window.pieValues         = <?= $pie_values ?? '[]' ?>;
+    window.currentSector     = <?= json_encode($my_brgy ?: 'Sector') ?>;
 </script>
 <script src="../js/client/analytics.js?v=<?= filemtime('../js/client/analytics.js') ?>"></script>
 </body>
