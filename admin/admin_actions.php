@@ -782,7 +782,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $html .= $renderRow($group[0], $role, "parent-row-$key", "cursor: pointer; transition: 0.2s;", $cluster_ids_str, true, $count - 1, $key);
         for ($i = 1; $i < $count; $i++) {
-            $html .= $renderRow($group[$i], $role, "cluster-row-$key cluster-child", "display: none; background: var(--surface-subtle); border-left: 4px solid var(--color-info, #1976d2);", null, false, 0, "");
+            $html .= $renderRow($group[$i], $role, "cluster-row-$key cluster-child", "display: none;", null, false, 0, "");
         }
     } else {
         $html .= $renderRow($group[0], $role, "", "", null, false, 0, "");

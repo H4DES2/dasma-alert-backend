@@ -300,3 +300,26 @@ html.global-dark-mode textarea.filter-dropdown {
     color: #f0f6fc !important;
     border: 1px solid #30363d !important;
 }
+/* 🚀 CLUSTERED DUPLICATE ROWS */
+.triage-table tr.cluster-child td {
+    background: #e9ecef !important;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.triage-table tr.cluster-child td:first-child {
+    border-left: 5px solid var(--color-info, #1976d2) !important;
+    padding-left: 20px;
+}
+
+.triage-table tr.cluster-child:hover td {
+    background: #dee2e6 !important;
+}
+
+html.global-dark-mode .triage-table tr.cluster-child td {
+    background: rgba(0, 0, 0, 0.4) !important;
+    border-bottom-color: var(--border-color);
+}
+
+html.global-dark-mode .triage-table tr.cluster-child:hover td {
+    background: rgba(0, 0, 0, 0.6) !important;
+}
