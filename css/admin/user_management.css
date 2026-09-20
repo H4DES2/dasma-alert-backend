@@ -36,8 +36,8 @@ body {
 }
 
 .main-content { 
-    width: 100% !important; 
-    max-width: 1600px;
+    max-width: 1750px !important;
+    width: 96% !important;
     margin: 0 auto;
     margin-top: clamp(80px, 12vh, 105px) !important; 
     padding: clamp(10px, 3vw, 24px) clamp(10px, 3.5vw, 32px) 40px !important; 
@@ -151,7 +151,7 @@ body {
     font-size: clamp(0.65rem, 1.6vw, 0.75rem); 
     letter-spacing: 0.5px; 
 }
-
+.data-table th,
 .data-table td { 
     padding: clamp(10px, 2vw, 16px) clamp(10px, 2.5vw, 18px); 
     text-align: left; 
@@ -160,8 +160,51 @@ body {
     color: var(--text-primary); 
     font-weight: 600; 
     font-size: clamp(0.78rem, 2vw, 0.88rem);
+    white-space: nowrap;
+}
+.data-table th:nth-child(1),
+.data-table td:nth-child(1) { width: 65px; text-align: center; } /* ID */
+
+.data-table th:nth-child(2),
+.data-table td:nth-child(2) { min-width: 140px; } /* Username */
+
+.data-table th:nth-child(3),
+.data-table td:nth-child(3) { min-width: 190px; } /* Full Name & Brgy */
+
+.data-table th:nth-child(4),
+.data-table td:nth-child(4) { min-width: 160px; } /* Contact Number */
+
+.data-table th:nth-child(5),
+.data-table td:nth-child(5) { min-width: 220px; } /* Email Contact */
+
+.data-table th:nth-child(6),
+.data-table td:nth-child(6) { min-width: 160px; } /* Current Role */
+
+.data-table th:nth-child(7),
+.data-table td:nth-child(7) { min-width: 130px; } /* Joined Date */
+
+.data-table th:nth-child(8),
+.data-table td:nth-child(8) { min-width: 110px; } /* Status */
+
+.data-table th:nth-child(9),
+.data-table td:nth-child(9) { min-width: 320px; text-align: center; } /* Actions */
+
+/* Keep Suspend, Role dropdown, and Trash on a single row */
+.action-cell {
+    min-width: 320px;
 }
 
+.action-btn-group {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: nowrap !important; /* Prevents trash button from dropping down */
+}
+
+.role-selector {
+    min-width: 145px;
+}
 .status-badge { 
     font-weight: 900; 
     text-transform: uppercase; 
