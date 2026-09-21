@@ -589,6 +589,29 @@ function toggleBackupRow(id) {
         row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
     }
 }
+function escalateToSuperadmin(incidentId) {
+    const reason = prompt("Enter reason for city backup escalation (e.g., No available local units, fire spreading):", "No local response units available.");
+    if (reason === null) return;
+
+    fetch('../php/admin_actions.php', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+            action: 'escalate_to_superadmin',
+            incident_id: incidentId,
+            reason: reason
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert("Escalated to CDRRMO Superadmin Command Center.");
+        } else {
+            alert("Escalation failed: " + (data.message || 'Unknown error'));
+        }
+    })
+    .catch(err => alert("Network error: " + err));
+}
 
 // Window bindings
 window.openDeployModal = openDeployModal;
