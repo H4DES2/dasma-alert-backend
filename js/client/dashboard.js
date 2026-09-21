@@ -590,30 +590,63 @@ function toggleBackupRow(id) {
     }
 }
 function escalateToSuperadmin(incidentId) {
-    const reason = prompt("Enter reason for city backup escalation (e.g., No available local units, fire spreading):", "No local response units available.");
-    if (reason === null) return;
+    const idInput = document.getElementById('escalate_incident_id');
+    const reasonInput = document.getElementById('escalate_reason');
+    const presetSelect = document.getElementById('escalate_reason_preset');
 
-    fetch('../php/admin_actions.php', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: new URLSearchParams({
-            action: 'escalate_to_superadmin',
-            incident_id: incidentId,
-            reason: reason
-        })
-    })
-    .then(res => res.json())
-    .then(data => {
-        if (data.success) {
-            alert("Escalated to CDRRMO Superadmin Command Center.");
-        } else {
-            alert("Escalation failed: " + (data.message || 'Unknown error'));
-        }
-    })
-    .catch(err => alert("Network error: " + err));
+    if (idInput) idInput.value = incidentId;
+    if (reasonInput) reasonInput.value = "No local response units available.";
+    if (presetSelect) presetSelect.selectedIndex = 0;
+
+    const modal = document.getElementById('escalateModal');
+    if (modal) modal.style.display = 'flex';
 }
 
-// Window bindings
+function submitEscalateToSuperadmin() {
+    const incidentId = document.getElementById('escalate_incident_id')?.value;
+    const reason = document.getElementById('escalate_reason')?.value.trim() || 'No local response units available.';
+    const btn = document.getElementById('btnConfirmEscalate');
+
+    if (!incidentId) return;
+
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = "<i class='bx bx-loader-alt bx-spin'></i> Escalating...";
+    }
+
+    const fd = new FormData();
+    fd.append('action', 'escalate_to_superadmin');
+    fd.append('incident_id', incidentId);
+    fd.append('reason', reason);
+
+    fetch(API_PATH, { method: 'POST', body: fd })
+        .then(async res => {
+            const raw = await res.text();
+            try { return JSON.parse(raw); } 
+            catch (e) { throw new Error("Server error: " + raw.substring(0, 100)); }
+        })
+        .then(data => {
+            closeModal('escalateModal');
+            if (data.success) {
+                customAlert("Escalated", "Incident transferred to CDRRMO Superadmin Command Center.", "bx-check-shield", "#388e3c");
+                fetchLocalData();
+            } else {
+                customAlert("Escalation Failed", data.message || "Could not escalate incident.", "bx-error", "#d32f2f");
+            }
+        })
+        .catch(err => {
+            closeModal('escalateModal');
+            customAlert("Network Error", err.message, "bx-error", "#d32f2f");
+        })
+        .finally(() => {
+            if (btn) {
+                btn.disabled = false;
+                btn.innerHTML = "Confirm Escalation";
+            }
+        });
+}
+
+window.submitEscalateToSuperadmin = submitEscalateToSuperadmin;
 window.openDeployModal = openDeployModal;
 window.submitDispatch = submitDispatch;
 window.cancelDispatch = cancelDispatch;
