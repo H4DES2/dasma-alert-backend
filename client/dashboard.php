@@ -349,6 +349,39 @@ $show_banner = ($active_broadcast && (int)$active_broadcast['id'] !== $dismissed
                 <div id="m-incident-body" style="display: flex; flex-direction: column;"></div>
             </div>
         </div>
+        <!-- ESCALATE TO CDRRMO MODAL -->
+        <div id="escalateModal" class="modal">
+            <div class="modal-content" style="max-width: 460px;">
+                <div class="close-modal" onclick="closeModal('escalateModal')"><i class='bx bx-x'></i></div>
+                <div class="modal-header">
+                    <h3 style="margin:0; color:#d32f2f; display:flex; align-items:center; gap:8px;">
+                        <i class='bx bx-up-arrow-circle'></i> Escalate to CDRRMO Superadmin
+                    </h3>
+                </div>
+                <div class="modal-body" style="margin-top: 15px;">
+                    <input type="hidden" id="escalate_incident_id">
+                    <p style="font-size: 0.85rem; color: #888; margin-bottom: 15px; line-height: 1.4;">
+                        Transferring this incident to the <b>CDRRMO City Command Center</b>. All city-wide response units will be alerted.
+                    </p>
+
+                    <label style="display:block; margin-bottom:6px; font-weight:800; color:#bbb; text-transform:uppercase; font-size:0.75rem;">Escalation Reason</label>
+                    <select id="escalate_reason_preset" class="filter-dropdown" style="width:100%; margin-bottom:12px; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); font-weight:700; background:var(--surface, #1e1e1e); color:var(--text, #fff);" onchange="document.getElementById('escalate_reason').value = this.value">
+                        <option value="No local response units available.">No local response units available</option>
+                        <option value="Specialized equipment needed (Heavy Rescue / HazMat / Aerial).">Specialized equipment needed</option>
+                        <option value="Incident rapidly escalating / Mass casualty.">Incident rapidly escalating / Mass casualty</option>
+                        <option value="Multiple concurrent incidents across barangay.">Multiple concurrent incidents in barangay</option>
+                    </select>
+
+                    <label style="display:block; margin-bottom:6px; font-weight:800; color:#bbb; text-transform:uppercase; font-size:0.75rem;">Officer Notes / Remarks</label>
+                    <textarea id="escalate_reason" class="filter-dropdown" style="width:100%; height:75px; margin-bottom:20px; resize:none; padding:10px; border-radius:10px; border:1px solid rgba(255,255,255,0.15); background:var(--surface, #1e1e1e); color:var(--text, #fff);" placeholder="Describe the current field situation...">No local response units available.</textarea>
+
+                    <div style="display:flex; gap:10px;">
+                        <button type="button" class="btn-sm" style="background:#555; flex:1; padding:12px; font-size:0.95rem; justify-content:center;" onclick="closeModal('escalateModal')">Cancel</button>
+                        <button type="button" id="btnConfirmEscalate" class="btn-sm" style="background:#d32f2f; flex:1; padding:12px; font-size:0.95rem; font-weight:800; justify-content:center;" onclick="submitEscalateToSuperadmin()">Confirm Escalation</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     </main>
 <script>
     window.soundEnabled = <?= ($sound_saved ?? 1) ? 'true' : 'false' ?>;
