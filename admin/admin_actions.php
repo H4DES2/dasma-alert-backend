@@ -684,7 +684,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 }
             }
 
-            $renderRow = function($inc, $role, $extraClass, $extraStyle, $targetIds = null, $isParent = false, $duplicateCount = 0, $clusterKey = '') {
+            $renderRow = function($inc, $role, $extraClass, $extraStyle, $targetIds = null, $isParent = false, $duplicateCount = 0, $clusterKey = '') use ($conn, $admin_brgy) {
                 $status = $inc['status'] ?? 'active';
                 $coords = $inc['latitude'] . ", " . $inc['longitude'];
                 $exact_time = date('h:i A', strtotime($inc['created_at']));
@@ -796,30 +796,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
                         $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
 
-                        $desc_html = "<b style='color: #64b5f6;'>Active Unit:</b> <span style='color:#fff;'>$backup_unit_name</span>";
+                        $desc_html = "<b style='color: #64b5f6;'>Active City Backup:</b> <span style='color:#fff;'>$backup_unit_name</span>";
                         $backup_action = ($role === 'superadmin') 
                             ? "<div style='display: flex; gap: 8px; align-items: center;'><button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall City Backup</button></div>"
                             : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>";
-                            } else {
-                                if ($backup_target === 'superadmin') {
-                                    // Already escalated to City CDRRMO
-                                    $badge_html = "<span class='badge' style='background: #d32f2f; font-size: 0.75rem; padding: 6px 10px;'>🚨 CITY BACKUP REQUESTED</span>";
-                                    $desc_html = "<b style='color: #ef5350;'>Barangay units depleted. Escalated to City CDRRMO.</b>";
-                                    $backup_action = ($role === 'superadmin')
-                                        ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>"
-                                        : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
-                                } else {
-                                    // Pending at Barangay Level
-                                    $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>⚠️ LOCAL BACKUP NEEDED</span>";
-                                    $desc_html = "<b style='color: #ff9800;'>Responder requested local backup from Barangay.</b>";
-                                    $backup_action = ($role === 'superadmin')
-                                        ? "<span style='color:#888; font-size:0.8rem; font-weight:bold; font-style:italic;'><i class='bx bx-radar'></i> Handling at Barangay Level</span>"
-                                        : "<div style='display: flex; gap: 8px; align-items: center;'>
-                                            <button class='btn-sm' style='background:#388e3c; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Dispatch Local</button>
-                                            <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); escalateToSuperadmin(\"$dispatch_id\")'><i class='bx bx-up-arrow-circle'></i> Escalate to CDRRMO</button>
-                                        </div>";
-                                }
-                            }
+                    } elseif ($backup_target === 'superadmin') {
+                        // Escalated to CDRRMO Superadmin
+                        $badge_html = "<span class='badge' style='background: #d32f2f; font-size: 0.75rem; padding: 6px 10px;'>🚨 CITY BACKUP REQUESTED</span>";
+                        $desc_html = "<b style='color: #ef5350;'>Barangay units depleted. Escalated to CDRRMO.</b>";
+                        $backup_action = ($role === 'superadmin')
+                            ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>"
+                            : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
+                    } else {
+                        // Pending at Barangay Level: Count remaining available local teams for this barangay
+                        $brgy_target_name = trim($inc['barangay'] ?? $admin_brgy);
+                        $check_avail = $conn->prepare("
+                            SELECT COUNT(*) as avail_count 
+                            FROM response_teams 
+                            WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty')
+                              AND (current_incident_id IS NULL OR current_incident_id = 0)
+                              AND (assigned_barangay = ? OR assigned_barangay LIKE ?)
+                        ");
+                        $like_brgy = "%" . $brgy_target_name . "%";
+                        $check_avail->bind_param("ss", $brgy_target_name, $like_brgy);
+                        $check_avail->execute();
+                        $avail_res = $check_avail->get_result()->fetch_assoc();
+                        $avail_units = (int)($avail_res['avail_count'] ?? 0);
+                        $check_avail->close();
+
+                        $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>⚠️ LOCAL BACKUP NEEDED</span>";
+                        $desc_html = "<b style='color: #ff9800;'>Local backup active. ($avail_units local units remaining available)</b>";
+
+                        if ($role === 'superadmin') {
+                            $backup_action = "<span style='color:#888; font-size:0.8rem; font-weight:bold; font-style:italic;'><i class='bx bx-radar'></i> Handling at Barangay Level</span>";
+                        } else {
+                            $dispatch_btn = ($avail_units > 0)
+                                ? "<button class='btn-sm' style='background:#388e3c; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Send More Backup ($avail_units left)</button>"
+                                : "<button class='btn-sm' style='background:#666; padding: 6px 12px; font-weight: bold; border-radius: 6px; cursor:not-allowed;' disabled><i class='bx bx-block'></i> No Local Units Left</button>";
+
+                            $backup_action = "<div style='display: flex; gap: 8px; align-items: center;'>
+                                $dispatch_btn
+                                <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); escalateToSuperadmin(\"$dispatch_id\")'><i class='bx bx-up-arrow-circle'></i> Escalate to CDRRMO</button>
+                            </div>";
+                        }
+                    }
 
                     $rowHtml .= "
                     <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.08);'>
@@ -1243,26 +1263,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id_list = implode(',', $ids_array);
             $primary_id = $ids_array[0]; 
 
-            $stmt_chk = $conn->prepare("SELECT assigned_to, backup_requested, status FROM incidents WHERE id = ?");
+            $stmt_chk = $conn->prepare("SELECT assigned_to, backup_requested, backup_target, status FROM incidents WHERE id = ?");
             $stmt_chk->bind_param("i", $primary_id);
             $stmt_chk->execute();
             $curr = $stmt_chk->get_result()->fetch_assoc();
             $stmt_chk->close();
 
             $existing_assigned = trim($curr['assigned_to'] ?? '');
-            $is_backup_deploy = ((int)($curr['backup_requested'] ?? 0) === 1);
+            $is_backup_deploy  = ((int)($curr['backup_requested'] ?? 0) === 1);
 
-            if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
-                if ($is_backup_deploy) {
+            if ($role === 'superadmin') {
+                // Only Superadmin deploys City Backup
+                if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
                     $merged_teams = $existing_assigned . " | [City Backup: " . $new_team_names . "]";
                 } else {
-                    $merged_teams = $existing_assigned . ", " . $new_team_names;
+                    $merged_teams = "[City Backup: " . $new_team_names . "]";
                 }
+                // Superadmin dispatch satisfies the escalation
+                $upd_sql = "UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0, backup_status = 'dispatched' WHERE id IN ($id_list)";
             } else {
-                $merged_teams = $new_team_names;
+                // Barangay Admin dispatching initial or reinforcement local teams
+                if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
+                    $merged_teams = $existing_assigned . ", " . $new_team_names;
+                } else {
+                    $merged_teams = $new_team_names;
+                }
+                // Retain backup_requested = 1 and backup_target = 'barangay' so local admin can send more or escalate
+                $keep_backup = $is_backup_deploy ? 1 : 0;
+                $upd_sql = "UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = $keep_backup, backup_target = 'barangay', backup_status = 'pending_barangay' WHERE id IN ($id_list)";
             }
 
-            $stmt = $conn->prepare("UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0 WHERE id IN ($id_list)");
+            $stmt = $conn->prepare($upd_sql);
             $stmt->bind_param("s", $merged_teams);
             $stmt->execute();
             $stmt->close();
