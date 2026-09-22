@@ -22,16 +22,15 @@ $u_stmt->close();
 $my_brgy = trim($u_data['barangay'] ?? '');
 $safe_brgy = $conn->real_escape_string($my_brgy);
 
-// Geofence the database queries based on the Admin's jurisdiction
 $team_filter = "";
 if ($role === 'admin' || $role === 'barangay_admin') {
+    // Only local units for barangay admin
     $team_filter = " AND (
         TRIM(assigned_barangay) = '$safe_brgy' 
-        OR LOWER(TRIM(assigned_barangay)) = 'city-wide' 
-        OR assigned_barangay IS NULL 
-        OR TRIM(assigned_barangay) = ''
+        OR assigned_barangay LIKE '%$safe_brgy%'
     )";
 }
+// Superadmin leaves $team_filter empty and can view all units
 
 // --- FETCH KPI DATA (Correctly includes 'operational' as available units) ---
 $res_total = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE 1=1 $team_filter");

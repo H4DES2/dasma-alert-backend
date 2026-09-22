@@ -1003,19 +1003,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $team_brgy_filter = "";
         
         if ($role === 'admin' || $role === 'barangay_admin') {
+            // Strictly local units: excludes NULL / City-Wide
             $team_brgy_filter = " AND (
                 TRIM(assigned_barangay) = ? 
                 OR assigned_barangay LIKE ?
-                OR LOWER(TRIM(assigned_barangay)) = 'city-wide' 
-                OR assigned_barangay IS NULL 
-                OR TRIM(assigned_barangay) = ''
             )";
             $types .= "ss";
             $params[] = $admin_brgy;
             $params[] = "%" . $admin_brgy . "%";
         } 
+        // Superadmin has no filter ($team_brgy_filter is empty), so they see all local + NULL city-wide units
         
-        $query = "SELECT id, team_name, team_type, assigned_barangay 
+        $query = "SELECT id, team_name, team_type, 
+                         COALESCE(assigned_barangay, 'City-Wide') AS assigned_barangay 
                   FROM response_teams 
                   WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty')
                     AND (current_incident_id IS NULL OR current_incident_id = 0) " . $team_brgy_filter;
@@ -1315,47 +1315,108 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $ids_raw = $_POST['incident_id'] ?? '';
         $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
         $team_ids = json_decode($_POST['team_ids'] ?? '[]', true);
-        $new_team_names = trim($_POST['team_names'] ?? ''); 
-        
-        if (!empty($ids_array) && is_array($team_ids) && !empty($team_ids)) {
-            $id_list = implode(',', $ids_array);
-            $primary_id = $ids_array[0]; 
+        $new_team_names = trim($_POST['team_names'] ?? '');
 
-            $stmt_chk = $conn->prepare("SELECT assigned_to, backup_requested, backup_target, status FROM incidents WHERE id = ?");
-            $stmt_chk->bind_param("i", $primary_id);
-            $stmt_chk->execute();
-            $curr = $stmt_chk->get_result()->fetch_assoc();
-            $stmt_chk->close();
+        // 1. Basic validation
+        if (empty($ids_array) || !is_array($team_ids) || empty($team_ids)) {
+            echo json_encode(['success' => false, 'message' => 'No teams or incidents selected.']);
+            exit();
+        }
 
-            $existing_assigned = trim($curr['assigned_to'] ?? '');
-            $is_backup_deploy  = ((int)($curr['backup_requested'] ?? 0) === 1);
+        // Clean and sanitize team IDs
+        $team_ids = array_filter(array_map('intval', $team_ids));
+        if (empty($team_ids)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid team IDs provided.']);
+            exit();
+        }
 
-            if ($role === 'superadmin') {
-                // Only Superadmin deploys City Backup
-                if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
-                    $merged_teams = $existing_assigned . " | [City Backup: " . $new_team_names . "]";
-                } else {
-                    $merged_teams = "[City Backup: " . $new_team_names . "]";
+        // 2. Strict Jurisdictional Geofence Guard (Barangay Admins cannot deploy external or City-Wide teams)
+        if ($role === 'admin' || $role === 'barangay_admin') {
+            $check_ph = implode(',', array_fill(0, count($team_ids), '?'));
+            $check_types = str_repeat('i', count($team_ids));
+            $like_b = "%" . $admin_brgy . "%";
+
+            $stmt_guard = $conn->prepare("
+                SELECT COUNT(*) as valid_count 
+                FROM response_teams 
+                WHERE id IN ($check_ph) 
+                  AND (TRIM(assigned_barangay) = ? OR assigned_barangay LIKE ?)
+            ");
+
+            if ($stmt_guard) {
+                $guard_params = array_merge($team_ids, [$admin_brgy, $like_b]);
+                $stmt_guard->bind_param($check_types . "ss", ...$guard_params);
+                $stmt_guard->execute();
+                $v_res = $stmt_guard->get_result()->fetch_assoc();
+                $stmt_guard->close();
+
+                if ((int)($v_res['valid_count'] ?? 0) !== count($team_ids)) {
+                    echo json_encode([
+                        'success' => false, 
+                        'message' => 'Permission denied: Cannot dispatch units outside your barangay jurisdiction.'
+                    ]);
+                    exit();
                 }
-                // Superadmin dispatch satisfies the escalation
-                $upd_sql = "UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = 0, backup_status = 'dispatched' WHERE id IN ($id_list)";
-            } else {
-                // Barangay Admin dispatching initial or reinforcement local teams
-                if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
-                    $merged_teams = $existing_assigned . ", " . $new_team_names;
-                } else {
-                    $merged_teams = $new_team_names;
-                }
-                // Retain backup_requested = 1 and backup_target = 'barangay' so local admin can send more or escalate
-                $keep_backup = $is_backup_deploy ? 1 : 0;
-                $upd_sql = "UPDATE incidents SET status = 'dispatched', assigned_to = ?, backup_requested = $keep_backup, backup_target = 'barangay', backup_status = 'pending_barangay' WHERE id IN ($id_list)";
             }
+        }
 
-            $stmt = $conn->prepare($upd_sql);
-            $stmt->bind_param("s", $merged_teams);
-            $stmt->execute();
-            $stmt->close();
-            
+        $id_list = implode(',', $ids_array);
+        $primary_id = $ids_array[0];
+
+        // 3. Fetch existing assignment state
+        $stmt_chk = $conn->prepare("SELECT assigned_to, backup_requested, backup_target, status FROM incidents WHERE id = ?");
+        $stmt_chk->bind_param("i", $primary_id);
+        $stmt_chk->execute();
+        $curr = $stmt_chk->get_result()->fetch_assoc();
+        $stmt_chk->close();
+
+        if (!$curr) {
+            echo json_encode(['success' => false, 'message' => 'Target incident not found.']);
+            exit();
+        }
+
+        $existing_assigned = trim($curr['assigned_to'] ?? '');
+        $is_backup_deploy  = ((int)($curr['backup_requested'] ?? 0) === 1);
+
+        // 4. Determine status & merged assignment text based on role
+        if ($role === 'superadmin') {
+            if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
+                $merged_teams = $existing_assigned . " | [City Backup: " . $new_team_names . "]";
+            } else {
+                $merged_teams = "[City Backup: " . $new_team_names . "]";
+            }
+            $upd_sql = "UPDATE incidents 
+                        SET status = 'dispatched', 
+                            assigned_to = ?, 
+                            backup_requested = 0, 
+                            backup_status = 'dispatched' 
+                        WHERE id IN ($id_list)";
+        } else {
+            if (!empty($existing_assigned) && $existing_assigned !== 'NULL') {
+                $merged_teams = $existing_assigned . ", " . $new_team_names;
+            } else {
+                $merged_teams = $new_team_names;
+            }
+            $keep_backup = $is_backup_deploy ? 1 : 0;
+            $upd_sql = "UPDATE incidents 
+                        SET status = 'dispatched', 
+                            assigned_to = ?, 
+                            backup_requested = $keep_backup, 
+                            backup_target = 'barangay', 
+                            backup_status = 'pending_barangay' 
+                        WHERE id IN ($id_list)";
+        }
+
+        // 5. Execute transaction
+        $conn->begin_transaction();
+        try {
+            // Update Incidents
+            $stmt_inc = $conn->prepare($upd_sql);
+            $stmt_inc->bind_param("s", $merged_teams);
+            $stmt_inc->execute();
+            $stmt_inc->close();
+
+            // Update Response Teams to 'deployed'
             $stmt_team = $conn->prepare("UPDATE response_teams SET current_incident_id = ?, status = 'deployed' WHERE id = ?");
             foreach ($team_ids as $tid) {
                 $team_id = (int)$tid;
@@ -1363,12 +1424,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt_team->execute();
             }
             $stmt_team->close();
-            
-            while (ob_get_level() > 0) { ob_end_clean(); }
-            echo json_encode(['success' => true]);
-        } else {
-            while (ob_get_level() > 0) { ob_end_clean(); }
-            echo json_encode(['success' => false, 'message' => 'No teams selected']);
+
+            // Audit Trail Log
+            $admin_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? '')) ?: ($_SESSION['username'] ?? 'Dispatch Admin');
+            $admin_label = ($role === 'superadmin') ? "CDRRMO Superadmin" : "Brgy. {$admin_brgy} Admin";
+            $log_msg = "🚒 UNIT DISPATCH: {$admin_name} ({$admin_label}) deployed unit(s) [{$new_team_names}] to incident.";
+
+            $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+            if ($stmt_log) {
+                $admin_id = (int)($_SESSION['user_id'] ?? 0);
+                foreach ($ids_array as $inc_id) {
+                    $stmt_log->bind_param("iis", $inc_id, $admin_id, $log_msg);
+                    $stmt_log->execute();
+                }
+                $stmt_log->close();
+            }
+
+            $conn->commit();
+            echo json_encode(['success' => true, 'message' => 'Units successfully dispatched.']);
+        } catch (Throwable $e) {
+            $conn->rollback();
+            echo json_encode(['success' => false, 'message' => 'Dispatch failed: ' . $e->getMessage()]);
         }
         exit();
     }
