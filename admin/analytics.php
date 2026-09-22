@@ -62,7 +62,7 @@ function parseRejectionDetails(?string $rawReason): array {
         $extra = trim($matches[4] ?? '');
 
         if (!empty($subBrgy) && empty($cat)) {
-            if (stripos($subBrgy, 'Alarm') !== false || stripos($subBrgy, 'Range') !== false || stripos($subBrgy, 'Duplicate') !== false || stripos($subBrgy, 'Prank') !== false) {
+            if (stripos($subBrgy, 'Alarm') !== false || stripos($subBrgy, 'Prank') !== false) {
                 $category = $subBrgy;
                 $officer = $officerName;
             } else {
@@ -76,9 +76,8 @@ function parseRejectionDetails(?string $rawReason): array {
     } else {
         $notes = $rawReason;
         if (stripos($rawReason, 'false alarm') !== false) $category = 'False Alarm';
-        elseif (stripos($rawReason, 'out of range') !== false) $category = 'Out of Jurisdiction';
-        elseif (stripos($rawReason, 'duplicate') !== false) $category = 'Duplicate Report';
         elseif (stripos($rawReason, 'prank') !== false || stripos($rawReason, 'spam') !== false) $category = 'Prank / Spam';
+        elseif (stripos($rawReason, 'incomplete') !== false) $category = 'Incomplete Information';
     }
 
     return ['officer' => $officer ?: 'Command Officer', 'category' => $category ?: 'False Alarm', 'notes' => $notes ?: 'False alarm verification.'];
@@ -145,8 +144,6 @@ $js_bin_incidents = json_encode($bin_incidents ?: []);
 // 4. SUMMARY BREAKDOWN STATS
 $reject_categories_count = [
     'False Alarm'             => 0,
-    'Out of Jurisdiction'     => 0,
-    'Duplicate Report'        => 0,
     'Prank / Spam'            => 0,
     'Incomplete Information'  => 0,
     'Other / Unspecified'     => 0
@@ -336,19 +333,17 @@ foreach ($archived_incidents as $inc) {
                             <h2><i class='bx bxs-trash-alt' style="color:#d32f2f;"></i> Report Bin & Rejection Audit</h2>
                             <span class="badge" style="background:#212121; font-size:0.8rem; padding: 8px 14px;"><?= $total_rejected ?> Total Rejections</span>
                         </div>
-                        <p style="font-size: 0.85rem; color: #777; margin: 0; font-weight: 600;">Granular breakdown of filtered false alarms, duplicates, and out-of-jurisdiction calls</p>
+                        <p style="font-size: 0.85rem; color: #777; margin: 0; font-weight: 600;">Granular breakdown of filtered false alarms, pranks, and incomplete incident reports</p>
                     </div>
 
                     <!-- SUMMARY STATS TILES -->
                     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px;">
                         <?php foreach ($reject_categories_count as $cat_name => $count): 
                             $accent_border = match($cat_name) {
-                                'False Alarm' => '#d32f2f',
-                                'Out of Jurisdiction' => '#f57c00',
-                                'Duplicate Report' => '#1976d2',
-                                'Prank / Spam' => '#6a1b9a',
+                                'False Alarm'            => '#d32f2f',
+                                'Prank / Spam'           => '#6a1b9a',
                                 'Incomplete Information' => '#00838f',
-                                default => '#616161'
+                                default                  => '#616161'
                             };
                             $pct = $total_rejected > 0 ? round(($count / $total_rejected) * 100) : 0;
                         ?>
@@ -381,11 +376,10 @@ foreach ($archived_incidents as $inc) {
                                         $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
                                         $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
                                         $catColor = match($bin['parsed_category']) {
-                                            'False Alarm' => '#d32f2f',
-                                            'Out of Jurisdiction' => '#f57c00',
-                                            'Duplicate Report', 'Duplicate' => '#1976d2',
-                                            'Prank', 'Prank / Spam' => '#6a1b9a',
-                                            default => '#424242'
+                                            'False Alarm'            => '#d32f2f',
+                                            'Prank', 'Prank / Spam'  => '#6a1b9a',
+                                            'Incomplete Information' => '#00838f',
+                                            default                  => '#424242'
                                         };
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
