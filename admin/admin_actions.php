@@ -888,7 +888,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             $backup_action = "<span style='color:#888; font-size:0.75rem; font-weight:bold; font-style:italic;'><i class='bx bx-radar'></i> Handled by Barangay</span>";
                         } else {
                             $dispatch_btn = ($avail_units > 0)
-                                ? "<button class='btn-sm' style='background:#2e7d32; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-plus-circle'></i> Add Backup ($avail_units)</button>"
+                                ? "<button class='btn-sm' style='background:#2e7d32; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-plus-circle'></i>backup($avail_units)</button>"
                                 : "<button class='btn-sm' style='background:#424242; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px; cursor:not-allowed; opacity:0.7;' disabled><i class='bx bx-block'></i> Depleted</button>";
 
                             $backup_action = "<div style='display: flex; gap: 6px; align-items: center;'>
