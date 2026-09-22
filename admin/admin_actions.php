@@ -298,7 +298,54 @@ if (isset($_POST['action']) && $_POST['action'] === 'escalate_to_superadmin') {
     }
     exit();
 }
+// 1.5 CANCEL ESCALATION TO CDRRMO (Reverts back to Barangay Level)
+if (isset($_POST['action']) && $_POST['action'] === 'cancel_escalation') {
+    requireRole($ADMIN_TIER_ROLES, $role);
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    header('Content-Type: application/json');
 
+    $ids_raw = $_POST['incident_id'] ?? '';
+    $ids_array = array_filter(array_map('intval', explode(',', $ids_raw)));
+
+    if (!empty($ids_array)) {
+        $id_list = implode(',', $ids_array);
+        $admin_id = (int)($_SESSION['user_id'] ?? 0);
+        $admin_name = trim(($_SESSION['first_name'] ?? '') . ' ' . ($_SESSION['last_name'] ?? '')) ?: ($_SESSION['username'] ?? 'Barangay Admin');
+        $admin_brgy = $_SESSION['barangay'] ?? 'Local';
+
+        $conn->begin_transaction();
+        try {
+            $stmt = $conn->prepare("
+                UPDATE incidents 
+                SET backup_requested = 1,
+                    backup_target = 'barangay',
+                    backup_status = 'pending_barangay'
+                WHERE id IN ($id_list)
+            ");
+            $stmt->execute();
+            $stmt->close();
+
+            $log_msg = "↩️ ESCALATION CANCELLED: {$admin_name} (Brgy. {$admin_brgy}) recalled city escalation. Incident returned to local queue.";
+            $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
+            if ($stmt_log) {
+                foreach ($ids_array as $inc_id) {
+                    $stmt_log->bind_param("iis", $inc_id, $admin_id, $log_msg);
+                    $stmt_log->execute();
+                }
+                $stmt_log->close();
+            }
+
+            $conn->commit();
+            echo json_encode(['success' => true, 'message' => 'Escalation cancelled. Incident reverted to local handling.']);
+        } catch (Exception $e) {
+            $conn->rollback();
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+    } else {
+        echo json_encode(['success' => false, 'message' => 'No incident ID provided']);
+    }
+    exit();
+}
 // 2. LEGACY / MANUAL BARANGAY BACKUP TRIGGER
 if (isset($_POST['action']) && $_POST['action'] === 'request_backup') {
     requireRole($ADMIN_TIER_ROLES, $role);
@@ -753,10 +800,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         }
                     }
                 } elseif ($status_lower === 'dispatched' || $status_lower === 'en route' || $status_lower === 'en_route' || $status_lower === 'on-scene') {
-                    $action_btns .= "<button class='btn-sm' style='background:#d32f2f; padding: 10px 15px; font-size: 0.9rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); cancelDispatch(\"$dispatch_id\")'><i class='bx bx-undo' style='font-size: 1.1rem;'></i> Recall</button>";
-                    if ($role !== 'superadmin' && $inc['backup_requested'] == 0) { $action_btns .= "<button class='btn-sm' style='background:#f57c00; padding: 10px 15px; width: 100%; justify-content: center;' onclick='event.stopPropagation(); requestBackup(\"$dispatch_id\")'><i class='bx bxs-error-circle'></i> Need Backup</button>"; }
-                } else {
-                    $action_btns .= "<span style='color:#888; font-size:0.85rem; font-weight:bold; font-style:italic;'>No Actions</span>";
+                    // Only Barangay Admin can recall their local units. Superadmin can only recall City Backup units.
+                    if ($role !== 'superadmin') {
+                        $action_btns .= "<button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-size: 0.8rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); cancelDispatch(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall</button>";
+                        if ($inc['backup_requested'] == 0) { 
+                            $action_btns .= "<button class='btn-sm' style='background:#f57c00; padding: 6px 12px; font-size: 0.8rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); requestBackup(\"$dispatch_id\")'><i class='bx bxs-error-circle'></i> Need Backup</button>"; 
+                        }
+                    } else {
+                        // Superadmin viewing an active/dispatched incident handled locally
+                        $action_btns .= "<span style='color:#666; font-size:0.75rem; font-weight:bold; font-style:italic;'><i class='bx bx-shield'></i> Handled Locally</span>";
+                    }
                 }
                 $action_btns .= "</div>";
 
@@ -796,17 +849,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         preg_match('/\[City Backup:\s*([^\]]+)\]/', $assigned_text, $b_matches);
                         $backup_unit_name = htmlspecialchars($b_matches[1] ?? 'City Unit');
 
-                        $desc_html = "<b style='color: #64b5f6;'>Active City Backup:</b> <span style='color:#fff;'>$backup_unit_name</span>";
+                        $desc_html = "<b style='color: #64b5f6;'>City Backup Active:</b> <span style='color:#fff;'>$backup_unit_name</span>";
                         $backup_action = ($role === 'superadmin') 
-                            ? "<div style='display: flex; gap: 8px; align-items: center;'><button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall City Backup</button></div>"
-                            : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.85rem;'>City Backup Active</span>";
+                            ? "<button class='btn-sm' style='background:#d32f2f; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall</button>"
+                            : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.8rem;'><i class='bx bx-check-shield'></i> City Backup Active</span>";
                     } elseif ($backup_target === 'superadmin') {
                         // Escalated to CDRRMO Superadmin
-                        $badge_html = "<span class='badge' style='background: #d32f2f; font-size: 0.75rem; padding: 6px 10px;'>🚨 CITY BACKUP REQUESTED</span>";
-                        $desc_html = "<b style='color: #ef5350;'>Barangay units depleted. Escalated to CDRRMO.</b>";
-                        $backup_action = ($role === 'superadmin')
-                            ? "<button class='btn-sm' style='background:#1976d2; padding: 8px 14px; font-weight: 800; border-radius: 8px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Backup</button>"
-                            : "<span style='color:#f57c00; font-weight:bold; font-size: 0.85rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City Dispatch...</span>";
+                        $badge_html = "<span class='badge' style='background: #d32f2f; font-size: 0.7rem; padding: 4px 8px;'>🚨 CITY BACKUP REQUESTED</span>";
+                        $desc_html = "<b style='color: #ef5350;'>Escalated to CDRRMO Command Center.</b>";
+                        
+                        if ($role === 'superadmin') {
+                            $backup_action = "<button class='btn-sm' style='background:#1976d2; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Unit</button>";
+                        } else {
+                            $backup_action = "<div style='display: flex; gap: 6px; align-items: center;'>
+                                <span style='color:#f57c00; font-weight:700; font-size: 0.75rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City...</span>
+                                <button class='btn-sm' style='background:#555; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px;' onclick='event.stopPropagation(); cancelEscalation(\"$dispatch_id\")' title='Cancel City Escalation'><i class='bx bx-undo'></i> Cancel Request</button>
+                            </div>";
+                        }
                     } else {
                         // Pending at Barangay Level: Count remaining available local teams for this barangay
                         $brgy_target_name = trim($inc['barangay'] ?? $admin_brgy);
@@ -824,30 +883,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         $avail_units = (int)($avail_res['avail_count'] ?? 0);
                         $check_avail->close();
 
-                        $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.75rem; padding: 6px 10px;'>⚠️ LOCAL BACKUP NEEDED</span>";
-                        $desc_html = "<b style='color: #ff9800;'>Local backup active. ($avail_units local units remaining available)</b>";
+                        $badge_html = "<span class='badge' style='background: #f57c00; font-size: 0.7rem; padding: 4px 8px;'>⚠️ LOCAL BACKUP</span>";
+                        $desc_html = "<span style='color: #bbb;'>Local backup active. <b style='color:#fff;'>($avail_units available)</b></span>";
 
                         if ($role === 'superadmin') {
-                            $backup_action = "<span style='color:#888; font-size:0.8rem; font-weight:bold; font-style:italic;'><i class='bx bx-radar'></i> Handling at Barangay Level</span>";
+                            $backup_action = "<span style='color:#888; font-size:0.75rem; font-weight:bold; font-style:italic;'><i class='bx bx-radar'></i> Handled by Barangay</span>";
                         } else {
                             $dispatch_btn = ($avail_units > 0)
-                                ? "<button class='btn-sm' style='background:#388e3c; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Send More Backup ($avail_units left)</button>"
-                                : "<button class='btn-sm' style='background:#666; padding: 6px 12px; font-weight: bold; border-radius: 6px; cursor:not-allowed;' disabled><i class='bx bx-block'></i> No Local Units Left</button>";
+                                ? "<button class='btn-sm' style='background:#2e7d32; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-plus-circle'></i> Add Backup ($avail_units)</button>"
+                                : "<button class='btn-sm' style='background:#424242; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px; cursor:not-allowed; opacity:0.7;' disabled><i class='bx bx-block'></i> Depleted</button>";
 
-                            $backup_action = "<div style='display: flex; gap: 8px; align-items: center;'>
+                            $backup_action = "<div style='display: flex; gap: 6px; align-items: center;'>
                                 $dispatch_btn
-                                <button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-weight: bold; border-radius: 6px;' onclick='event.stopPropagation(); escalateToSuperadmin(\"$dispatch_id\")'><i class='bx bx-up-arrow-circle'></i> Escalate to CDRRMO</button>
+                                <button class='btn-sm' style='background:#c62828; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); escalateToSuperadmin(\"$dispatch_id\")'><i class='bx bx-up-arrow-circle'></i> Escalate</button>
                             </div>";
                         }
                     }
 
                     $rowHtml .= "
-                    <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.08);'>
-                        <td colspan='6' style='padding: 10px 18px; border-left: 4px solid #f57c00;'>
+                    <tr id='backup-row-" . $inc['id'] . "' class='" . $extraClass . " backup-subrow' style='background: rgba(245, 124, 0, 0.06);'>
+                        <td colspan='6' style='padding: 8px 16px; border-left: 3px solid #f57c00;'>
                             <div style='display: flex; align-items: center; justify-content: space-between;'>
-                                <div style='display: flex; align-items: center; gap: 12px;'>
+                                <div style='display: flex; align-items: center; gap: 10px;'>
                                     " . ($badge_html ?? '') . "
-                                    <div style='font-size: 0.85rem; color: #bbb; line-height: 1.3;'>
+                                    <div style='font-size: 0.8rem; line-height: 1.2;'>
                                         " . $desc_html . "
                                     </div>
                                 </div>
