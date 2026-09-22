@@ -646,7 +646,7 @@ function submitEscalateToSuperadmin() {
         });
 }
 function cancelEscalation(incidentId) {
-    customConfirm("Cancel Escalation?", "Revert incident from City CDRRMO back to Barangay management?", "bx-undo", "#d32f2f", function() {
+    customConfirm("Cancel Backup Request?", "Dismiss this backup request and return the incident to normal status?", "bx-undo", "#d32f2f", function() {
         const fd = new FormData();
         fd.append('action', 'cancel_escalation');
         fd.append('incident_id', incidentId);
@@ -655,23 +655,21 @@ function cancelEscalation(incidentId) {
             .then(async res => {
                 const raw = await res.text();
                 try { return JSON.parse(raw); }
-                catch (e) { throw new Error("Server output was not JSON: " + raw.substring(0, 100)); }
+                catch (e) { throw new Error("Server error: " + raw.substring(0, 100)); }
             })
             .then(data => {
                 if (data.success) {
-                    customAlert("Escalation Cancelled", "Incident returned to Barangay control.", "bx-check", "#388e3c");
+                    customAlert("Backup Dismissed", "Backup request has been cancelled.", "bx-check", "#388e3c");
                     fetchLocalData();
                 } else {
-                    customAlert("Error", data.message || "Failed to cancel escalation.", "bx-error", "#d32f2f");
+                    customAlert("Error", data.message || "Failed to cancel backup.", "bx-error", "#d32f2f");
                 }
             })
             .catch(err => {
-                console.error("Cancel escalation error:", err);
                 customAlert("Network Error", err.message, "bx-error", "#d32f2f");
             });
     });
 }
-
 window.cancelEscalation = cancelEscalation;
 window.submitEscalateToSuperadmin = submitEscalateToSuperadmin;
 window.openDeployModal = openDeployModal;

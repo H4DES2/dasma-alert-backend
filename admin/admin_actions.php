@@ -298,8 +298,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'escalate_to_superadmin') {
     }
     exit();
 }
-// 1.5 CANCEL ESCALATION TO CDRRMO (Reverts back to Barangay Level)
-if (isset($_POST['action']) && $_POST['action'] === 'cancel_escalation') {
+if (isset($_POST['action']) && ($_POST['action'] === 'cancel_escalation' || $_POST['action'] === 'cancel_backup_request')) {
     requireRole($ADMIN_TIER_ROLES, $role);
     while (ob_get_level() > 0) { ob_end_clean(); }
     header('Content-Type: application/json');
@@ -317,15 +316,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'cancel_escalation') {
         try {
             $stmt = $conn->prepare("
                 UPDATE incidents 
-                SET backup_requested = 1,
-                    backup_target = 'barangay',
-                    backup_status = 'pending_barangay'
+                SET backup_requested = 0,
+                    backup_target = 'none',
+                    backup_status = 'none'
                 WHERE id IN ($id_list)
             ");
             $stmt->execute();
             $stmt->close();
 
-            $log_msg = "↩️ ESCALATION CANCELLED: {$admin_name} (Brgy. {$admin_brgy}) recalled city escalation. Incident returned to local queue.";
+            $log_msg = "↩️ BACKUP CANCELLED: {$admin_name} (Brgy. {$admin_brgy}) closed/recalled the backup request.";
             $stmt_log = $conn->prepare("INSERT INTO incident_logs (incident_id, user_id, log_message) VALUES (?, ?, ?)");
             if ($stmt_log) {
                 foreach ($ids_array as $inc_id) {
@@ -336,7 +335,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'cancel_escalation') {
             }
 
             $conn->commit();
-            echo json_encode(['success' => true, 'message' => 'Escalation cancelled. Incident reverted to local handling.']);
+            echo json_encode(['success' => true, 'message' => 'Backup request cancelled.']);
         } catch (Exception $e) {
             $conn->rollback();
             echo json_encode(['success' => false, 'message' => $e->getMessage()]);
@@ -854,19 +853,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             ? "<button class='btn-sm' style='background:#d32f2f; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px;' onclick='event.stopPropagation(); recallCityBackup(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall</button>"
                             : "<span style='color:#64b5f6; font-weight:bold; font-size: 0.8rem;'><i class='bx bx-check-shield'></i> City Backup Active</span>";
                     } elseif ($backup_target === 'superadmin') {
-                        // Escalated to CDRRMO Superadmin
-                        $badge_html = "<span class='badge' style='background: #d32f2f; font-size: 0.7rem; padding: 4px 8px;'>🚨 CITY BACKUP REQUESTED</span>";
-                        $desc_html = "<b style='color: #ef5350;'>Escalated to CDRRMO Command Center.</b>";
-                        
-                        if ($role === 'superadmin') {
-                            $backup_action = "<button class='btn-sm' style='background:#1976d2; padding: 6px 12px; font-size: 0.8rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Unit</button>";
+                            $badge_html = "<span class='badge' style='background: #d32f2f; font-size: 0.7rem; padding: 4px 8px;'>🚨 CITY BACKUP REQUESTED</span>";
+                            $desc_html = "<b style='color: #ef5350;'>Escalated to CDRRMO Command Center.</b>";
+                            
+                            if ($role === 'superadmin') {
+                                $backup_action = "<button class='btn-sm' style='background:#1976d2; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); openDeployModal(\"$dispatch_id\", \"$safe_type_backup\")'><i class='bx bxs-truck'></i> Deploy City Unit</button>";
+                            } else {
+                                $backup_action = "<div style='display: flex; gap: 6px; align-items: center;'>
+                                    <span style='color:#f57c00; font-weight:700; font-size: 0.75rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City...</span>
+                                    <button class='btn-sm' style='background:#555; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px;' onclick='event.stopPropagation(); cancelEscalation(\"$dispatch_id\")' title='Cancel City Escalation'><i class='bx bx-undo'></i> Cancel Escalation</button>
+                                </div>";
+                            }
                         } else {
-                            $backup_action = "<div style='display: flex; gap: 6px; align-items: center;'>
-                                <span style='color:#f57c00; font-weight:700; font-size: 0.75rem;'><i class='bx bx-time-five bx-spin'></i> Awaiting City...</span>
-                                <button class='btn-sm' style='background:#555; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px;' onclick='event.stopPropagation(); cancelEscalation(\"$dispatch_id\")' title='Cancel City Escalation'><i class='bx bx-undo'></i> Cancel Request</button>
-                            </div>";
-                        }
-                    } else {
                         // Pending at Barangay Level: Count remaining available local teams for this barangay
                         $brgy_target_name = trim($inc['barangay'] ?? $admin_brgy);
                         $check_avail = $conn->prepare("
@@ -896,6 +894,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                             $backup_action = "<div style='display: flex; gap: 6px; align-items: center;'>
                                 $dispatch_btn
                                 <button class='btn-sm' style='background:#c62828; padding: 5px 10px; font-size: 0.75rem; font-weight: 700; border-radius: 6px;' onclick='event.stopPropagation(); escalateToSuperadmin(\"$dispatch_id\")'><i class='bx bx-up-arrow-circle'></i> Escalate</button>
+        <button class='btn-sm' style='background:#555; padding: 5px 10px; font-size: 0.75rem; border-radius: 6px;' onclick='event.stopPropagation(); cancelEscalation(\"$dispatch_id\")' title='Cancel Backup Request'><i class='bx bx-x'></i> Cancel</button>
                             </div>";
                         }
                     }
