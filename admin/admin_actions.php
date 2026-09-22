@@ -870,7 +870,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                         $check_avail = $conn->prepare("
                             SELECT COUNT(*) as avail_count 
                             FROM response_teams 
-                            WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty')
+                            WHERE LOWER(TRIM(status)) IN ('operational', 'on duty')
                               AND (current_incident_id IS NULL OR current_incident_id = 0)
                               AND (assigned_barangay = ? OR assigned_barangay LIKE ?)
                         ");
@@ -999,29 +999,51 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         ob_end_clean();
         header('Content-Type: application/json');
         
-        $params = []; $types = "";
+        $params = [];
+        $types = "";
         $team_brgy_filter = "";
+
+        // Determine the authoritative barangay for this session
+        $target_brgy = trim($_SESSION['barangay'] ?? '');
         
+        // If session barangay is missing, fetch directly from DB using user_id
+        if (empty($target_brgy) && !empty($user_id)) {
+            $u_stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
+            if ($u_stmt) {
+                $u_stmt->bind_param("i", $user_id);
+                $u_stmt->execute();
+                $u_row = $u_stmt->get_result()->fetch_assoc();
+                $target_brgy = trim($u_row['barangay'] ?? '');
+                $u_stmt->close();
+                $_SESSION['barangay'] = $target_brgy;
+            }
+        }
+
+        // Superadmin: sees all units (including City-Wide NULL units)
+        // Barangay Admin: MUST strictly match their own barangay name (NO empty wildcard fallback)
         if ($role === 'admin' || $role === 'barangay_admin') {
-            // Strictly local units: excludes NULL / City-Wide
-            $team_brgy_filter = " AND (
-                TRIM(assigned_barangay) = ? 
-                OR assigned_barangay LIKE ?
-            )";
-            $types .= "ss";
-            $params[] = $admin_brgy;
-            $params[] = "%" . $admin_brgy . "%";
+            if (!empty($target_brgy)) {
+                $team_brgy_filter = " AND (
+                    LOWER(TRIM(assigned_barangay)) = LOWER(?)
+                )";
+                $types .= "s";
+                $params[] = $target_brgy;
+            } else {
+                // If the admin has no barangay set, return NO teams to prevent leaking other barangays
+                $team_brgy_filter = " AND 1=0 ";
+            }
         } 
-        // Superadmin has no filter ($team_brgy_filter is empty), so they see all local + NULL city-wide units
         
         $query = "SELECT id, team_name, team_type, 
                          COALESCE(assigned_barangay, 'City-Wide') AS assigned_barangay 
                   FROM response_teams 
-                  WHERE LOWER(TRIM(status)) IN ('operational', 'available', 'on duty')
+                  WHERE LOWER(TRIM(status)) IN ('operational','on duty')
                     AND (current_incident_id IS NULL OR current_incident_id = 0) " . $team_brgy_filter;
                   
         $stmt = $conn->prepare($query);
-        if (!empty($params)) { $stmt->bind_param($types, ...$params); }
+        if (!empty($params)) { 
+            $stmt->bind_param($types, ...$params); 
+        }
         $stmt->execute();
         $res = $stmt->get_result();
         
@@ -1199,11 +1221,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($action === 'update_team_status') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id = (int)$_POST['id'];
-        $status = $_POST['status'];
-        if ($status === 'available' || $status === 'operational' || $status === 'maintenance') {
-            $save_status = ($status === 'available') ? 'operational' : $status;
-            $stmt = $conn->prepare("UPDATE response_teams SET status = ?, current_incident_id = NULL WHERE id = ?");
-            $stmt->bind_param("si", $save_status, $id);
+        $status = strtolower(trim($_POST['status']));
+        
+        // Normalize any incoming 'available' status straight to 'operational'
+        if ($status === 'available' || $status === 'operational') {
+            $stmt = $conn->prepare("UPDATE response_teams SET status = 'operational', current_incident_id = NULL WHERE id = ?");
+            $stmt->bind_param("i", $id);
         } else {
             $stmt = $conn->prepare("UPDATE response_teams SET status = ? WHERE id = ?");
             $stmt->bind_param("si", $status, $id);

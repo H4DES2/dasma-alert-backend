@@ -30,13 +30,12 @@ if ($role === 'admin' || $role === 'barangay_admin') {
         OR assigned_barangay LIKE '%$safe_brgy%'
     )";
 }
-// Superadmin leaves $team_filter empty and can view all units
 
-// --- FETCH KPI DATA (Correctly includes 'operational' as available units) ---
+// --- FETCH KPI DATA ---
 $res_total = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE 1=1 $team_filter");
 $total_teams = $res_total->fetch_assoc()['count'] ?? 0;
 
-$res_avail = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(TRIM(status)) IN ('available', 'operational') $team_filter");
+$res_avail = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(TRIM(status)) = 'operational' $team_filter");
 $avail_teams = $res_avail->fetch_assoc()['count'] ?? 0;
 
 $res_dep = $conn->query("SELECT COUNT(*) as count FROM response_teams WHERE LOWER(TRIM(status)) IN ('deployed', 'on-scene', 'dispatched') $team_filter");
@@ -57,7 +56,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
     $teams = $teams_result->fetch_all(MYSQLI_ASSOC);
     foreach($teams as $t) {
         $stat = strtolower(trim($t['status']));
-        if($stat === 'available' || $stat === 'operational') $avail_list[] = $t;
+        if($stat === 'operational') $avail_list[] = $t;
         if($stat === 'deployed' || $stat === 'on-scene' || $stat === 'dispatched') $dep_list[] = $t;
         if($stat === 'maintenance') $maint_list[] = $t;
     }
@@ -181,7 +180,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
                                 <td><span class="badge <?php echo $badge_class; ?>"><?php echo strtoupper($team['status']); ?></span></td>
                                 
                                 <td style="text-align: center;" onclick="event.stopPropagation();">
-                                    <?php if ($st_clean === 'available' || $st_clean === 'operational'): ?>
+                                    <?php if ($st_clean === 'operational'): ?>
                                         <button class="btn-sm" style="background: #f57c00; margin: 0 auto; padding: 8px 14px; font-weight: 700; border-radius: 8px;" onclick="updateStatus(<?php echo $team['id']; ?>, 'maintenance')">
                                             <i class='bx bxs-wrench'></i> Maintenance
                                         </button>
