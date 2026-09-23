@@ -29,9 +29,8 @@ $users_result = $conn->query("
         u.created_at, 
         u.status, 
         u.role,
-        p.phone_number
+        (SELECT p.phone_number FROM user_profiles p WHERE p.user_id = u.id ORDER BY p.id DESC LIMIT 1) AS phone_number
     FROM users u
-    LEFT JOIN user_profiles p ON u.id = p.user_id
     ORDER BY u.created_at DESC
 ");
 
