@@ -112,6 +112,8 @@ echo "Inserting 500 incidents in bulk...\n";
 $conn->begin_transaction();
 
 try {
+    $conn->query("DELETE FROM incident_logs WHERE incident_id IN (SELECT id FROM incidents WHERE status = 'archived')");
+    $conn->query("DELETE FROM incidents WHERE status = 'archived'");
     for ($i = 0; $i < $TARGET_COUNT; $i++) {
         $created_ts = mt_rand($START_TIME, $END_TIME);
         $created_str = date('Y-m-d H:i:s', $created_ts);
