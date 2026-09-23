@@ -209,7 +209,9 @@ function openReportModal() {
     [yearSelect, qYearSelect].forEach(sel => {
         if (!sel) return;
         sel.innerHTML = '';
-        for (let y = b.year; y >= 2024; y--) {
+        const baseYear = 2026;
+        const currentYear = Math.max(b.year, baseYear);
+        for (let y = currentYear; y >= baseYear; y--) {
             const opt = document.createElement('option');
             opt.value = y;
             opt.textContent = y;
