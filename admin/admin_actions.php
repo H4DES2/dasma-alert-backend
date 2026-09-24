@@ -90,34 +90,6 @@ $conn->query("CREATE TABLE IF NOT EXISTS incident_logs (
     log_message TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )");
-$conn->query("CREATE TABLE IF NOT EXISTS disaster_guidelines (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(255) NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-)");
-
-$conn->query("CREATE TABLE IF NOT EXISTS emergency_types (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(100) NOT NULL,
-    icon VARCHAR(50) DEFAULT 'bx-error',
-    incidents TEXT DEFAULT NULL,
-    status ENUM('active','inactive') DEFAULT 'active'
-)");
-$chk_et_col = $conn->query("SHOW COLUMNS FROM emergency_types LIKE 'incidents'");
-if ($chk_et_col && $chk_et_col->num_rows === 0) {
-    $conn->query("ALTER TABLE emergency_types ADD COLUMN incidents TEXT DEFAULT NULL");
-}
-$chk_et = $conn->query("SELECT COUNT(*) as c FROM emergency_types");
-if ($chk_et && $chk_et->fetch_assoc()['c'] == 0) {
-    $conn->query("INSERT INTO emergency_types (name, icon, incidents) VALUES 
-        ('Medical', 'bx-plus-medical', 'Heart Attack, Severe Bleeding, Unconscious, Stroke'), 
-        ('Fire', 'bxs-flame', 'Structural Fire, Grass/Brush Fire, Vehicle Fire'), 
-        ('Crime', 'bxs-shield', 'Theft, Assault, Domestic Violence, Suspicious Person'), 
-        ('Rescue', 'bx-support', 'Trapped in Vehicle, Drowning, Animal Rescue'), 
-        ('Hazard', 'bx-error', 'Downed Power Lines, Fallen Tree, Oil/Chemical Spill, Open Manhole')");
-}
 $check_col_up = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'is_online'");
 if ($check_col_up && $check_col_up->num_rows === 0) {
     $conn->query("ALTER TABLE user_profiles ADD COLUMN is_online TINYINT(1) DEFAULT 0");
