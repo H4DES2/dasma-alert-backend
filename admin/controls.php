@@ -192,11 +192,12 @@ $current_page = 'controls.php';
                 <select id="type_icon" class="nav-input-field" style="width:100%; padding:12px; margin-bottom:20px; border: 1px solid #e2e8f0; border-radius:8px;">
                     <option value="bx-error">⚠️ General Hazard (bx-error)</option>
                     <option value="bxs-flame">🔥 Fire (bxs-flame)</option>
-                    <option value="bx-plus-medical">⚕️ Medical (bx-plus-medical)</option>
+                    <option value="bx-plus-medical">⚕️ Medical Emergency (bx-plus-medical)</option>
+                    <option value="bxs-virus">🦠 Public Health / Outbreak (bxs-virus)</option>
                     <option value="bxs-shield">🛡️ Crime / Police (bxs-shield)</option>
                     <option value="bx-support">🎧 Rescue (bx-support)</option>
                     <option value="bxs-car-crash">🚗 Vehicle Accident (bxs-car-crash)</option>
-                    <option value="bx-water">🌊 Flood / Water (bx-water)</option>
+                    <option value="bx-water">🌊 Flood / Environmental (bx-water)</option>
                     <option value="bx-wind">🌪️ Weather / Typhoon (bx-wind)</option>
                 </select>
                 
