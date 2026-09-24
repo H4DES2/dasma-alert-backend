@@ -243,9 +243,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                 </div>
             </div>
         </div>
-
-        <!-- App Announcements Management Panel -->
-        <div class="sitting-panel" style="width: 100%; margin-bottom: 40px;">
             <div class="panel-header">
                 <h2><i class='bx bxs-bell-ring' style="color:var(--color-warning);"></i> Manage App Announcements</h2>
                 <button class="btn-sm" style="background:var(--color-info);" onclick="openAnnouncementModal()"><i class='bx bx-plus'></i> Create New</button>
@@ -319,8 +316,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                 </div>
             </div>
         </div>
-
-        <div id="announcementModal" class="modal">
             <div class="modal-content" style="max-width: 500px;">
                 <div class="close-modal" onclick="closeModal('announcementModal')"><i class='bx bx-x'></i></div>
                 <div class="modal-header" style="margin-bottom: 20px;">

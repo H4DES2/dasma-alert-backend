@@ -90,7 +90,30 @@ $conn->query("CREATE TABLE IF NOT EXISTS incident_logs (
     log_message TEXT NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 )");
+$conn->query("CREATE TABLE IF NOT EXISTS disaster_guidelines (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(255) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+)");
 
+$conn->query("CREATE TABLE IF NOT EXISTS emergency_types (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    icon VARCHAR(50) DEFAULT 'bx-error',
+    status ENUM('active','inactive') DEFAULT 'active'
+)");
+
+$chk_et = $conn->query("SELECT COUNT(*) as c FROM emergency_types");
+if ($chk_et && $chk_et->fetch_assoc()['c'] == 0) {
+    $conn->query("INSERT INTO emergency_types (name, icon) VALUES 
+        ('Medical', 'bx-plus-medical'), 
+        ('Fire', 'bxs-flame'), 
+        ('Crime', 'bxs-shield'), 
+        ('Rescue', 'bx-support'), 
+        ('Hazard', 'bx-error')");
+}
 $check_col_up = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'is_online'");
 if ($check_col_up && $check_col_up->num_rows === 0) {
     $conn->query("ALTER TABLE user_profiles ADD COLUMN is_online TINYINT(1) DEFAULT 0");
@@ -1182,7 +1205,56 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit();
     }
+    if ($action === 'save_guideline') {
+        requireRole(['superadmin'], $role);
+        $id = (int)($_POST['id'] ?? 0);
+        $title = trim($_POST['title'] ?? '');
+        $content = trim($_POST['content'] ?? '');
+        if ($id > 0) {
+            $stmt = $conn->prepare("UPDATE disaster_guidelines SET title=?, content=? WHERE id=?");
+            $stmt->bind_param("ssi", $title, $content, $id);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO disaster_guidelines (title, content) VALUES (?, ?)");
+            $stmt->bind_param("ss", $title, $content);
+        }
+        if ($stmt->execute()) { ob_end_clean(); echo "success"; }
+        $stmt->close(); exit();
+    }
 
+    if ($action === 'delete_guideline') {
+        requireRole(['superadmin'], $role);
+        $id = (int)$_POST['id'];
+        $stmt = $conn->prepare("DELETE FROM disaster_guidelines WHERE id=?");
+        $stmt->bind_param("i", $id);
+        if ($stmt->execute()) { ob_end_clean(); echo "success"; }
+        $stmt->close(); exit();
+    }
+
+    // --- EMERGENCY TYPES ---
+    if ($action === 'save_emergency_type') {
+        requireRole(['superadmin'], $role);
+        $id = (int)($_POST['id'] ?? 0);
+        $name = trim($_POST['name'] ?? '');
+        $icon = trim($_POST['icon'] ?? 'bx-error');
+        if ($id > 0) {
+            $stmt = $conn->prepare("UPDATE emergency_types SET name=?, icon=? WHERE id=?");
+            $stmt->bind_param("ssi", $name, $icon, $id);
+        } else {
+            $stmt = $conn->prepare("INSERT INTO emergency_types (name, icon) VALUES (?, ?)");
+            $stmt->bind_param("ss", $name, $icon);
+        }
+        if ($stmt->execute()) { ob_end_clean(); echo "success"; }
+        $stmt->close(); exit();
+    }
+
+    if ($action === 'delete_emergency_type') {
+        requireRole(['superadmin'], $role);
+        $id = (int)$_POST['id'];
+        $stmt = $conn->prepare("DELETE FROM emergency_types WHERE id=?");
+        $stmt->bind_param("i", $id);
+        if ($stmt->execute()) { ob_end_clean(); echo "success"; }
+        $stmt->close(); exit();
+    }
     if ($action === 'recall_team' || $action === 'cancel_dispatch') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $incident_id = isset($_POST['incident_id']) ? (int)$_POST['incident_id'] : (isset($_POST['id']) ? (int)$_POST['id'] : 0);

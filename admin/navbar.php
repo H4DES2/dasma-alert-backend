@@ -100,15 +100,13 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="<?= $current_page == 'evacuation_centers.php' ? 'active' : '' ?>"><a href="evacuation_centers.php"><i class='bx bxs-home-heart'></i> <span>EVACUATION CENTERS</span></a></li>
             <li class="<?= $current_page == 'analytics.php' ? 'active' : '' ?>"><a href="analytics.php"><i class='bx bxs-report'></i> <span>ANALYTICS & REPORTS</span></a></li>
             <?php if ($s_role === 'superadmin'): ?>
+            <li class="<?= $current_page == 'controls.php' ? 'active' : '' ?>"><a href="controls.php"><i class='bx bx-slider-alt'></i> <span>CONTROLS</span></a></li>
             <li class="<?= $current_page == 'user_management.php' ? 'active' : '' ?>"><a href="user_management.php"><i class='bx bxs-group'></i> <span>USER MANAGEMENT</span></a></li>
             <?php endif; ?>
         </ul>
     </div>
 
     <div class="navbar-actions">
-        <?php if ($s_role === 'superadmin'): ?>
-        <button onclick="openGlobalBroadcastModal()" class="broadcast-btn"><i class='bx bx-broadcast'></i> <span>BROADCAST</span></button>
-        <?php endif; ?>
 
         <div class="profile-dropdown" id="profileDropdown">
     <div class="profile-toggle" onclick="toggleDropdown(event)">
@@ -126,7 +124,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
 </nav>
 
 <?php if ($s_role === 'superadmin'): ?>
-<div id="globalBroadcastModal" class="custom-modal-overlay">
     <div class="custom-modal-box" style="text-align: left;">
         <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
             <h3 style="margin:0; color:#d32f2f;"><i class='bx bx-broadcast'></i> GLOBAL ALERT</h3>
