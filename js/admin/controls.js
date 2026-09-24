@@ -132,3 +132,37 @@ function saveIncidents() {
     
     fetch(API_PATH, { method: 'POST', body: fd }).then(() => location.reload());
 }
+// Preview Type Details Modal
+function showTypeDetails(id, name, icon, incidents) {
+    document.getElementById('viewTypeName').innerText = name;
+    document.getElementById('viewTypeIcon').className = 'bx ' + (icon || 'bx-error');
+
+    const container = document.getElementById('viewTypeIncidentsList');
+    container.innerHTML = '';
+
+    const items = (incidents || '')
+        .split(',')
+        .map(s => s.trim())
+        .filter(s => s.length > 0);
+
+    if (items.length === 0) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 24px; color: #94a3b8; font-weight: 600; background: #f8fafc; border-radius: 12px; border: 1px dashed #cbd5e1;">
+                No specific hazards configured yet.
+            </div>`;
+    } else {
+        items.forEach(hazard => {
+            const row = document.createElement('div');
+            row.style.cssText = 'display: flex; align-items: center; gap: 10px; padding: 10px 14px; background: #f8fafc; border: 1px solid #edf2f7; border-radius: 10px; font-weight: 600; font-size: 0.9rem; color: #334155;';
+            row.innerHTML = `<i class='bx bx-chevron-right' style='color: #f59e0b; font-size: 1.2rem;'></i> <span>${hazard}</span>`;
+            container.appendChild(row);
+        });
+    }
+
+    document.getElementById('viewTypeEditHazardsBtn').onclick = function() {
+        closeModal('viewTypeDetailsModal');
+        openIncidentModalFor(id);
+    };
+
+    document.getElementById('viewTypeDetailsModal').style.display = 'flex';
+}

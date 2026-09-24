@@ -66,35 +66,36 @@ $current_page = 'controls.php';
                 </div>
 
                 <!-- EMERGENCY TYPES -->
-                <div class="sitting-panel" style="border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
-                    <div class="panel-header" style="margin-bottom: 10px; border:none;">
-                        <h2 style="font-weight:800; font-size:1.1rem;"><i class='bx bxs-error-circle' style="color:#ef4444;"></i> Emergency Types</h2>
-                        <div style="display:flex; gap:8px;">
-                            <button class="pill-btn bg-green" onclick="openIncidentModal()"><i class='bx bx-list-ul'></i> Hazards</button>
-                            <button class="pill-btn" onclick="openTypeModal()"><i class='bx bx-plus'></i> Add Type</button>
-                        </div>
-                    </div>
-                    <div class="table-scroll-wrapper" style="max-height: 400px; border: 1px solid #edf2f7; border-radius: 12px; padding: 0 10px;">
-                        <table class="triage-table">
-                            <thead><tr><th>Icon & Name</th><th style="text-align: center;">Actions</th></tr></thead>
-                            <tbody>
-                                <?php foreach($emergency_types as $et): ?>
-                                <tr>
-                                    <td>
-                                        <i class='bx <?php echo $et['icon']; ?>' style="font-size:1.1rem; color:#ef4444; vertical-align:middle; margin-right:8px;"></i> 
-                                        <b style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($et['name']); ?></b>
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap;">
-                                        <button class="action-circle bg-orange" onclick="openIncidentModalFor(<?php echo $et['id']; ?>)" title="Manage Hazards"><i class='bx bx-list-ul'></i></button>
-                                        <button class="action-circle bg-green" onclick="openTypeModal(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')" title="Edit Name/Icon"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="deleteType(<?php echo $et['id']; ?>)" title="Delete Type"><i class='bx bx-trash'></i></button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+<div class="sitting-panel" style="border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
+    <div class="panel-header" style="margin-bottom: 10px; border:none;">
+        <h2 style="font-weight:800; font-size:1.1rem;"><i class='bx bxs-error-circle' style="color:#ef4444;"></i> Emergency Types</h2>
+        <div style="display:flex; gap:8px;">
+            <button class="pill-btn bg-green" onclick="openIncidentModal()"><i class='bx bx-list-ul'></i> Hazards</button>
+            <button class="pill-btn" onclick="openTypeModal()"><i class='bx bx-plus'></i> Add Type</button>
+        </div>
+    </div>
+    <div class="table-scroll-wrapper" style="max-height: 400px; border: 1px solid #edf2f7; border-radius: 12px; padding: 0 10px;">
+        <table class="triage-table">
+            <thead><tr><th>Icon & Name</th><th style="text-align: center;">Actions</th></tr></thead>
+            <tbody>
+                <?php foreach($emergency_types as $et): ?>
+                <tr onclick="showTypeDetails(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')" style="cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                    <td>
+                        <i class='bx <?php echo $et['icon']; ?>' style="font-size:1.1rem; color:#ef4444; vertical-align:middle; margin-right:8px;"></i> 
+                        <b style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($et['name']); ?></b>
+                        <small style="display:block; color:#94a3b8; font-size:0.75rem; margin-top:2px;">Click to view hazards</small>
+                    </td>
+                    <td style="text-align: center; white-space: nowrap;">
+                        <button class="action-circle bg-orange" onclick="event.stopPropagation(); openIncidentModalFor(<?php echo $et['id']; ?>)" title="Manage Hazards"><i class='bx bx-list-ul'></i></button>
+                        <button class="action-circle bg-green" onclick="event.stopPropagation(); openTypeModal(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')" title="Edit Name/Icon"><i class='bx bx-edit'></i></button>
+                        <button class="action-circle bg-red" onclick="event.stopPropagation(); deleteType(<?php echo $et['id']; ?>)" title="Delete Type"><i class='bx bx-trash'></i></button>
+                    </td>
+                </tr>
+                <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+</div>
 
             </div>
 
@@ -223,7 +224,29 @@ $current_page = 'controls.php';
                 <button class="pill-btn" style="width:100%; justify-content:center; padding:12px; font-size:1rem; background:#10b981;" onclick="saveIncidents()">Save Hazards</button>
             </div>
         </div>
+         <!-- Type Preview Modal -->
+<div id="viewTypeDetailsModal" class="modal">
+    <div class="modal-content" style="max-width: 460px; border-radius: 16px;">
+        <div class="close-modal" onclick="closeModal('viewTypeDetailsModal')"><i class='bx bx-x'></i></div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div id="viewTypeIconWrapper" style="width: 44px; height: 44px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); display: flex; align-items: center; justify-content: center;">
+                <i id="viewTypeIcon" class='bx' style="font-size: 1.6rem; color: #ef4444;"></i>
+            </div>
+            <div>
+                <h3 id="viewTypeName" style="margin: 0; font-weight: 800; color: #1e293b;"></h3>
+                <small style="color: #94a3b8; font-weight: 700;">Sub-Hazards & Incidents</small>
+            </div>
+        </div>
 
+        <div id="viewTypeIncidentsList" style="max-height: 280px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button class="pill-btn bg-orange" id="viewTypeEditHazardsBtn" style="flex: 1; justify-content: center; padding: 12px; font-size: 0.9rem;"><i class='bx bx-edit'></i> Edit Hazards</button>
+            <button class="pill-btn" style="background: #e2e8f0; color: #475569; padding: 12px 20px;" onclick="closeModal('viewTypeDetailsModal')">Close</button>
+        </div>
+    </div>
+</div>               
     </main>
 
     <script src="../js/admin/controls.js"></script>
