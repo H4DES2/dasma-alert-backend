@@ -55,20 +55,24 @@ function deleteGuideline(id) {
 }
 
 // Emergency Types
-function openTypeModal(id='', name='', icon='bx-error') {
+function openTypeModal(id='', name='', icon='bx-error', incidents='') {
     document.getElementById('type_id').value = id;
     document.getElementById('type_name').value = name;
     document.getElementById('type_icon').value = icon;
+    document.getElementById('type_incidents').value = incidents;
     document.getElementById('typeModal').style.display = 'flex';
 }
+
 function saveType() {
     let fd = new FormData();
     fd.append('action', 'save_emergency_type');
     fd.append('id', document.getElementById('type_id').value);
     fd.append('name', document.getElementById('type_name').value);
     fd.append('icon', document.getElementById('type_icon').value);
+    fd.append('incidents', document.getElementById('type_incidents').value);
     fetch(API_PATH, { method: 'POST', body: fd }).then(() => location.reload());
 }
+
 function deleteType(id) {
     if(!confirm('Delete this emergency type?')) return;
     let fd = new FormData(); fd.append('action', 'delete_emergency_type'); fd.append('id', id);
