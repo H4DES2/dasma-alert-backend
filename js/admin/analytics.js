@@ -88,9 +88,6 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 });
 
-// -----------------------------------------------------
-// 2. DYNAMIC SEASONALITY FUNCTION
-// -----------------------------------------------------
 function renderSeasonality() {
     const canvasElement = document.getElementById('seasonalityLineChart');
     if (!canvasElement) return;
@@ -103,9 +100,12 @@ function renderSeasonality() {
         if (filter === 'all') return true;
         const incDate = new Date(dateStr.replace(' ', 'T'));
         const diffDays = (now - incDate) / (1000 * 60 * 60 * 24);
-        if (filter === 'week') return diffDays <= 7;
-        if (filter === 'month') return diffDays <= 30;
-        if (filter === 'year') return diffDays <= 365;
+        
+        if (filter === 'day') return diffDays <= 1;
+        if (filter === 'weekly') return diffDays <= 7;
+        if (filter === 'monthly') return diffDays <= 30;
+        if (filter === 'quarterly') return diffDays <= 90;
+        if (filter === 'yearly') return diffDays <= 365;
         return true;
     });
 
@@ -425,6 +425,92 @@ function processReportGeneration() {
     }
 }
 
+// -----------------------------------------------------
+// 2. DYNAMIC SEASONALITY FUNCTION
+// -----------------------------------------------------
+function renderSeasonality() {
+    const canvasElement = document.getElementById('seasonalityLineChart');
+    if (!canvasElement) return;
+
+    const filterEl = document.getElementById('seasonalityFilter');
+    const filter = filterEl ? filterEl.value : 'all';
+    const now = new Date();
+    
+    let filtered = allSeasonDates.filter(dateStr => {
+        if (filter === 'all') return true;
+        const incDate = new Date(dateStr.replace(' ', 'T'));
+        const diffDays = (now - incDate) / (1000 * 60 * 60 * 24);
+        
+        if (filter === 'day') return diffDays <= 1;
+        if (filter === 'weekly') return diffDays <= 7;
+        if (filter === 'monthly') return diffDays <= 30;
+        if (filter === 'quarterly') return diffDays <= 90;
+        if (filter === 'yearly') return diffDays <= 365;
+        return true;
+    });
+
+    let timelineData = {};
+    [...filtered].sort().forEach(dateStr => {
+        let dateObj = new Date(dateStr.replace(' ', 'T'));
+        let day = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        timelineData[day] = (timelineData[day] || 0) + 1;
+    });
+
+    const labels = Object.keys(timelineData);
+    const data = Object.values(timelineData);
+
+    const overlay = document.getElementById('seasonalityOverlay');
+    if (overlay) {
+        overlay.style.display = (labels.length === 0) ? 'flex' : 'none';
+    }
+
+    const ctx = canvasElement.getContext('2d');
+
+    if (lineChartInstance) {
+        lineChartInstance.data.labels = labels;
+        lineChartInstance.data.datasets[0].data = data;
+        lineChartInstance.update();
+    } else {
+        const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
+        const textColor = isDarkMode ? '#8b949e' : '#888';
+        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
+        gradient.addColorStop(0, 'rgba(211, 47, 47, 0.5)'); 
+        gradient.addColorStop(1, 'rgba(211, 47, 47, 0.0)'); 
+
+        lineChartInstance = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Incidents',
+                    data: data,
+                    borderColor: '#d32f2f',
+                    backgroundColor: gradient,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.4,
+                    pointBackgroundColor: '#ffffff',
+                    pointBorderColor: '#d32f2f',
+                    pointRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false }, datalabels: { display: false } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { color: textColor, font: { weight: 'bold' } } },
+                    y: { beginAtZero: true, grid: { color: gridColor, drawBorder: false }, ticks: { stepSize: 1, color: textColor, font: { weight: 'bold' } } }
+                }
+            }
+        });
+    }
+}
+
+// -----------------------------------------------------
+// PDF GENERATOR UPDATE (Inside Section 3)
+// -----------------------------------------------------
 function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, groupByType) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('landscape');
@@ -438,6 +524,72 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
     doc.text(`Timeframe: ${rangeLabel}  |  Filter: ${selectedTypeLabel}  |  Generated: ${new Date().toLocaleString()}`, 14, 22);
 
     let startY = 30;
+
+    // --- RENDER DYNAMIC PIE CHART BREAKDOWN BEFORE INCIDENTS ---
+    if (vaultRows.length > 0 || binRows.length > 0) {
+        const typeCounts = {};
+        const combined = [...vaultRows, ...binRows];
+        combined.forEach(row => {
+            const t = row.incident_type || 'Uncategorized';
+            typeCounts[t] = (typeCounts[t] || 0) + 1;
+        });
+
+        const labels = Object.keys(typeCounts);
+        const data = Object.values(typeCounts);
+
+        // Create an off-screen canvas to render the breakdown
+        const canvas = document.createElement('canvas');
+        canvas.width = 600;
+        canvas.height = 300;
+        canvas.style.position = 'absolute';
+        canvas.style.left = '-9999px';
+        document.body.appendChild(canvas);
+
+        const palette = ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#0097a7', '#0288d1'];
+        const bgColors = labels.map((_, i) => palette[i % palette.length]);
+
+        const tempChart = new Chart(canvas.getContext('2d'), {
+            type: 'pie',
+            data: {
+                labels: labels,
+                datasets: [{
+                    data: data,
+                    backgroundColor: bgColors,
+                    borderWidth: 1,
+                    borderColor: '#ffffff'
+                }]
+            },
+            options: {
+                responsive: false,
+                animation: false, // Critical to capture synchronously
+                plugins: {
+                    legend: { position: 'right', labels: { font: { size: 14 } } },
+                    datalabels: { display: false } 
+                }
+            }
+        });
+
+        // Set solid white background behind chart
+        const ctx = canvas.getContext('2d');
+        ctx.globalCompositeOperation = 'destination-over';
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        const imgData = canvas.toDataURL('image/png', 1.0);
+        
+        doc.setFontSize(14);
+        doc.setTextColor(33, 33, 33);
+        doc.text('Incident Type Breakdown', 14, startY);
+        
+        doc.addImage(imgData, 'PNG', 14, startY + 4, 120, 60);
+        
+        // Clean up memory
+        tempChart.destroy();
+        document.body.removeChild(canvas);
+
+        startY += 72; // Shift start point for tables below the graph
+    }
+    // --- END GRAPH INJECTION ---
 
     // 1. INCIDENT ARCHIVE VAULT
     if (vaultRows.length > 0) {

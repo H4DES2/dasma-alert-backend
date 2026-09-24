@@ -444,9 +444,11 @@ foreach ($archived_incidents as $inc) {
                         <h2><i class='bx bx-line-chart' style="color:#d32f2f;"></i> Disaster Seasonality</h2>
                         <select id="seasonalityFilter" class="filter-select" onchange="renderSeasonality()">
                             <option value="all">All Time</option>
-                            <option value="year">Past Year</option>
-                            <option value="month">Past Month</option>
-                            <option value="week">Past Week</option>
+                            <option value="day">Single Day</option>
+                            <option value="weekly">Weekly Range (Up to 7 Days)</option>
+                            <option value="monthly">Monthly</option>
+                            <option value="quarterly">Quarterly</option>
+                            <option value="yearly">Yearly</option>
                         </select>
                     </div>
                     <div class="chart-wrapper">
