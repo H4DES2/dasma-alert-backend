@@ -50,15 +50,6 @@ if ($role === 'superadmin') {
         $barangays = array_column($b_res->fetch_all(MYSQLI_ASSOC), 'name');
     }
 }
-
-// 3. Announcements (Limit to 10 latest)
-$announcements = [];
-$ann_res = $conn->query("SELECT * FROM announcements ORDER BY created_at DESC LIMIT 10");
-if ($ann_res) {
-    while ($row = $ann_res->fetch_assoc()) {
-        $announcements[] = $row;
-    }
-}
 $active_broadcast = ($res = $conn->query("SELECT id, title, message, severity FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1")) ? $res->fetch_assoc() : null;
 $show_banner      = ($role !== 'superadmin' && $active_broadcast && $active_broadcast['id'] != ($_COOKIE['dismissed_broadcast_id'] ?? 0));
 function getReadableLocation($lat, $lng, $fallbackText) {
@@ -243,62 +234,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                 </div>
             </div>
         </div>
-            <div class="panel-header">
-                <h2><i class='bx bxs-bell-ring' style="color:var(--color-warning);"></i> Manage App Announcements</h2>
-                <button class="btn-sm" style="background:var(--color-info);" onclick="openAnnouncementModal()"><i class='bx bx-plus'></i> Create New</button>
-            </div>
-            
-            <div class="table-scroll-wrapper" style="max-height: 400px;">
-                <table class="triage-table">
-                    <thead>
-                        <tr>
-                            <th style="width: 20%;">Date & Time</th>
-                            <th style="width: 50%;">Announcement</th>
-                            <th style="width: 15%; text-align:center;">Image</th>
-                            <th style="width: 15%; text-align: center;">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <?php if(empty($announcements)): ?>
-                            <tr><td colspan="4" style="text-align:center; padding: 40px; color:var(--text-muted);">No announcements posted yet.</td></tr>
-                        <?php else: ?>
-                            <?php foreach($announcements as $ann): ?>
-                                <tr>
-                                    <td>
-                                        <b style="color: var(--text-primary);"><?php echo date('M d, Y', strtotime($ann['created_at'])); ?></b><br>
-                                        <small style="color: var(--text-muted); font-weight: 700;"><?php echo date('h:i A', strtotime($ann['created_at'])); ?></small>
-                                    </td>
-                                    <td>
-                                        <strong style="color:var(--color-info); font-size:1rem;"><?php echo htmlspecialchars($ann['title']); ?></strong><br>
-                                        <span style="color:var(--text-secondary); font-size:0.88rem; line-height: 1.4; display:block; margin-top:4px;"><?php echo nl2br(htmlspecialchars($ann['message'])); ?></span>
-                                    </td>
-                                    <td style="text-align:center;">
-                                        <?php if(!empty($ann['image_path'])): ?>
-                                            <?php 
-                                                $imgUrl = $ann['image_path'];
-                                                if (!str_starts_with($imgUrl, 'http')) {
-                                                    $imgUrl = 'https://dasma-api-l9ql.onrender.com/' . ltrim(str_replace('dasma_api/', '', $imgUrl), '/');
-                                                }
-                                            ?>
-                                            <img src="<?php echo htmlspecialchars($imgUrl, ENT_QUOTES); ?>" style="height:56px; width:80px; border-radius:var(--radius-md); object-fit:cover; border: 1px solid var(--border-color);">
-                                        <?php else: ?>
-                                            <span style="color:var(--text-muted); font-style:italic; font-size: 0.8rem;">No Image</span>
-                                        <?php endif; ?>
-                                    </td>
-                                    <td style="text-align: center;">
-                                        <div style="display:flex; gap:8px; justify-content:center;">
-                                            <button class="btn-sm" style="background:var(--color-success); padding:8px;" onclick="openAnnouncementModal(<?php echo $ann['id']; ?>, '<?php echo addslashes($ann['title']); ?>', '<?php echo addslashes(str_replace(array("\r", "\n"), array('\r', '\n'), $ann['message'])); ?>')"><i class='bx bx-edit' style="font-size: 1.1rem;"></i></button>
-                                            <button class="btn-sm" style="background:var(--color-critical); padding:8px;" onclick="deleteAnnouncement(<?php echo $ann['id']; ?>)"><i class='bx bx-trash' style="font-size: 1.1rem;"></i></button>
-                                        </div>
-                                    </td>
-                                </tr>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
         <!-- MODALS -->
         <div id="dispatchModal" class="modal">
             <div class="modal-content" style="max-width: 450px;">
@@ -313,27 +248,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                     <label style="display:block; margin-bottom:8px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.75rem; letter-spacing:0.04em;">Available Response Teams</label>
                     <div id="available_teams_list" class="team-list-container"></div>
                     <button class="btn-sm" style="background:var(--color-success); width:100%; padding:14px; font-size:0.95rem;" onclick="submitDispatch()">Deploy Selected Teams</button>
-                </div>
-            </div>
-        </div>
-            <div class="modal-content" style="max-width: 500px;">
-                <div class="close-modal" onclick="closeModal('announcementModal')"><i class='bx bx-x'></i></div>
-                <div class="modal-header" style="margin-bottom: 20px;">
-                    <h3 id="annModalTitle" style="margin:0; font-weight:800;"><i class='bx bxs-bell-ring' style="color: var(--color-warning);"></i> Create Announcement</h3>
-                </div>
-                <div class="modal-body">
-                    <input type="hidden" id="ann_id">
-                    
-                    <label style="display:block; margin-bottom:6px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.75rem; letter-spacing:0.04em;">Announcement Title</label>
-                    <input type="text" id="ann_title" class="filter-dropdown" style="width:100%; margin-bottom:15px;" placeholder="E.g., Relief Goods Distribution...">
-                    
-                    <label style="display:block; margin-bottom:6px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.75rem; letter-spacing:0.04em;">Message / Details</label>
-                    <textarea id="ann_message" class="filter-dropdown" style="width:100%; height:120px; margin-bottom:15px; resize:none;" placeholder="Enter full details here..."></textarea>
-                    
-                    <label style="display:block; margin-bottom:6px; font-weight:800; color:var(--text-secondary); text-transform:uppercase; font-size:0.75rem; letter-spacing:0.04em;">Attach Image (Optional)</label>
-                    <input type="file" id="ann_image" accept="image/*" style="margin-bottom: 24px; width: 100%; padding: 10px; border: 1px dashed var(--border-color); border-radius: var(--radius-md); background: var(--surface-subtle); color: var(--text-primary);">
-                    
-                    <button class="btn-sm" style="background:var(--color-info); width:100%; padding:14px; font-size:0.95rem;" onclick="saveAnnouncement()">Publish Announcement</button>
                 </div>
             </div>
         </div>
