@@ -123,22 +123,6 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 </nav>
 
-<?php if ($s_role === 'superadmin'): ?>
-    <div class="custom-modal-box" style="text-align: left;">
-        <div style="display:flex; justify-content:space-between; margin-bottom:25px;">
-            <h3 style="margin:0; color:#d32f2f;"><i class='bx bx-broadcast'></i> GLOBAL ALERT</h3>
-            <span onclick="closeGlobalBroadcastModal()" style="cursor:pointer; font-size:2rem; line-height: 1; color: #aaa;">&times;</span>
-        </div>
-        <input type="text" id="globalBroadcastTitle" placeholder="ALERT TITLE" class="nav-input-field">
-        <textarea id="globalBroadcastMessage" rows="4" placeholder="MESSAGE..." class="nav-input-field"></textarea>
-        <select id="globalBroadcastSeverity" class="nav-input-field">
-            <option value="info">INFO</option><option value="warning">WARNING</option><option value="critical">CRITICAL</option>
-        </select>
-        <button onclick="submitGlobalBroadcast()" style="background:#d32f2f; color:white; width:100%; padding:16px; border:none; border-radius:15px; font-weight:900;">TRANSMIT ALERT</button>
-    </div>
-</div>
-<?php endif; ?>
-
 <div id="customConfirmModal" class="custom-modal-overlay">
     <div class="custom-modal-box">
         <i id="modalIcon" class="bx" style="font-size: 5rem; margin-bottom: 20px; display: block;"></i>
