@@ -33,6 +33,7 @@ $current_page = 'controls.php';
         .action-circle { width: 30px; height: 30px; border-radius: 50%; border: none; color: white; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 0.9rem; }
         .bg-green { background: #10b981; }
         .bg-red { background: #ef4444; }
+        .bg-orange { background: #f59e0b; }
         .triage-table th { background: transparent; color: #888; font-size: 0.75rem; text-transform: uppercase; padding-bottom: 10px; border-bottom: 1px solid #edf2f7; }
         .triage-table td { border-bottom: 1px solid #edf2f7; padding: 14px 10px; }
     </style>
@@ -68,7 +69,10 @@ $current_page = 'controls.php';
                 <div class="sitting-panel" style="border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.03);">
                     <div class="panel-header" style="margin-bottom: 10px; border:none;">
                         <h2 style="font-weight:800; font-size:1.1rem;"><i class='bx bxs-error-circle' style="color:#ef4444;"></i> Emergency Types</h2>
-                        <button class="pill-btn" onclick="openTypeModal()"><i class='bx bx-plus'></i> Add Type</button>
+                        <div style="display:flex; gap:8px;">
+                            <button class="pill-btn bg-green" onclick="openIncidentModal()"><i class='bx bx-list-ul'></i> Hazards</button>
+                            <button class="pill-btn" onclick="openTypeModal()"><i class='bx bx-plus'></i> Add Type</button>
+                        </div>
                     </div>
                     <div class="table-scroll-wrapper" style="max-height: 400px; border: 1px solid #edf2f7; border-radius: 12px; padding: 0 10px;">
                         <table class="triage-table">
@@ -76,10 +80,14 @@ $current_page = 'controls.php';
                             <tbody>
                                 <?php foreach($emergency_types as $et): ?>
                                 <tr>
-                                    <td><i class='bx <?php echo $et['icon']; ?>' style="font-size:1.1rem; color:#ef4444; vertical-align:middle; margin-right:8px;"></i> <b style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($et['name']); ?></b></td>
-                                    <td style="text-align: center;">
-                                        <button class="action-circle bg-green" onclick="openTypeModal(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="deleteType(<?php echo $et['id']; ?>)"><i class='bx bx-trash'></i></button>
+                                    <td>
+                                        <i class='bx <?php echo $et['icon']; ?>' style="font-size:1.1rem; color:#ef4444; vertical-align:middle; margin-right:8px;"></i> 
+                                        <b style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($et['name']); ?></b>
+                                    </td>
+                                    <td style="text-align: center; white-space: nowrap;">
+                                        <button class="action-circle bg-orange" onclick="openIncidentModalFor(<?php echo $et['id']; ?>)" title="Manage Hazards"><i class='bx bx-list-ul'></i></button>
+                                        <button class="action-circle bg-green" onclick="openTypeModal(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')" title="Edit Name/Icon"><i class='bx bx-edit'></i></button>
+                                        <button class="action-circle bg-red" onclick="deleteType(<?php echo $et['id']; ?>)" title="Delete Type"><i class='bx bx-trash'></i></button>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -168,20 +176,54 @@ $current_page = 'controls.php';
             </div>
         </div>
 
+        <!-- Parent Type Modal -->
         <div id="typeModal" class="modal">
             <div class="modal-content" style="max-width: 450px; border-radius: 16px;">
                 <div class="close-modal" onclick="closeModal('typeModal')"><i class='bx bx-x'></i></div>
                 <h3 id="typeModalTitle" style="margin-bottom:15px; font-weight:800;">Emergency Type</h3>
                 <input type="hidden" id="type_id">
+                <input type="hidden" id="type_hidden_incidents">
+                
                 <label style="font-size: 0.75rem; font-weight: 800; color: #888;">Type Name</label>
-                <input type="text" id="type_name" class="nav-input-field" style="width:100%; padding:12px; margin-bottom:10px; border: 1px solid #e2e8f0; border-radius:8px;" placeholder="e.g. Fire, Flood">
-                <label style="font-size: 0.75rem; font-weight: 800; color: #888;">BoxIcon Class</label>
-                <input type="text" id="type_icon" class="nav-input-field" style="width:100%; padding:12px; margin-bottom:10px; border: 1px solid #e2e8f0; border-radius:8px;" placeholder="e.g. bxs-flame">
-                <label style="font-size: 0.75rem; font-weight: 800; color: #888;">Specific Incidents / Hazards (Comma Separated)</label>
-                <textarea id="type_incidents" class="nav-input-field" rows="3" style="width:100%; padding:12px; margin-bottom:20px; border: 1px solid #e2e8f0; border-radius:8px; resize:none;" placeholder="e.g. Downed Power Lines, Oil Spill, Landslide"></textarea>
-                <button class="pill-btn" style="width:100%; justify-content:center; padding:12px; font-size:1rem; background:#3b82f6;" onclick="saveType()">Save Settings</button>
+                <input type="text" id="type_name" class="nav-input-field" style="width:100%; padding:12px; margin-bottom:15px; border: 1px solid #e2e8f0; border-radius:8px;" placeholder="e.g. Fire, Flood">
+                
+                <label style="font-size: 0.75rem; font-weight: 800; color: #888;">Icon / Logo</label>
+                <select id="type_icon" class="nav-input-field" style="width:100%; padding:12px; margin-bottom:20px; border: 1px solid #e2e8f0; border-radius:8px;">
+                    <option value="bx-error">⚠️ General Hazard (bx-error)</option>
+                    <option value="bxs-flame">🔥 Fire (bxs-flame)</option>
+                    <option value="bx-plus-medical">⚕️ Medical (bx-plus-medical)</option>
+                    <option value="bxs-shield">🛡️ Crime / Police (bxs-shield)</option>
+                    <option value="bx-support">🎧 Rescue (bx-support)</option>
+                    <option value="bxs-car-crash">🚗 Vehicle Accident (bxs-car-crash)</option>
+                    <option value="bx-water">🌊 Flood / Water (bx-water)</option>
+                    <option value="bx-wind">🌪️ Weather / Typhoon (bx-wind)</option>
+                </select>
+                
+                <button class="pill-btn" style="width:100%; justify-content:center; padding:12px; font-size:1rem; background:#3b82f6;" onclick="saveType()">Save Type</button>
             </div>
         </div>
+
+        <!-- Specific Incidents / Hazards Modal -->
+        <div id="incidentModal" class="modal">
+            <div class="modal-content" style="max-width: 450px; border-radius: 16px;">
+                <div class="close-modal" onclick="closeModal('incidentModal')"><i class='bx bx-x'></i></div>
+                <h3 style="margin-bottom:15px; font-weight:800;">Manage Specific Hazards</h3>
+                
+                <label style="font-size: 0.75rem; font-weight: 800; color: #888;">Select Parent Emergency Type</label>
+                <select id="inc_parent_id" class="nav-input-field" style="width:100%; padding:12px; margin-bottom:15px; border: 1px solid #e2e8f0; border-radius:8px;" onchange="loadIncidentsForParent(this.value)">
+                    <option value="">-- Select Emergency Type --</option>
+                    <?php foreach($emergency_types as $et): ?>
+                        <option value="<?php echo $et['id']; ?>" data-name="<?php echo htmlspecialchars($et['name']); ?>" data-icon="<?php echo $et['icon']; ?>" data-incidents="<?php echo htmlspecialchars($et['incidents'] ?? ''); ?>"><?php echo htmlspecialchars($et['name']); ?></option>
+                    <?php endforeach; ?>
+                </select>
+
+                <label style="font-size: 0.75rem; font-weight: 800; color: #888;">Specific Incidents / Hazards (Comma Separated)</label>
+                <textarea id="inc_list_values" class="nav-input-field" rows="4" style="width:100%; padding:12px; margin-bottom:20px; border: 1px solid #e2e8f0; border-radius:8px; resize:none;" placeholder="e.g. Downed Power Lines, Oil Spill, Landslide"></textarea>
+                
+                <button class="pill-btn" style="width:100%; justify-content:center; padding:12px; font-size:1rem; background:#10b981;" onclick="saveIncidents()">Save Hazards</button>
+            </div>
+        </div>
+
     </main>
 
     <script src="../js/admin/controls.js"></script>

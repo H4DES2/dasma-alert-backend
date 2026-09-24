@@ -54,12 +54,20 @@ function deleteGuideline(id) {
     fetch(API_PATH, { method: 'POST', body: fd }).then(() => location.reload());
 }
 
-// Emergency Types
+// Emergency Types (Parent)
 function openTypeModal(id='', name='', icon='bx-error', incidents='') {
     document.getElementById('type_id').value = id;
     document.getElementById('type_name').value = name;
-    document.getElementById('type_icon').value = icon;
-    document.getElementById('type_incidents').value = incidents;
+    
+    let iconSelect = document.getElementById('type_icon');
+    let exists = Array.from(iconSelect.options).some(opt => opt.value === icon);
+    if (exists) {
+        iconSelect.value = icon;
+    } else {
+        iconSelect.value = 'bx-error'; // Fallback
+    }
+
+    document.getElementById('type_hidden_incidents').value = incidents;
     document.getElementById('typeModal').style.display = 'flex';
 }
 
@@ -69,12 +77,58 @@ function saveType() {
     fd.append('id', document.getElementById('type_id').value);
     fd.append('name', document.getElementById('type_name').value);
     fd.append('icon', document.getElementById('type_icon').value);
-    fd.append('incidents', document.getElementById('type_incidents').value);
+    
+    // Preserve existing incidents when only updating name/icon
+    fd.append('incidents', document.getElementById('type_hidden_incidents').value);
+    
     fetch(API_PATH, { method: 'POST', body: fd }).then(() => location.reload());
 }
 
 function deleteType(id) {
     if(!confirm('Delete this emergency type?')) return;
     let fd = new FormData(); fd.append('action', 'delete_emergency_type'); fd.append('id', id);
+    fetch(API_PATH, { method: 'POST', body: fd }).then(() => location.reload());
+}
+
+// Specific Hazards / Sub-Incidents
+function openIncidentModal() {
+    document.getElementById('inc_parent_id').value = '';
+    document.getElementById('inc_list_values').value = '';
+    document.getElementById('incidentModal').style.display = 'flex';
+}
+
+function openIncidentModalFor(id) {
+    openIncidentModal();
+    document.getElementById('inc_parent_id').value = id;
+    loadIncidentsForParent(id);
+}
+
+function loadIncidentsForParent(val) {
+    if(!val) {
+        document.getElementById('inc_list_values').value = '';
+        return;
+    }
+    let sel = document.getElementById('inc_parent_id');
+    let opt = sel.options[sel.selectedIndex];
+    document.getElementById('inc_list_values').value = opt.getAttribute('data-incidents') || '';
+}
+
+function saveIncidents() {
+    let sel = document.getElementById('inc_parent_id');
+    if(!sel.value) {
+        alert('Please select an Emergency Type first.');
+        return;
+    }
+    
+    let opt = sel.options[sel.selectedIndex];
+    let fd = new FormData();
+    fd.append('action', 'save_emergency_type');
+    fd.append('id', sel.value);
+    
+    // Preserve parent name/icon when updating incidents
+    fd.append('name', opt.getAttribute('data-name'));
+    fd.append('icon', opt.getAttribute('data-icon'));
+    fd.append('incidents', document.getElementById('inc_list_values').value);
+    
     fetch(API_PATH, { method: 'POST', body: fd }).then(() => location.reload());
 }
