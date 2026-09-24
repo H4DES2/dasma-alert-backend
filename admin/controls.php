@@ -137,11 +137,14 @@ $current_page = 'controls.php';
                             <thead><tr><th>Title</th><th style="text-align: center;">Actions</th></tr></thead>
                             <tbody>
                                 <?php foreach($guidelines as $g): ?>
-                                <tr>
-                                    <td><strong style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($g['title']); ?></strong></td>
-                                    <td style="text-align: center;">
-                                        <button class="action-circle bg-green" onclick="openGuidelineModal(<?php echo $g['id']; ?>, '<?php echo addslashes($g['title']); ?>', '<?php echo addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])); ?>')"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="deleteGuideline(<?php echo $g['id']; ?>)"><i class='bx bx-trash'></i></button>
+                                <tr onclick="showGuidelineDetails(<?php echo $g['id']; ?>, '<?php echo addslashes($g['title']); ?>', '<?php echo addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])); ?>')" style="cursor: pointer; transition: background 0.15s;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background='transparent'">
+                                    <td>
+                                        <strong style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($g['title']); ?></strong>
+                                        <small style="display:block; color:#94a3b8; font-size:0.75rem; margin-top:2px;">Click to view full instructions</small>
+                                    </td>
+                                    <td style="text-align: center; white-space: nowrap;">
+                                        <button class="action-circle bg-green" onclick="event.stopPropagation(); openGuidelineModal(<?php echo $g['id']; ?>, '<?php echo addslashes($g['title']); ?>', '<?php echo addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])); ?>')" title="Edit Guideline"><i class='bx bx-edit'></i></button>
+                                        <button class="action-circle bg-red" onclick="event.stopPropagation(); deleteGuideline(<?php echo $g['id']; ?>)" title="Delete Guideline"><i class='bx bx-trash'></i></button>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -247,7 +250,30 @@ $current_page = 'controls.php';
             <button class="pill-btn" style="background: #e2e8f0; color: #475569; padding: 12px 20px;" onclick="closeModal('viewTypeDetailsModal')">Close</button>
         </div>
     </div>
-</div>               
+</div>    
+<!-- Guideline Preview Modal -->
+<div id="viewGuidelineModal" class="modal">
+    <div class="modal-content" style="max-width: 550px; border-radius: 16px;">
+        <div class="close-modal" onclick="closeModal('viewGuidelineModal')"><i class='bx bx-x'></i></div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: rgba(16, 185, 129, 0.1); display: flex; align-items: center; justify-content: center;">
+                <i class='bx bx-book-bookmark' style="font-size: 1.6rem; color: #10b981;"></i>
+            </div>
+            <div>
+                <h3 id="viewGuideTitle" style="margin: 0; font-weight: 800; color: #1e293b;"></h3>
+                <small style="color: #94a3b8; font-weight: 700;">Disaster Safety Instructions</small>
+            </div>
+        </div>
+
+        <div id="viewGuideContent" style="max-height: 360px; overflow-y: auto; white-space: pre-line; line-height: 1.6; font-size: 0.9rem; color: #334155; padding: 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #edf2f7; margin-bottom: 20px;">
+        </div>
+
+        <div style="display: flex; gap: 10px;">
+            <button class="pill-btn bg-green" id="viewGuideEditBtn" style="flex: 1; justify-content: center; padding: 12px; font-size: 0.9rem;"><i class='bx bx-edit'></i> Edit Guide</button>
+            <button class="pill-btn" style="background: #e2e8f0; color: #475569; padding: 12px 20px;" onclick="closeModal('viewGuidelineModal')">Close</button>
+        </div>
+    </div>
+</div>           
     </main>
 
     <script src="../js/admin/controls.js"></script>

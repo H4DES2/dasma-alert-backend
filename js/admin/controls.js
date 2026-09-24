@@ -166,3 +166,15 @@ function showTypeDetails(id, name, icon, incidents) {
 
     document.getElementById('viewTypeDetailsModal').style.display = 'flex';
 }
+// Preview Guideline Modal
+function showGuidelineDetails(id, title, content) {
+    document.getElementById('viewGuideTitle').innerText = title;
+    document.getElementById('viewGuideContent').innerText = content.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
+    
+    document.getElementById('viewGuideEditBtn').onclick = function() {
+        closeModal('viewGuidelineModal');
+        openGuidelineModal(id, title, content);
+    };
+
+    document.getElementById('viewGuidelineModal').style.display = 'flex';
+}
