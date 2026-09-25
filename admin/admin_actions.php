@@ -95,7 +95,52 @@ if ($check_col_up && $check_col_up->num_rows === 0) {
     $conn->query("ALTER TABLE user_profiles ADD COLUMN is_online TINYINT(1) DEFAULT 0");
 }
 // =========================================================================================
+// Rate limiting guard for mutating administrative operations
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $conn->query("CREATE TABLE IF NOT EXISTS admin_action_rate_limits (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        admin_id INT NOT NULL,
+        action VARCHAR(50) NOT NULL,
+        action_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_admin_action (admin_id, action, action_time)
+    )");
 
+    $tracked_action = $_POST['action'] ?? 'unknown_action';
+    
+    // Ignore benign non-mutating updates like audio/ui preferences
+    if ($tracked_action !== 'save_preferences' && $user_id) {
+        $stmt_rate = $conn->prepare("
+            SELECT COUNT(*) as count 
+            FROM admin_action_rate_limits 
+            WHERE admin_id = ? 
+              AND action_time >= (NOW() - INTERVAL 10 SECOND)
+        ");
+        $stmt_rate->bind_param("i", $user_id);
+        $stmt_rate->execute();
+        $rate_check = $stmt_rate->get_result()->fetch_assoc();
+        $stmt_rate->close();
+
+        // Cap admin dispatches and mutates to max 10 requests per 10 seconds
+        if (($rate_check['count'] ?? 0) >= 10) {
+            if (ob_get_level() > 0) { ob_end_clean(); }
+            header('Content-Type: application/json');
+            http_response_code(429);
+            echo json_encode([
+                'success' => false, 
+                'message' => 'Too many commands dispatched. Please wait a few seconds before retrying.'
+            ]);
+            exit();
+        }
+
+        // Record the executed action
+        $stmt_log_act = $conn->prepare("INSERT INTO admin_action_rate_limits (admin_id, action) VALUES (?, ?)");
+        if ($stmt_log_act) {
+            $stmt_log_act->bind_param("is", $user_id, $tracked_action);
+            $stmt_log_act->execute();
+            $stmt_log_act->close();
+        }
+    }
+}
 // Evidence Image Upload (Public Reports)
 if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
     $a_allowed_mime = ["image/jpeg", "image/png", "image/gif", "image/webp"];
@@ -577,7 +622,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $types = "";
         $brgy_filter = "";
         
-        $city_limits = " AND (latitude BETWEEN 12.0000 AND 21.2000 AND longitude BETWEEN 119.5000 AND 124.5000) ";
+        $city_limits = " AND (latitude BETWEEN 14.2600 AND 14.3750 AND longitude BETWEEN 120.9100 AND 121.0100) ";
         
         if ($role === 'admin' || $role === 'barangay_admin') {
             $brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";

@@ -335,19 +335,22 @@ document.addEventListener('DOMContentLoaded', function() {
             maxZoom: 18, attribution: 'Esri Satellite'
         });
 
-        const luzonBounds = L.latLngBounds(
-            [12.0000, 119.5000],
-            [21.2000, 124.5000]
+        // Strict Dasmariñas City Bounding Box
+        const dasmaBounds = L.latLngBounds(
+            [14.2600, 120.9100],
+            [14.3750, 121.0100]
         );
 
         map = L.map('dasma-map', { 
-            center: [15.8000, 121.0000], 
-            zoom: 6.5,
-            minZoom: 5.5,
-            maxBounds: luzonBounds,
-            maxBoundsViscosity: 0.8,
+            center: [14.3294, 120.9367], 
+            zoom: 13,
+            minZoom: 12,
+            maxZoom: 18,
+            maxBounds: dasmaBounds,
+            maxBoundsViscosity: 1.0,
             layers: [osmStreet]
         });
+
         incidentLayer = L.layerGroup().addTo(map); 
         evacLayer = L.layerGroup().addTo(map);
 
@@ -363,6 +366,43 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
+
+        // Fetch & Highlight Dasmariñas City Boundary in Red
+        fetch('../geojson/dasmarinas_boundary.geojson')
+            .then(res => {
+                if (!res.ok) throw new Error("GeoJSON not found locally");
+                return res.json();
+            })
+            .then(geojsonData => {
+                L.geoJSON(geojsonData, {
+                    style: {
+                        color: '#d32f2f',
+                        weight: 3,
+                        opacity: 0.9,
+                        fillColor: '#d32f2f',
+                        fillOpacity: 0.08,
+                        dashArray: '4, 6'
+                    },
+                    interactive: false
+                }).addTo(map);
+            })
+            .catch(() => {
+                // Fallback boundary polygon rectangle if GeoJSON file is unavailable
+                L.polygon([
+                    [14.3750, 120.9100],
+                    [14.3750, 121.0100],
+                    [14.2600, 121.0100],
+                    [14.2600, 120.9100]
+                ], {
+                    color: '#d32f2f',
+                    weight: 2.5,
+                    opacity: 0.85,
+                    fillColor: '#d32f2f',
+                    fillOpacity: 0.05,
+                    dashArray: '5, 5',
+                    interactive: false
+                }).addTo(map);
+            });
     }
 
     initSSE();
