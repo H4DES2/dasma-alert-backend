@@ -1000,13 +1000,16 @@ function openMobileModal(row, type) {
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
 const sentimentCanvas = document.getElementById('sentimentPieChart');
-    if (sentimentCanvas) {
+    const sentimentValues = window.sentimentData || [];
+    const totalSentiment = sentimentValues.reduce((a, b) => a + parseInt(b, 10), 0);
+
+    if (sentimentCanvas && totalSentiment > 0) {
         new Chart(sentimentCanvas.getContext('2d'), {
             type: 'doughnut',
             data: {
                 labels: window.sentimentLabels || [],
                 datasets: [{
-                    data: window.sentimentData || [0, 0, 0, 0],
+                    data: sentimentValues,
                     backgroundColor: ['#d32f2f', '#f57c00', '#0288d1', '#388e3c'],
                     borderWidth: 2,
                     borderColor: isDarkMode ? '#161b22' : '#ffffff',
@@ -1017,14 +1020,16 @@ const sentimentCanvas = document.getElementById('sentimentPieChart');
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'bottom', labels: { padding: 12, font: { weight: 'bold', size: 11 }, color: textColor } },
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { padding: 12, font: { weight: 'bold', size: 11 }, color: textColor } 
+                    },
                     datalabels: {
                         color: '#ffffff',
-                        font: { weight: 'bold', size: 14 },
-                        formatter: (value, context) => {
-                            let total = context.chart.data.datasets[0].data.reduce((a, b) => a + parseInt(b, 10), 0);
-                            if (total === 0 || value === 0) return '';
-                            let pct = Math.round((value / total) * 100);
+                        font: { weight: 'bold', size: 13 },
+                        formatter: (value) => {
+                            if (value === 0) return '';
+                            let pct = Math.round((value / totalSentiment) * 100);
                             return pct >= 5 ? pct + '%' : '';
                         }
                     }
@@ -1032,7 +1037,6 @@ const sentimentCanvas = document.getElementById('sentimentPieChart');
             }
         });
     }
-
 // Window bindings
 window.openReportModal = openReportModal;
 window.handlePeriodChange = handlePeriodChange;

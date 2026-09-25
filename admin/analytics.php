@@ -254,11 +254,36 @@ function analyzeIncidentSentiment(?string $text): array {
     return ['score' => 0.0, 'label' => 'Neutral / Informative', 'urgency' => 'Normal'];
 }
 $sentiment_counts = [
-    'Panic / Severe Distress' => 0,
+    'Panic / Severe Distress'       => 0,
     'Distress / Heightened Anxiety' => 0,
-    'Neutral / Informative' => 0,
-    'Calm / Controlled' => 0
+    'Neutral / Informative'         => 0,
+    'Calm / Controlled'             => 0
 ];
+
+// Combine both archived incidents and bin/spam reports to evaluate all citizen descriptions
+$all_evaluated_reports = array_merge($archived_incidents ?? [], $bin_incidents ?? []);
+
+// If still empty, pull any available incident logs directly
+if (empty($all_evaluated_reports)) {
+    $fallback_logs = $conn->query("SELECT log_message FROM incident_logs ORDER BY id DESC LIMIT 50");
+    if ($fallback_logs) {
+        while ($l = $fallback_logs->fetch_assoc()) {
+            $all_evaluated_reports[] = ['initial_log' => $l['log_message']];
+        }
+    }
+}
+
+foreach ($all_evaluated_reports as $item) {
+    $text = $item['initial_log'] ?? $item['user_logs'] ?? '';
+    if (!empty($text)) {
+        $s_eval = analyzeIncidentSentiment($text);
+        if (isset($sentiment_counts[$s_eval['label']])) {
+            $sentiment_counts[$s_eval['label']]++;
+        }
+    }
+}
+
+$has_sentiment_data = array_sum($sentiment_counts) > 0;
 
 foreach ($archived_incidents as &$inc_item) {
     $s_eval = analyzeIncidentSentiment($inc_item['initial_log'] ?? '');
@@ -530,16 +555,19 @@ unset($inc_item);
                     <div id="heatmap"></div>
                 </div>
                 <div class="sitting-panel" style="flex: none;">
-                    <div class="panel-header" style="margin-bottom: 5px;">
-                        <h2><i class='bx bx-brain' style="color:#8e24aa;"></i> Citizen Sentiment Analysis</h2>
-                    </div>
-                    <p style="font-size: 0.8rem; color: #777; margin-bottom: 12px; font-weight: 600;">
-                        Urgency & emotional distress detected from citizen descriptions
-                    </p>
-                    <div class="chart-wrapper">
-                        <canvas id="sentimentPieChart"></canvas>
-                    </div>
-                </div>
+    <div class="panel-header" style="margin-bottom: 5px;">
+        <h2><i class='bx bx-brain' style="color:#8e24aa;"></i> Citizen Sentiment Analysis</h2>
+    </div>
+    <p style="font-size: 0.8rem; color: #777; margin-bottom: 12px; font-weight: 600;">
+        Urgency & emotional distress detected from citizen descriptions
+    </p>
+    <div class="chart-wrapper">
+        <?php if (!$has_sentiment_data): ?>
+            <div class="empty-overlay">No citizen descriptions recorded yet.</div>
+        <?php endif; ?>
+        <canvas id="sentimentPieChart"></canvas>
+    </div>
+</div>
                 <div class="sitting-panel" style="flex: none;">
                     <div class="panel-header" style="margin-bottom: 5px;">
                         <h2><i class='bx bxs-pie-chart-alt-2' style="color:#f57c00;"></i> Breakdown</h2>
