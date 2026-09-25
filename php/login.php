@@ -30,6 +30,16 @@ $isApiRequest = (
 if ($isApiRequest) {
     header('Content-Type: application/json; charset=utf-8');
 
+    // Dedicated table for mobile rate limiting (isolated from web's auth.php)
+    $conn->query("CREATE TABLE IF NOT EXISTS mobile_login_attempts (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ip_address VARCHAR(45) NOT NULL,
+        username VARCHAR(100) NOT NULL,
+        attempt_time TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_ip_time (ip_address, attempt_time),
+        INDEX idx_user_time (username, attempt_time)
+    )");
+
     $inputData = $_POST;
     if (empty($inputData)) {
         $raw = file_get_contents('php://input');
@@ -51,13 +61,51 @@ if ($isApiRequest) {
         exit();
     }
 
-    // Authenticate user without is_verified column
-    $stmt = $conn->prepare("SELECT id, username, password, role FROM users WHERE username = ? OR email = ? LIMIT 1");
+    // Resolve client IP
+    $ip_address = $_SERVER['HTTP_CF_CONNECTING_IP'] 
+        ?? $_SERVER['HTTP_X_FORWARDED_FOR'] 
+        ?? $_SERVER['REMOTE_ADDR'] 
+        ?? '0.0.0.0';
+    $ip_address = trim(explode(',', $ip_address)[0]);
+
+    // Rate Limit: Max 5 failed attempts in 15 minutes per IP or Username
+    $rate_stmt = $conn->prepare("
+        SELECT COUNT(*) as failed_attempts 
+        FROM mobile_login_attempts 
+        WHERE (ip_address = ? OR username = ?) 
+          AND attempt_time >= (NOW() - INTERVAL 15 MINUTE)
+    ");
+    $rate_stmt->bind_param("ss", $ip_address, $username);
+    $rate_stmt->execute();
+    $rate_res = $rate_stmt->get_result()->fetch_assoc();
+    $rate_stmt->close();
+
+    if (($rate_res['failed_attempts'] ?? 0) >= 5) {
+        http_response_code(429);
+        echo json_encode([
+            "status" => "error",
+            "success" => false,
+            "message" => "Too many failed login attempts. Please wait 15 minutes before trying again."
+        ]);
+        exit();
+    }
+
+    // Authenticate user
+    $stmt = $conn->prepare("SELECT id, username, password, first_name, last_name, role FROM users WHERE username = ? OR email = ? LIMIT 1");
     $stmt->bind_param("ss", $username, $username);
     $stmt->execute();
     $user = $stmt->get_result()->fetch_assoc();
+    $stmt->close();
 
     if ($user && password_verify($password, $user['password'])) {
+        // Clear mobile failed attempts on successful sign-in
+        $clear_stmt = $conn->prepare("DELETE FROM mobile_login_attempts WHERE ip_address = ? OR username = ?");
+        if ($clear_stmt) {
+            $clear_stmt->bind_param("ss", $ip_address, $username);
+            $clear_stmt->execute();
+            $clear_stmt->close();
+        }
+
         // Normalize role strings so Flutter recognizes them
         $rawRole = strtolower(trim($user['role'] ?? ''));
         $cleanRole = 'citizen';
@@ -75,15 +123,36 @@ if ($isApiRequest) {
             "success" => true,
             "message" => "Login successful",
             "role" => $cleanRole,
+            "id" => (string)$user['id'],
+            "username" => $user['username'],
+            "fname" => $user['first_name'] ?? '',
+            "lname" => $user['last_name'] ?? '',
             "user" => [
                 "id" => (string)$user['id'],
                 "username" => $user['username'],
+                "fname" => $user['first_name'] ?? '',
+                "lname" => $user['last_name'] ?? '',
                 "role" => $cleanRole,
                 "is_verified" => 1
             ]
         ]);
         exit();
-}
+    } else {
+        // Log failed attempt for mobile rate limiting
+        $log_stmt = $conn->prepare("INSERT INTO mobile_login_attempts (ip_address, username) VALUES (?, ?)");
+        if ($log_stmt) {
+            $log_stmt->bind_param("ss", $ip_address, $username);
+            $log_stmt->execute();
+            $log_stmt->close();
+        }
+
+        echo json_encode([
+            "status" => "error",
+            "success" => false,
+            "message" => "Invalid username or password."
+        ]);
+        exit();
+    }
 }
 // ==========================================
 // 2. WEB PORTAL SESSION CHECK
