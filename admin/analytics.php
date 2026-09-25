@@ -206,6 +206,68 @@ foreach ($archived_incidents as $inc) {
         $heat_coords[] = [(float)$inc['latitude'], (float)$inc['longitude'], 0.8];
     }
 }
+function analyzeIncidentSentiment(?string $text): array {
+    if (empty($text)) {
+        return ['score' => 0, 'label' => 'Neutral', 'urgency' => 'Low'];
+    }
+    
+    $clean = mb_strtolower(trim($text), 'UTF-8');
+    
+    // Emergency & distress lexicon (English + Filipino/Tagalog)
+    $panicWords = [
+        'help', 'saklolo', 'tulong', 'emergency', 'sunog', 'fire', 'trapped', 'nakulong',
+        'dying', 'namamatay', 'unconscious', 'dugo', 'bleeding', 'baril', 'gun', 'patay',
+        'dead', 'critical', 'severe', 'explosion', 'sabog', 'drown', 'nalulunod', 'collapse'
+    ];
+    $distressWords = [
+        'injured', 'sugatan', 'accident', 'banggaan', 'flood', 'baha', 'hirap', 'pain',
+        'sakit', 'attack', 'smoke', 'usok', 'leak', 'falling', 'danger', 'delikado',
+        'broken', 'bali', 'crime', 'robbery', 'holdap', 'lost', 'nawawala'
+    ];
+    $calmWords = [
+        'clear', 'safe', 'resolved', 'okay', 'stable', 'minor', 'controlled', 'ayos'
+    ];
+
+    $panicHits = 0;
+    foreach ($panicWords as $w) {
+        if (str_contains($clean, $w)) $panicHits++;
+    }
+
+    $distressHits = 0;
+    foreach ($distressWords as $w) {
+        if (str_contains($clean, $w)) $distressHits++;
+    }
+
+    $calmHits = 0;
+    foreach ($calmWords as $w) {
+        if (str_contains($clean, $w)) $calmHits++;
+    }
+
+    if ($panicHits >= 1) {
+        return ['score' => -0.85, 'label' => 'Panic / Severe Distress', 'urgency' => 'Critical'];
+    } elseif ($distressHits >= 1) {
+        return ['score' => -0.45, 'label' => 'Distress / Heightened Anxiety', 'urgency' => 'Elevated'];
+    } elseif ($calmHits >= 1) {
+        return ['score' => 0.40, 'label' => 'Calm / Controlled', 'urgency' => 'Low'];
+    }
+
+    return ['score' => 0.0, 'label' => 'Neutral / Informative', 'urgency' => 'Normal'];
+}
+$sentiment_counts = [
+    'Panic / Severe Distress' => 0,
+    'Distress / Heightened Anxiety' => 0,
+    'Neutral / Informative' => 0,
+    'Calm / Controlled' => 0
+];
+
+foreach ($archived_incidents as &$inc_item) {
+    $s_eval = analyzeIncidentSentiment($inc_item['initial_log'] ?? '');
+    $inc_item['sentiment'] = $s_eval;
+    if (isset($sentiment_counts[$s_eval['label']])) {
+        $sentiment_counts[$s_eval['label']]++;
+    }
+}
+unset($inc_item);
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -467,7 +529,17 @@ foreach ($archived_incidents as $inc) {
                     </div>
                     <div id="heatmap"></div>
                 </div>
-
+                <div class="sitting-panel" style="flex: none;">
+                    <div class="panel-header" style="margin-bottom: 5px;">
+                        <h2><i class='bx bx-brain' style="color:#8e24aa;"></i> Citizen Sentiment Analysis</h2>
+                    </div>
+                    <p style="font-size: 0.8rem; color: #777; margin-bottom: 12px; font-weight: 600;">
+                        Urgency & emotional distress detected from citizen descriptions
+                    </p>
+                    <div class="chart-wrapper">
+                        <canvas id="sentimentPieChart"></canvas>
+                    </div>
+                </div>
                 <div class="sitting-panel" style="flex: none;">
                     <div class="panel-header" style="margin-bottom: 5px;">
                         <h2><i class='bx bxs-pie-chart-alt-2' style="color:#f57c00;"></i> Breakdown</h2>
@@ -671,6 +743,8 @@ foreach ($archived_incidents as $inc) {
     </div>                                       
 
 <script>
+    window.sentimentData    = <?= json_encode(array_values($sentiment_counts)) ?>;
+    window.sentimentLabels  = <?= json_encode(array_keys($sentiment_counts)) ?>;
     window.allIncidents      = <?= $js_incidents ?? '[]' ?>;
     window.binIncidents      = <?= $js_bin_incidents ?? '[]' ?>;
     window.allSeasonDates    = <?= json_encode($seasonality_dates ?? []) ?>;

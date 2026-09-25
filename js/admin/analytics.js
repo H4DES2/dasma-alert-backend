@@ -999,6 +999,39 @@ function openMobileModal(row, type) {
 
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
+const sentimentCanvas = document.getElementById('sentimentPieChart');
+    if (sentimentCanvas) {
+        new Chart(sentimentCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: window.sentimentLabels || [],
+                datasets: [{
+                    data: window.sentimentData || [0, 0, 0, 0],
+                    backgroundColor: ['#d32f2f', '#f57c00', '#0288d1', '#388e3c'],
+                    borderWidth: 2,
+                    borderColor: isDarkMode ? '#161b22' : '#ffffff',
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { padding: 12, font: { weight: 'bold', size: 11 }, color: textColor } },
+                    datalabels: {
+                        color: '#ffffff',
+                        font: { weight: 'bold', size: 14 },
+                        formatter: (value, context) => {
+                            let total = context.chart.data.datasets[0].data.reduce((a, b) => a + parseInt(b, 10), 0);
+                            if (total === 0 || value === 0) return '';
+                            let pct = Math.round((value / total) * 100);
+                            return pct >= 5 ? pct + '%' : '';
+                        }
+                    }
+                }
+            }
+        });
+    }
 
 // Window bindings
 window.openReportModal = openReportModal;
