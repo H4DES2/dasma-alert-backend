@@ -214,13 +214,31 @@ function applyDashboardUpdates(data) {
         data.map.forEach(inc => { 
             let lat = parseFloat(inc.latitude);
             let lng = parseFloat(inc.longitude);
+            let acc = parseFloat(inc.accuracy_meters);
+            let hasAccuracy = !isNaN(acc) && acc > 0;
             
             if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
+                let accuracyLine = hasAccuracy
+                    ? `<br><small style="color:${acc > 30 ? '#f59e0b' : '#3b82f6'};">Location accuracy: \u00b1${Math.round(acc)}m</small>`
+                    : '';
+
                 L.marker([lat, lng], { 
                     icon: getIncidentIcon(inc.incident_type, inc.severity, inc.backup_requested) 
                 })
                 .addTo(incidentLayer)
-                .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:var(--color-critical); font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>`); 
+                .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:var(--color-critical); font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>${accuracyLine}`); 
+
+
+            if (hasAccuracy) {
+                let displayRadius = Math.min(acc, 200); // cap visual circle rendering to 200m
+                L.circle([lat, lng], {
+                    radius: displayRadius,
+                    color: acc > 30 ? '#f59e0b' : '#3b82f6',
+                    weight: 1,
+                    fillOpacity: 0.08,
+                    interactive: false
+                }).addTo(incidentLayer);
+            }
             }
         });
     }

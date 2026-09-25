@@ -586,7 +586,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $params[] = "%" . $admin_brgy . "%";
         }
         
-        $query = "SELECT id, incident_type, barangay, backup_requested FROM incidents WHERE status NOT IN ('archived', 'resolved', 'rejected') $brgy_filter $city_limits ORDER BY CASE severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, created_at DESC";
+        $query = "SELECT id, incident_type, barangay, latitude, longitude, accuracy_meters, backup_requested FROM incidents WHERE status NOT IN ('archived', 'resolved', 'rejected') $brgy_filter $city_limits ORDER BY CASE severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, created_at DESC";
         $stmt = $conn->prepare($query);
         if (!empty($params)) { $stmt->bind_param($types, ...$params); }
         $stmt->execute();
@@ -680,7 +680,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $response['kpi_details'] = ['active' => $act_details, 'deployed' => $dep_details, 'evacuees' => $evac_details];
 
-        $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
+        $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, accuracy_meters, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
         if ($resMap) { while ($row = $resMap->fetch_assoc()) { $response['map'][] = $row; } }
 
         $resEvac = executeSyncQuery($conn, "SELECT id, name, barangay, latitude, longitude, capacity, current_occupants, status FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
