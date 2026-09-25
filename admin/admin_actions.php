@@ -577,7 +577,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $types = "";
         $brgy_filter = "";
         
-        $city_limits = " AND (latitude BETWEEN 14.2500 AND 14.3900 AND longitude BETWEEN 120.8900 AND 121.0200) ";
+        $city_limits = " AND (latitude BETWEEN 12.0000 AND 21.2000 AND longitude BETWEEN 119.5000 AND 124.5000) ";
         
         if ($role === 'admin' || $role === 'barangay_admin') {
             $brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
@@ -632,7 +632,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $types .= "s"; $params[] = "%" . $type . "%";
         }
 
-        $type_clause .= " AND (i.latitude BETWEEN 14.2500 AND 14.3900 AND i.longitude BETWEEN 120.8900 AND 121.0200) ";
+        $type_clause .= " AND (i.latitude BETWEEN 12.0000 AND 21.2000 AND i.longitude BETWEEN 119.5000 AND 124.5000) ";
 
         $target = !empty($target_brgy) ? trim($target_brgy) : trim($admin_brgy);
         if (strcasecmp($target, 'Burol Main') === 0) {
@@ -1131,7 +1131,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         requireRole($ADMIN_TIER_ROLES, $role);
         ob_end_clean();
         header('Content-Type: application/json');
-        $res = $conn->query("SELECT COUNT(*) as c FROM incidents WHERE status NOT IN ('archived', 'rejected') AND (latitude BETWEEN 14.2500 AND 14.3900 AND longitude BETWEEN 120.8900 AND 121.0200)");
+        $res = $conn->query("SELECT COUNT(*) as c FROM incidents WHERE status NOT IN ('archived', 'rejected') AND (latitude BETWEEN 12.0000 AND 21.2000 AND longitude BETWEEN 119.5000 AND 124.5000)");
         echo json_encode(['count' => $res->fetch_assoc()['c'] ?? 0]);
         exit();
     }

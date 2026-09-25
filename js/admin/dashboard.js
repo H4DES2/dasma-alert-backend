@@ -317,21 +317,21 @@ document.addEventListener('DOMContentLoaded', function() {
             maxZoom: 18, attribution: 'Esri Satellite'
         });
 
-        const dasmaBounds = L.latLngBounds(
-            [14.2500, 120.8900],
-            [14.3900, 121.0200]
+        const luzonBounds = L.latLngBounds(
+            [12.0000, 119.5000],
+            [21.2000, 124.5000]
         );
 
         map = L.map('dasma-map', { 
-            center: [14.3294, 120.9368], 
-            zoom: 13,
-            minZoom: 13,
-            maxBounds: dasmaBounds,
-            maxBoundsViscosity: 1.0,
+            center: [14.6000, 121.0000], 
+            zoom: 9,
+            minZoom: 6,
+            maxBounds: luzonBounds,
+            maxBoundsViscosity: 0.8,
             layers: [osmStreet]
         });
         incidentLayer = L.layerGroup().addTo(map); 
-        evacLayer = L.layerGroup().addTo(map); 
+        evacLayer = L.layerGroup().addTo(map);
 
         const baseMaps = {
             "Street Map": osmStreet,
