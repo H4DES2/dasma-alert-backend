@@ -284,8 +284,8 @@ html.global-dark-mode .skeleton {
     min-width: 0;
 }
 
-.left-panel { flex: 1.5; min-height: 600px; display: flex; flex-direction: column; } 
-.right-panel { flex: 1; min-height: 600px; overflow: hidden; } 
+.left-panel { flex: 4; min-height: 480px; display: flex; flex-direction: column; } 
+.right-panel { flex: 6; min-height: 480px; overflow: hidden; } 
 
 .panel-header { 
     display: flex; 

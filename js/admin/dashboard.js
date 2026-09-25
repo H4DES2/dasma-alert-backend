@@ -323,9 +323,9 @@ document.addEventListener('DOMContentLoaded', function() {
         );
 
         map = L.map('dasma-map', { 
-            center: [14.6000, 121.0000], 
-            zoom: 9,
-            minZoom: 6,
+            center: [15.8000, 121.0000], 
+            zoom: 6.5,
+            minZoom: 5.5,
             maxBounds: luzonBounds,
             maxBoundsViscosity: 0.8,
             layers: [osmStreet]
