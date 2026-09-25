@@ -366,34 +366,38 @@ document.addEventListener('DOMContentLoaded', function() {
 
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
 
-       // Resolve GeoJSON URL dynamically from root
-        const geojsonUrl = window.location.pathname.includes('/alert/')
-            ? '/alert/dasmarinas_barangays.geojson'
-            : '/dasmarinas_barangays.geojson';
+       // Create high-priority pane for the boundary so tiles never obscure it
+        map.createPane('boundaryPane');
+        map.getPane('boundaryPane').style.zIndex = 450;
+        map.getPane('boundaryPane').style.pointerEvents = 'none';
 
-        fetch(geojsonUrl)
+        const boundaryEndpoint = window.location.pathname.includes('/alert/')
+            ? '/alert/admin/get_boundary.php'
+            : 'get_boundary.php';
+
+        fetch(boundaryEndpoint)
             .then(res => {
-                if (!res.ok) throw new Error("HTTP " + res.status + " fetching " + geojsonUrl);
+                if (!res.ok) throw new Error("HTTP " + res.status);
                 return res.json();
             })
             .then(geojsonData => {
-                const borderLayer = L.geoJSON(geojsonData, {
+                const boundaryLayer = L.geoJSON(geojsonData, {
+                    pane: 'boundaryPane',
                     style: {
-                        color: '#dc2626',
-                        weight: 2.5,
+                        color: '#ff0000',
+                        weight: 3,
                         opacity: 1,
-                        dashArray: '6, 6',
-                        fillColor: '#ef4444',
-                        fillOpacity: 0.06
-                    },
-                    interactive: false
+                        dashArray: '8, 6',
+                        fillColor: '#ff0000',
+                        fillOpacity: 0.05
+                    }
                 }).addTo(map);
 
-                // Auto-fit view exactly to the Dasmariñas city boundary
-                map.fitBounds(borderLayer.getBounds(), { padding: [20, 20] });
+                // Fit camera cleanly to the actual perimeter
+                map.fitBounds(boundaryLayer.getBounds(), { padding: [15, 15] });
             })
             .catch(err => {
-                console.error("Failed to load Dasmariñas boundary GeoJSON:", err);
+                console.error("Boundary load error:", err);
             });
     }
 
