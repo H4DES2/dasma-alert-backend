@@ -744,3 +744,11 @@ html.global-dark-mode .triage-table tr.cluster-child td {
 html.global-dark-mode .triage-table tr.cluster-child:hover td {
     background: rgba(0, 0, 0, 0.6) !important;
 }
+path.leaflet-interactive {
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.leaflet-overlay-pane svg path {
+    pointer-events: none;
+}

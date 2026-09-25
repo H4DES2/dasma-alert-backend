@@ -366,26 +366,35 @@ document.addEventListener('DOMContentLoaded', function() {
 
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
 
-        // Load genuine Dasmariñas barangay boundaries
-        fetch('../dasmarinas_barangays.geojson')
+       // Resolve GeoJSON URL dynamically from root
+        const geojsonUrl = window.location.pathname.includes('/alert/')
+            ? '/alert/dasmarinas_barangays.geojson'
+            : '/dasmarinas_barangays.geojson';
+
+        fetch(geojsonUrl)
             .then(res => {
-                if (!res.ok) throw new Error("Status " + res.status);
+                if (!res.ok) throw new Error("HTTP " + res.status + " fetching " + geojsonUrl);
                 return res.json();
             })
             .then(geojsonData => {
-                L.geoJSON(geojsonData, {
+                const borderLayer = L.geoJSON(geojsonData, {
                     style: {
-                        color: '#d32f2f',
-                        weight: 2,
-                        opacity: 0.85,
-                        dashArray: '5, 5',
-                        fillColor: '#d32f2f',
-                        fillOpacity: 0.04
+                        color: '#dc2626',
+                        weight: 2.5,
+                        opacity: 1,
+                        dashArray: '6, 6',
+                        fillColor: '#ef4444',
+                        fillOpacity: 0.06
                     },
                     interactive: false
                 }).addTo(map);
+
+                // Auto-fit view exactly to the Dasmariñas city boundary
+                map.fitBounds(borderLayer.getBounds(), { padding: [20, 20] });
             })
-            .catch(err => console.error("Error loading barangays GeoJSON:", err));
+            .catch(err => {
+                console.error("Failed to load Dasmariñas boundary GeoJSON:", err);
+            });
     }
 
     initSSE();
