@@ -365,40 +365,6 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
-
-       // Create high-priority pane for the boundary so tiles never obscure it
-        map.createPane('boundaryPane');
-        map.getPane('boundaryPane').style.zIndex = 450;
-        map.getPane('boundaryPane').style.pointerEvents = 'none';
-
-        const boundaryEndpoint = window.location.pathname.includes('/alert/')
-            ? '/alert/admin/get_boundary.php'
-            : 'get_boundary.php';
-
-        fetch(boundaryEndpoint)
-            .then(res => {
-                if (!res.ok) throw new Error("HTTP " + res.status);
-                return res.json();
-            })
-            .then(geojsonData => {
-                const boundaryLayer = L.geoJSON(geojsonData, {
-                    pane: 'boundaryPane',
-                    style: {
-                        color: '#ff0000',
-                        weight: 3,
-                        opacity: 1,
-                        dashArray: '8, 6',
-                        fillColor: '#ff0000',
-                        fillOpacity: 0.05
-                    }
-                }).addTo(map);
-
-                // Fit camera cleanly to the actual perimeter
-                map.fitBounds(boundaryLayer.getBounds(), { padding: [15, 15] });
-            })
-            .catch(err => {
-                console.error("Boundary load error:", err);
-            });
     }
 
     initSSE();
