@@ -1,5 +1,6 @@
 <?php
-require_once 'config.php';
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/auth.php';
 
 // Allow CORS dynamically for Flutter Web / APIs without exposing wildcard '*' to web browsers
 if (isset($_SERVER['HTTP_ORIGIN'])) {
@@ -18,15 +19,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
-require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/auth.php';
 
 /** @var \mysqli $conn */
-if (!isset($auth)) { $auth = new Auth($conn); }
-
-// ==========================================
-// 1. API LOGIN HANDLER (Flutter Mobile App)
-// ==========================================
+if (!isset($auth) || !($auth instanceof Auth)) { 
+    $auth = new Auth($conn); 
+}
 $isApiRequest = (
     (isset($_SERVER['CONTENT_TYPE']) && stripos($_SERVER['CONTENT_TYPE'], 'application/json') !== false) ||
     (isset($_POST['username']) && !isset($_POST['login_submit']))

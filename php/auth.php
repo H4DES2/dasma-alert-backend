@@ -1,15 +1,18 @@
 <?php
 require_once __DIR__ . '/config.php';
+global $conn;
 
 class Auth {
     private $conn;
 
-    public function __construct($database_connection) {
-        $this->conn = $database_connection;
-        $this->ensureTables();
-    }
-    // Auto-repair table for persistent server-side rate-limiting
-    private function ensureTables() {
+    public function __construct($database_connection = null) {
+        global $conn;
+        $this->conn = ($database_connection instanceof mysqli) ? $database_connection : $conn;
+        
+        if ($this->conn instanceof mysqli) {
+            $this->ensureTables();
+        }
+    }    private function ensureTables() {
         $this->conn->query("CREATE TABLE IF NOT EXISTS login_attempts (
             id INT AUTO_INCREMENT PRIMARY KEY,
             identifier VARCHAR(64) NOT NULL UNIQUE,
@@ -224,5 +227,11 @@ class Auth {
         return ['success' => true, 'message' => 'Password reset successfully! Redirecting to login...'];
     }
 }
-/** @var \mysqli $conn */
-$auth = new Auth($conn);
+global $conn;
+if (!isset($conn) || !($conn instanceof mysqli)) {
+    require_once __DIR__ . '/config.php';
+}
+
+if (!isset($auth) || !($auth instanceof Auth)) {
+    $auth = new Auth($conn);
+}

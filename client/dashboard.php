@@ -6,8 +6,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 require_once '../php/auth.php';
 
-if (!isset($auth)) { 
-    $auth = new Auth($conn); 
+if (!isset($auth) || !($auth instanceof Auth)) {
+    $auth = new Auth($conn);
 }
 
 // 🚀 LOGOUT LISTENER
