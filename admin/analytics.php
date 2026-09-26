@@ -123,7 +123,6 @@ $query = "
     ) log_sub ON i.id = log_sub.incident_id
     $where_clause
     ORDER BY i.created_at DESC
-    LIMIT 100
 ";
 $stmt = $conn->prepare($query);
 if (!empty($params)) { $stmt->bind_param($types, ...$params); }
@@ -153,7 +152,6 @@ $bin_query = "
     ) b_log ON i.id = b_log.incident_id
     WHERE i.status IN ('rejected', 'spam', 'out_of_range')
     ORDER BY i.created_at DESC
-    LIMIT 100
 ";
 $stmt_bin = $conn->prepare($bin_query);
 $stmt_bin->execute();
