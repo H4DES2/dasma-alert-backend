@@ -111,15 +111,15 @@ $query = "
            log_sub.all_logs
     FROM incidents i 
     LEFT JOIN (
-        SELECT incident_id,
-               SUBSTRING_INDEX(GROUP_CONCAT(log_message ORDER BY created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
-               MIN(CASE WHEN LOWER(log_message) LIKE '%scene%' THEN created_at END) as arrived_at,
-               MAX(created_at) as resolved_at,
+        SELECT il.incident_id,
+               SUBSTRING_INDEX(GROUP_CONCAT(il.log_message ORDER BY il.created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
+               MIN(CASE WHEN LOWER(il.log_message) LIKE '%scene%' THEN il.created_at END) as arrived_at,
+               MAX(il.created_at) as resolved_at,
                GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) 
                             ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') as all_logs
         FROM incident_logs il
         LEFT JOIN users u ON il.user_id = u.id
-        GROUP BY incident_id
+        GROUP BY il.incident_id
     ) log_sub ON i.id = log_sub.incident_id
     $where_clause
     ORDER BY i.created_at DESC
@@ -142,14 +142,14 @@ $bin_query = "
            b_log.all_logs
     FROM incidents i 
     LEFT JOIN spam_reports sr ON i.id = sr.incident_id
-    LEFT JOIN (
-        SELECT incident_id,
-               SUBSTRING_INDEX(GROUP_CONCAT(log_message ORDER BY created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
+   LEFT JOIN (
+        SELECT il.incident_id,
+               SUBSTRING_INDEX(GROUP_CONCAT(il.log_message ORDER BY il.created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
                GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) 
                             ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') as all_logs
         FROM incident_logs il
         LEFT JOIN users u ON il.user_id = u.id
-        GROUP BY incident_id
+        GROUP BY il.incident_id
     ) b_log ON i.id = b_log.incident_id
     WHERE i.status IN ('rejected', 'spam', 'out_of_range')
     ORDER BY i.created_at DESC
