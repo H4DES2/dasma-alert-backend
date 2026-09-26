@@ -101,18 +101,29 @@ if ($type_filter !== 'all') {
     $params[] = "%" . $type_filter . "%";
 }
 
-// 2. ARCHIVED INCIDENTS
+// 2. OPTIMIZED ARCHIVED INCIDENTS (Index-Friendly Aggregations)
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.image_path, i.created_at,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
-           (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as initial_log,
-           (SELECT MIN(created_at) FROM incident_logs WHERE incident_id = i.id AND LOWER(log_message) LIKE '%scene%') as arrived_at,
-           (SELECT MAX(created_at) FROM incident_logs WHERE incident_id = i.id) as resolved_at,
-           (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') 
-            FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id) as all_logs
+           COALESCE(log_sub.initial_log, 'No user details provided.') as initial_log,
+           log_sub.arrived_at,
+           log_sub.resolved_at,
+           log_sub.all_logs
     FROM incidents i 
+    LEFT JOIN (
+        SELECT incident_id,
+               SUBSTRING_INDEX(GROUP_CONCAT(log_message ORDER BY created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
+               MIN(CASE WHEN LOWER(log_message) LIKE '%scene%' THEN created_at END) as arrived_at,
+               MAX(created_at) as resolved_at,
+               GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) 
+                            ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') as all_logs
+        FROM incident_logs il
+        LEFT JOIN users u ON il.user_id = u.id
+        GROUP BY incident_id
+    ) log_sub ON i.id = log_sub.incident_id
     $where_clause
     ORDER BY i.created_at DESC
+    LIMIT 100
 ";
 $stmt = $conn->prepare($query);
 if (!empty($params)) { $stmt->bind_param($types, ...$params); }
@@ -121,19 +132,28 @@ $archived_incidents = ($res = $stmt->get_result()) ? $res->fetch_all(MYSQLI_ASSO
 $stmt->close();
 $js_incidents = json_encode($archived_incidents ?: []);
 
-// 3. DETAILED REPORT BIN WITH REJECTION AUDIT
+// 3. OPTIMIZED DETAILED REPORT BIN (Limit & Flattened Aggregation)
 $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.status, i.image_path, i.created_at, i.admin_remarks,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
            sr.reason as spam_reason,
            DATE_FORMAT(sr.created_at, '%b %d, %Y - %h:%i %p') as rejected_date_str,
-           (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as initial_log,
-           (SELECT GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') 
-            FROM incident_logs il LEFT JOIN users u ON il.user_id = u.id WHERE il.incident_id = i.id) as all_logs
+           COALESCE(b_log.initial_log, 'No user log entered.') as initial_log,
+           b_log.all_logs
     FROM incidents i 
     LEFT JOIN spam_reports sr ON i.id = sr.incident_id
+    LEFT JOIN (
+        SELECT incident_id,
+               SUBSTRING_INDEX(GROUP_CONCAT(log_message ORDER BY created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
+               GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) 
+                            ORDER BY il.created_at DESC, il.id DESC SEPARATOR '|||') as all_logs
+        FROM incident_logs il
+        LEFT JOIN users u ON il.user_id = u.id
+        GROUP BY incident_id
+    ) b_log ON i.id = b_log.incident_id
     WHERE i.status IN ('rejected', 'spam', 'out_of_range')
     ORDER BY i.created_at DESC
+    LIMIT 100
 ";
 $stmt_bin = $conn->prepare($bin_query);
 $stmt_bin->execute();
@@ -171,6 +191,31 @@ unset($bin_row);
 
 $total_rejected = count($bin_incidents);
 
+// 5. UNIFIED SINGLE-PASS SENTIMENT EVALUATION
+$sentiment_counts = [
+    'Panic / Severe Distress'       => 0,
+    'Distress / Heightened Anxiety' => 0,
+    'Neutral / Informative'         => 0,
+    'Calm / Controlled'             => 0
+];
+
+foreach ($archived_incidents as &$inc_item) {
+    $s_eval = analyzeIncidentSentiment($inc_item['initial_log'] ?? '');
+    $inc_item['sentiment'] = $s_eval;
+    if (isset($sentiment_counts[$s_eval['label']])) {
+        $sentiment_counts[$s_eval['label']]++;
+    }
+}
+unset($inc_item);
+
+foreach ($bin_incidents as $b_item) {
+    $s_eval = analyzeIncidentSentiment($b_item['initial_log'] ?? '');
+    if (isset($sentiment_counts[$s_eval['label']])) {
+        $sentiment_counts[$s_eval['label']]++;
+    }
+}
+
+$has_sentiment_data = array_sum($sentiment_counts) > 0;
 // 5. CHARTS & BROADCASTS
 $broadcast_history = ($b_res = $conn->query("SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC")) ? $b_res->fetch_all(MYSQLI_ASSOC) : [];
 $types_res = $conn->query("SELECT DISTINCT incident_type FROM incidents WHERE status = 'archived'");
