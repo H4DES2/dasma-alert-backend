@@ -1,3 +1,19 @@
+ServerSignature Off
+
+<IfModule mod_headers.c>
+    # Strip PHP version identification headers
+    Header unset X-Powered-By
+    Header always unset X-Powered-By
+
+    # Ensure browsers revalidate PHP files while caching static assets
+    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2)$">
+        Header set Cache-Control "max-age=2592000, public"
+    </FilesMatch>
+    <FilesMatch "\.php$">
+        Header set Cache-Control "no-cache, no-store, must-revalidate"
+    </FilesMatch>
+</IfModule>
+
 <IfModule mod_expires.c>
     ExpiresActive On
     
@@ -10,16 +26,6 @@
     ExpiresByType image/x-icon "access plus 1 month"
     ExpiresByType image/svg+xml "access plus 1 month"
     ExpiresByType font/woff2 "access plus 1 year"
-</IfModule>
-
-<IfModule mod_headers.c>
-    # Ensure browsers revalidate PHP files while caching static assets
-    <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2)$">
-        Header set Cache-Control "max-age=2592000, public"
-    </FilesMatch>
-    <FilesMatch "\.php$">
-        Header set Cache-Control "no-cache, no-store, must-revalidate"
-    </FilesMatch>
 </IfModule>
 
 <IfModule mod_deflate.c>
