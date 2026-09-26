@@ -28,21 +28,16 @@ $db_font    = in_array($raw_font,  $ALLOWED_FONTS)  ? $raw_font  : '16px';
 $js_theme   = json_encode($db_theme);
 $js_font    = json_encode($db_font);
 
-// Safe fallback avatar using inline SVG data URI to avoid 404 requests
-// Base64 encode the fallback SVG so it never breaks HTML attributes
-$default_avatar = 'data:image/svg+xml;base64,' . base64_encode('<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="#94a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>');
-// Safe fallback avatar using inline SVG data URI to avoid 404 requests
+// Fallback avatar data URI
 $default_avatar = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="%2394a3b8"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/></svg>';
 
 $raw_photo     = trim($user_data['profile_photo'] ?? '');
 $profile_photo = $default_avatar;
 
 if (!empty($raw_photo) && $raw_photo !== 'NULL') {
-    // 1. Direct Cloudinary / external HTTPS URL
     if (str_starts_with($raw_photo, 'http://') || str_starts_with($raw_photo, 'https://')) {
         $profile_photo = htmlspecialchars($raw_photo, ENT_QUOTES, 'UTF-8');
     } else {
-        // 2. Local relative paths
         $clean_path = ltrim($raw_photo, '/');
         if (file_exists(__DIR__ . '/../' . $clean_path)) {
             $profile_photo = '../' . htmlspecialchars($clean_path, ENT_QUOTES, 'UTF-8');
@@ -55,10 +50,11 @@ if (!empty($raw_photo) && $raw_photo !== 'NULL') {
 }
 
 $current_page = basename($_SERVER['PHP_SELF']);
+$csp_nonce = defined('CSP_NONCE') ? CSP_NONCE : '';
 ?>
 
-<!-- Inline theme applier to prevent flash of light mode -->
-<script>
+<!-- Inline theme applier with CSP Nonce -->
+<script nonce="<?= $csp_nonce ?>">
     (function() {
         const dbTheme  = <?= $js_theme ?>;
         const fontSize = <?= $js_font ?>;
@@ -96,30 +92,39 @@ $current_page = basename($_SERVER['PHP_SELF']);
                     <span id="nav-incident-badge" style="display:none; position:absolute; top:12px; right:8px; background:#d32f2f; color:white; font-size:0.6rem; padding:3px 6px; border-radius:50%; font-weight:bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">0</span>
                 </a>
             </li>
-            <li class="<?= $current_page == 'resource_tracking.php' ? 'active' : '' ?>"><a href="resource_tracking.php"><i class='bx bxs-truck'></i> <span>RESOURCE TRACKING</span></a></li>
-            <li class="<?= $current_page == 'evacuation_centers.php' ? 'active' : '' ?>"><a href="evacuation_centers.php"><i class='bx bxs-home-heart'></i> <span>EVACUATION CENTERS</span></a></li>
-            <li class="<?= $current_page == 'analytics.php' ? 'active' : '' ?>"><a href="analytics.php"><i class='bx bxs-report'></i> <span>ANALYTICS & REPORTS</span></a></li>
+            <li class="<?= $current_page == 'resource_tracking.php' ? 'active' : '' ?>">
+                <a href="resource_tracking.php"><i class='bx bxs-truck'></i> <span>RESOURCE TRACKING</span></a>
+            </li>
+            <li class="<?= $current_page == 'evacuation_centers.php' ? 'active' : '' ?>">
+                <a href="evacuation_centers.php"><i class='bx bxs-home-heart'></i> <span>EVACUATION CENTERS</span></a>
+            </li>
+            <li class="<?= $current_page == 'analytics.php' ? 'active' : '' ?>">
+                <a href="analytics.php"><i class='bx bxs-report'></i> <span>ANALYTICS & REPORTS</span></a>
+            </li>
             <?php if ($s_role === 'superadmin'): ?>
-            <li class="<?= $current_page == 'controls.php' ? 'active' : '' ?>"><a href="controls.php"><i class='bx bx-slider-alt'></i> <span>CONTROLS</span></a></li>
-            <li class="<?= $current_page == 'user_management.php' ? 'active' : '' ?>"><a href="user_management.php"><i class='bx bxs-group'></i> <span>USER MANAGEMENT</span></a></li>
+            <li class="<?= $current_page == 'controls.php' ? 'active' : '' ?>">
+                <a href="controls.php"><i class='bx bx-slider-alt'></i> <span>CONTROLS</span></a>
+            </li>
+            <li class="<?= $current_page == 'user_management.php' ? 'active' : '' ?>">
+                <a href="user_management.php"><i class='bx bxs-group'></i> <span>USER MANAGEMENT</span></a>
+            </li>
             <?php endif; ?>
         </ul>
     </div>
 
     <div class="navbar-actions">
-
         <div class="profile-dropdown" id="profileDropdown">
-    <div class="profile-toggle" onclick="toggleDropdown(event)">
-        <img src="<?= htmlspecialchars($profile_photo, ENT_QUOTES, 'UTF-8') ?>" alt="Profile">
-    </div>
-    <div class="dropdown-menu">
-        <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
-        <?php if ($s_role === 'superadmin'): ?>
-        <button onclick="showCustomModal('backup')" class="dropdown-item"><i class='bx bxs-data'></i> BACKUP DATABASE</button>
-        <?php endif; ?>
-        <button onclick="showCustomModal('logout')" class="dropdown-item logout-btn"><i class='bx bx-log-out-circle'></i> LOGOUT SESSION</button>
-    </div>
-</div>
+            <div class="profile-toggle" id="profileToggleBtn">
+                <img src="<?= htmlspecialchars($profile_photo, ENT_QUOTES, 'UTF-8') ?>" alt="Profile">
+            </div>
+            <div class="dropdown-menu">
+                <a href="profile.php" class="dropdown-item"><i class='bx bxs-user-detail'></i> MY PROFILE</a>
+                <?php if ($s_role === 'superadmin'): ?>
+                <button type="button" id="navBackupBtn" class="dropdown-item"><i class='bx bxs-data'></i> BACKUP DATABASE</button>
+                <?php endif; ?>
+                <button type="button" id="navLogoutBtn" class="dropdown-item logout-btn"><i class='bx bx-log-out-circle'></i> LOGOUT SESSION</button>
+            </div>
+        </div>
     </div>
 </nav>
 
@@ -129,8 +134,8 @@ $current_page = basename($_SERVER['PHP_SELF']);
         <h3 id="modalTitle"></h3>
         <p id="modalMessage"></p>
         <div style="display: flex; gap: 15px;">
-            <button onclick="closeCustomModal()" style="padding:14px; border-radius:12px; flex:1; cursor:pointer; border:none; background:#f1f4f8; font-weight:800; color:#444;">CANCEL</button>
-            <button id="modalConfirmBtn" style="padding:14px; border-radius:12px; border:none; color:white; flex:2; cursor:pointer; font-weight:900;">PROCEED</button>
+            <button type="button" id="modalCancelBtn" style="padding:14px; border-radius:12px; flex:1; cursor:pointer; border:none; background:#f1f4f8; font-weight:800; color:#444;">CANCEL</button>
+            <button type="button" id="modalConfirmBtn" style="padding:14px; border-radius:12px; border:none; color:white; flex:2; cursor:pointer; font-weight:900;">PROCEED</button>
         </div>
     </div>
 </div>
