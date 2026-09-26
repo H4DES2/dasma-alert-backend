@@ -340,15 +340,29 @@ document.addEventListener('DOMContentLoaded', function() {
             [14.3750, 121.0100]
         );
 
-        map = L.map('dasma-map', { 
-            center: [14.3294, 120.9367], 
+        map = L.map('dasma-map', {
+            preferCanvas: true,            // Switches rendering to hardware-accelerated Canvas (fixes SVG lag)
+            updateWhenIdle: true,          // Prevents redrawing tiles/vectors while actively dragging
+            updateWhenZooming: false,       // Pauses layer refreshes mid-zoom
+            center: [14.3294, 120.9367],
             zoom: 13,
             minZoom: 12,
             maxZoom: 18,
             maxBounds: dasmaBounds,
             maxBoundsViscosity: 0.9,
             layers: [osmStreet]
-        });
+            });
+           let isUserDraggingMap = false;
+
+            map.on('movestart dragstart', () => {
+                isUserDraggingMap = true;
+            });
+
+                map.on('moveend dragend', () => {
+                    setTimeout(() => {
+                        isUserDraggingMap = false;
+                    }, 400);
+                }); 
 
         incidentLayer = L.layerGroup().addTo(map); 
         evacLayer = L.layerGroup().addTo(map);

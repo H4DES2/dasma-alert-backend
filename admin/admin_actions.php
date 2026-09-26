@@ -43,17 +43,19 @@ function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fal
         return $fallback;
     }
 
-    $sql = "
-        SELECT name
-        FROM barangays
-        WHERE boundary IS NOT NULL
-        ORDER BY ST_Distance(ST_SRID(boundary, 0), POINT(?, ?)) ASC
+    // 1. FAST INDEXED LOOKUP: Point-in-Polygon (O(1) with Spatial Index)
+    $point_wkt = "POINT($lat $lng)";
+    $sql_fast = "
+        SELECT name 
+        FROM barangays 
+        WHERE boundary IS NOT NULL 
+          AND ST_Contains(boundary, ST_GeomFromText(?, 4326))
         LIMIT 1
     ";
-
-    $stmt = $conn->prepare($sql);
+    
+    $stmt = $conn->prepare($sql_fast);
     if ($stmt) {
-        $stmt->bind_param("dd", $lng, $lat);
+        $stmt->bind_param("s", $point_wkt);
         $stmt->execute();
         $result = $stmt->get_result();
         if ($row = $result->fetch_assoc()) {
@@ -62,6 +64,28 @@ function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fal
             return (strcasecmp($sector, 'Burol Main') === 0) ? 'Burol' : $sector;
         }
         $stmt->close();
+    }
+
+    // 2. FALLBACK ONLY IF OUTSIDE GEOFENCE BOUNDS: Bounding Box centroid distance
+    $sql_fallback = "
+        SELECT name
+        FROM barangays
+        WHERE boundary IS NOT NULL
+        ORDER BY ST_Distance_Sphere(ST_Centroid(boundary), ST_GeomFromText(?, 4326)) ASC
+        LIMIT 1
+    ";
+
+    $stmt_fb = $conn->prepare($sql_fallback);
+    if ($stmt_fb) {
+        $stmt_fb->bind_param("s", $point_wkt);
+        $stmt_fb->execute();
+        $result = $stmt_fb->get_result();
+        if ($row = $result->fetch_assoc()) {
+            $stmt_fb->close();
+            $sector = trim($row['name']);
+            return (strcasecmp($sector, 'Burol Main') === 0) ? 'Burol' : $sector;
+        }
+        $stmt_fb->close();
     }
 
     return $fallback;
