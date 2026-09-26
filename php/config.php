@@ -36,9 +36,21 @@ header("X-Frame-Options: SAMEORIGIN");
 header("Referrer-Policy: strict-origin-when-cross-origin");
 header("Permissions-Policy: camera=(self), microphone=(), geolocation=(self), payment=(), usb=()");
 
-// 3. Content Security Policy
+// Generate a unique per-request nonce for inline scripts
+if (!defined('CSP_NONCE')) {
+    define('CSP_NONCE', base64_encode(random_bytes(16)));
+}
+
+// Global Security Headers
+header("Strict-Transport-Security: max-age=31536000; includeSubDomains; preload");
+header("X-Content-Type-Options: nosniff");
+header("X-Frame-Options: SAMEORIGIN");
+header("Referrer-Policy: strict-origin-when-cross-origin");
+header("Permissions-Policy: camera=(self), microphone=(), geolocation=(self), payment=(), usb=()");
+
+// Content Security Policy (A+ compliant: Uses 'nonce', removes 'unsafe-inline' and 'unsafe-eval' from script-src)
 $csp = "default-src 'self'; " .
-       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
+       "script-src 'self' 'nonce-" . CSP_NONCE . "' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; " .
        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; " .
        "font-src 'self' https://fonts.gstatic.com https://unpkg.com data:; " .
        "img-src 'self' data: blob: https://*.tile.openstreetmap.org https://mt1.google.com https://*.google.com https://res.cloudinary.com https://api.cloudinary.com https://unpkg.com; " .

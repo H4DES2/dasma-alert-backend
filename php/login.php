@@ -416,7 +416,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['login_submit'])) {
 
 <script src="../js/php/login.js?v=<?= filemtime('../js/php/login.js') ?>"></script>
 <?php if (!empty($message)): ?>
-<script>
+<script nonce="<?= CSP_NONCE ?>">
     document.addEventListener("DOMContentLoaded", function() {
         switchTab('login');
     });
