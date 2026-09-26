@@ -67,7 +67,7 @@
     height: 100%; 
     position: relative; 
     width: 100%;
-    justify-content: space-evenly;
+    justify-content: space-between;
 }
 
 #navbarSupportedContent li { 
@@ -78,6 +78,8 @@
     z-index: 2; 
     flex: 1;
     min-width: 0;
+    position: relative;
+    height: 100%;
 }
 
 #navbarSupportedContent ul li a { 
@@ -95,10 +97,14 @@
     text-transform: uppercase; 
     letter-spacing: 0.8px;
     transition: color 0.4s ease;
+    white-space: nowrap;
 }
 
 #navbarSupportedContent ul li a i {
     font-size: clamp(1.15rem, 3.8vw, 1.45rem);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 #navbarSupportedContent ul li.active a { color: #b10000; }
@@ -114,7 +120,8 @@
     border-top-right-radius: 20px; 
     margin-top: 10px; 
     z-index: 1; 
-    transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    transition: all 0.35s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+    pointer-events: none;
 }
 
 .hori-selector .right, .hori-selector .left { 
@@ -143,28 +150,6 @@
     align-items: center; 
     gap: clamp(6px, 1.8vw, 12px); 
     flex-shrink: 0; 
-}
-
-.broadcast-btn { 
-    padding: clamp(6px, 1.5vw, 8px) clamp(8px, 2vw, 14px); 
-    color: #b10000 !important; 
-    border-radius: clamp(8px, 2vw, 12px); 
-    background: transparent; 
-    border: 2px solid #b10000; 
-    cursor: pointer; 
-    font-weight: 900; 
-    font-size: clamp(0.65rem, 1.6vw, 0.75rem); 
-    text-transform: uppercase; 
-    display: flex; 
-    align-items: center; 
-    gap: 6px; 
-    transition: 0.2s; 
-    white-space: nowrap;
-}
-
-.broadcast-btn:hover { 
-    background: #b10000; 
-    color: #ffffff !important; 
 }
 
 .profile-dropdown { position: relative; }
@@ -216,7 +201,6 @@
 .dropdown-item:hover { background: #f8f9fa; color: #b10000; }
 .dropdown-item.logout-btn { color: #d32f2f; margin-top: 4px; border-top: 1px solid #f1f4f8; }
 
-/* 🚀 NAVBAR POPUP MODALS & OVERLAYS */
 .custom-modal-overlay { 
     display: none; 
     position: fixed; 
@@ -242,19 +226,6 @@
     border: 1px solid rgba(255, 255, 255, 0.2); 
 }
 
-.nav-input-field { 
-    width: 100%; 
-    padding: 12px 14px; 
-    margin-bottom: 15px; 
-    border-radius: 12px; 
-    border: 1px solid #e2e8f0; 
-    background: #f8f9fa; 
-    font-family: inherit; 
-    font-weight: 700; 
-    outline: none; 
-    color: #333;
-}
-
 /* Dark Mode Overrides */
 html.global-dark-mode .custom-gooey-navbar { background-color: #161b22; border-color: #30363d; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.5); }
 html.global-dark-mode .navbar-brand h2 { color: #f0f6fc; }
@@ -272,21 +243,21 @@ html.global-dark-mode .dropdown-menu { background: #161b22; border-color: #30363
 html.global-dark-mode .dropdown-item { color: #c9d1d9; }
 html.global-dark-mode .dropdown-item:hover { background: #21262d; color: #ff6b6b; }
 html.global-dark-mode .dropdown-item.logout-btn { border-top-color: #30363d; }
-
 html.global-dark-mode .custom-modal-box { background-color: #161b22; box-shadow: 0 30px 70px rgba(0,0,0,0.6); border-color: #30363d; }
-html.global-dark-mode .nav-input-field { background: #0d1117; border-color: #30363d; color: #f0f6fc; }
-html.global-dark-mode #modalTitle, 
-html.global-dark-mode #modalMessage { color: #f0f6fc; }
-html.global-dark-mode #customConfirmModal button:first-child { background: #21262d !important; color: #c9d1d9 !important; }
 
-/* 🚀 SCREEN-BASED HIDING & COMPRESSION */
+/* Responsive adjustments */
 @media (max-width: 900px) {
-    #navbarSupportedContent ul li a span { display: none; }
-    .broadcast-btn span { display: none; }
-    .broadcast-btn { padding: 8px; border-radius: 50%; width: 36px; height: 36px; justify-content: center; }
+    #navbarSupportedContent ul li a span { display: none !important; }
+    #navbarSupportedContent ul li a { padding: 0 !important; }
+    .navbar-brand h2 { display: none; }
+    .custom-gooey-navbar { padding: 0 12px; }
 }
 
 @media (max-width: 600px) {
-    .navbar-brand h2 { display: none; }
-    .custom-gooey-navbar { padding: 0 10px; }
+    .custom-gooey-navbar { padding: 0 8px; }
+    .hori-selector .left, .hori-selector .right { width: 12px; }
+    .hori-selector .left { left: -12px; }
+    .hori-selector .right { right: -12px; }
+    .hori-selector .left:before { width: 24px; height: 24px; left: -12px; }
+    .hori-selector .right:before { width: 24px; height: 24px; right: -12px; }
 }
