@@ -150,12 +150,14 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                     <div style="display: flex; gap: 10px;">
                         <select id="map-filter-incident" class="filter-dropdown" onchange="syncDashboard()">
                             <option value="all">All Types</option>
-                            <option value="Fire">Fire</option>
-                            <option value="Medical">Medical</option>
                             <option value="Accident">Accident</option>
-                            <option value="Rescue">Rescue</option>
-                            <option value="Environmental">Environmental</option>
                             <option value="Crime">Crime</option>
+                            <option value="Environmental">Environmental</option>
+                            <option value="Fire">Fire</option>
+                            <option value="Hazard">Hazard</option>
+                            <option value="Health">Health</option>
+                            <option value="Medical">Medical</option>
+                            <option value="Rescue">Rescue</option>
                         </select>
                         <button id="evac-toggle-btn" class="filter-dropdown" onclick="toggleEvacLayer()"><i id="evac-icon" class='bx bxs-home-heart'></i> Evacs</button>
                     </div>
