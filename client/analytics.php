@@ -12,23 +12,23 @@ if (!$auth->is_logged_in()) {
     exit();
 }
 
-$user_id = $_SESSION['user_id'];
-$my_brgy = $_SESSION['barangay'] ?? '';
+$user_id = (int)($_SESSION['user_id'] ?? 0);
+$my_brgy = trim($_SESSION['barangay'] ?? '');
 
-if (empty($my_brgy)) {
+if (empty($my_brgy) && $user_id > 0) {
     $stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
     $stmt->bind_param("i", $user_id);
     $stmt->execute();
     $res = $stmt->get_result()->fetch_assoc();
-    $my_brgy = $res['barangay'] ?? '';
+    $my_brgy = trim($res['barangay'] ?? '');
     $_SESSION['barangay'] = $my_brgy;
     $stmt->close();
 }
 
-$target_brgy = trim($my_brgy);
+$target_brgy = $my_brgy;
 $like_brgy   = '%' . $target_brgy . '%';
 
-// 1. Fetch Archive Vault Incidents (with Timeline timestamps)
+// 1. Fetch Archive Vault Incidents
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.created_at, i.image_path,
     DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -61,7 +61,7 @@ while ($row = $result->fetch_assoc()) {
 }
 $stmt->close();
 
-// 2. Fetch Rejection Audit Records & Category Breakdown
+// 2. Fetch Rejection Audit Records & Breakdown
 $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.created_at, i.image_path, i.admin_remarks,
     DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -84,12 +84,12 @@ $b_res = $b_stmt->get_result();
 
 $rejected_incidents = [];
 $rejection_categories = [
-    'False Alarm' => 0,
-    'Out of Jurisdiction' => 0,
-    'Duplicate Report' => 0,
-    'Prank / Spam' => 0,
+    'False Alarm'            => 0,
+    'Out of Jurisdiction'    => 0,
+    'Duplicate Report'       => 0,
+    'Prank / Spam'           => 0,
     'Incomplete Information' => 0,
-    'Other / Unspecified' => 0
+    'Other / Unspecified'    => 0
 ];
 
 while ($brow = $b_res->fetch_assoc()) {
@@ -112,12 +112,12 @@ $b_stmt->close();
 
 $total_rejections = count($rejected_incidents);
 
-function calculatePercent(int $count, int $total): int {
-    return $total > 0 ? (int)round(($count / $total) * 100) : 0;
+function getAuditPct(int $count, int $total): int {
+    return ($total > 0) ? (int)round(($count / $total) * 100) : 0;
 }
 
-$js_incidents = json_encode($incidents);
-$js_rejected  = json_encode($rejected_incidents);
+$js_incidents = json_encode($incidents ?: []);
+$js_rejected  = json_encode($rejected_incidents ?: []);
 $pie_labels   = json_encode(array_keys($type_counts));
 $pie_values   = json_encode(array_values($type_counts));
 ?>
@@ -173,10 +173,10 @@ $pie_values   = json_encode(array_values($type_counts));
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th style="width: 35%;">INCIDENT & LOGS</th>
-                                <th style="width: 25%;">LOCATION & STATUS</th>
-                                <th style="width: 25%;">RESPONSE TIMELINE</th>
-                                <th style="width: 15%; text-align:center;">ACTION</th>
+                                <th style="width: 38%;">INCIDENT & LOGS</th>
+                                <th class="mobile-hide" style="width: 22%;">LOCATION & STATUS</th>
+                                <th class="mobile-hide" style="width: 25%;">RESPONSE TIMELINE</th>
+                                <th class="mobile-hide" style="width: 15%; text-align:center;">ACTION</th>
                             </tr>
                         </thead>
                         <tbody id="vaultTableBody">
@@ -195,13 +195,17 @@ $pie_values   = json_encode(array_values($type_counts));
                                     <td>
                                         <div class="incident-title-text"><?php echo htmlspecialchars($inc['incident_type']); ?></div>
                                         <div class="incident-date-text"><?php echo $inc['date_str']; ?></div>
+                                        <div class="mobile-sub-badges">
+                                            <span class="badge <?php echo $badge; ?>"><?php echo strtoupper($inc['severity']); ?></span>
+                                            <span class="badge" style="background: #424242;"><?php echo htmlspecialchars($inc['barangay']); ?></span>
+                                        </div>
                                         <div class="reporter-log-snippet"><?php echo $rep_log; ?></div>
                                     </td>
-                                    <td>
+                                    <td class="mobile-hide">
                                         <div style="font-weight: 800; font-size: 0.95rem;"><?php echo htmlspecialchars($inc['barangay']); ?></div>
                                         <span class="badge <?php echo $badge; ?>" style="margin-top: 5px;"><?php echo strtoupper($inc['severity']); ?></span>
                                     </td>
-                                    <td>
+                                    <td class="mobile-hide">
                                         <div class="timeline-meta">
                                             <div><b>Reported:</b> <span><?php echo $inc['reported_time'] ?: 'Unknown'; ?></span></div>
                                             <div><b>Arrived:</b> <span><?php echo $inc['arrived_time'] ?: 'Unknown'; ?></span></div>
@@ -209,7 +213,7 @@ $pie_values   = json_encode(array_values($type_counts));
                                             <div style="color: var(--color-critical, #d32f2f); font-weight: 800;"><b>Total Time:</b> <span><?php echo $total_time; ?></span></div>
                                         </div>
                                     </td>
-                                    <td style="text-align:center;">
+                                    <td class="mobile-hide" style="text-align:center;">
                                         <div class="btn-action-group">
                                             <button type="button" class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewEvidence('<?php echo $safe_img; ?>', '<?php echo $safe_type; ?>', '<?php echo $safe_brgy; ?>')"><i class='bx bx-image'></i></button>
                                             <button type="button" class="btn-table-icon bg-blue" data-logs="<?= htmlspecialchars($inc['all_logs'] ?? '', ENT_QUOTES, 'UTF-8') ?>" data-type="<?= htmlspecialchars($inc['incident_type'], ENT_QUOTES, 'UTF-8') ?>" onclick="event.stopPropagation(); openLogModal(this)"><i class='bx bx-list-ul'></i></button>
@@ -224,7 +228,7 @@ $pie_values   = json_encode(array_values($type_counts));
             </div>
         </div>
 
-        <!-- 2. SIDE-BY-SIDE: Breakdown & Seasonality Charts -->
+        <!-- 2. SIDE-BY-SIDE: Charts Grid -->
         <div class="analytics-charts-row">
             <div class="sitting-panel">
                 <div class="panel-header">
@@ -269,42 +273,42 @@ $pie_values   = json_encode(array_values($type_counts));
                     <span class="audit-title">FALSE ALARM</span>
                     <div class="audit-body">
                         <h3><?php echo $rejection_categories['False Alarm']; ?></h3>
-                        <span class="audit-pct"><?php echo calculatePercent($rejection_categories['False Alarm'], $total_rejections); ?>%</span>
+                        <span class="audit-pct"><?php echo getAuditPct($rejection_categories['False Alarm'], $total_rejections); ?>%</span>
                     </div>
                 </div>
                 <div class="audit-card orange">
                     <span class="audit-title">OUT OF JURISDICTION</span>
                     <div class="audit-body">
                         <h3><?php echo $rejection_categories['Out of Jurisdiction']; ?></h3>
-                        <span class="audit-pct"><?php echo calculatePercent($rejection_categories['Out of Jurisdiction'], $total_rejections); ?>%</span>
+                        <span class="audit-pct"><?php echo getAuditPct($rejection_categories['Out of Jurisdiction'], $total_rejections); ?>%</span>
                     </div>
                 </div>
                 <div class="audit-card blue">
                     <span class="audit-title">DUPLICATE REPORT</span>
                     <div class="audit-body">
                         <h3><?php echo $rejection_categories['Duplicate Report']; ?></h3>
-                        <span class="audit-pct"><?php echo calculatePercent($rejection_categories['Duplicate Report'], $total_rejections); ?>%</span>
+                        <span class="audit-pct"><?php echo getAuditPct($rejection_categories['Duplicate Report'], $total_rejections); ?>%</span>
                     </div>
                 </div>
                 <div class="audit-card purple">
                     <span class="audit-title">PRANK / SPAM</span>
                     <div class="audit-body">
                         <h3><?php echo $rejection_categories['Prank / Spam']; ?></h3>
-                        <span class="audit-pct"><?php echo calculatePercent($rejection_categories['Prank / Spam'], $total_rejections); ?>%</span>
+                        <span class="audit-pct"><?php echo getAuditPct($rejection_categories['Prank / Spam'], $total_rejections); ?>%</span>
                     </div>
                 </div>
                 <div class="audit-card teal">
                     <span class="audit-title">INCOMPLETE INFO</span>
                     <div class="audit-body">
                         <h3><?php echo $rejection_categories['Incomplete Information']; ?></h3>
-                        <span class="audit-pct"><?php echo calculatePercent($rejection_categories['Incomplete Information'], $total_rejections); ?>%</span>
+                        <span class="audit-pct"><?php echo getAuditPct($rejection_categories['Incomplete Information'], $total_rejections); ?>%</span>
                     </div>
                 </div>
                 <div class="audit-card gray">
                     <span class="audit-title">OTHER / UNSPECIFIED</span>
                     <div class="audit-body">
                         <h3><?php echo $rejection_categories['Other / Unspecified']; ?></h3>
-                        <span class="audit-pct"><?php echo calculatePercent($rejection_categories['Other / Unspecified'], $total_rejections); ?>%</span>
+                        <span class="audit-pct"><?php echo getAuditPct($rejection_categories['Other / Unspecified'], $total_rejections); ?>%</span>
                     </div>
                 </div>
             </div>
@@ -314,10 +318,10 @@ $pie_values   = json_encode(array_values($type_counts));
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width: 30%;">INCIDENT & CITIZEN INPUT</th>
-                            <th style="width: 18%;">JURISDICTION</th>
-                            <th style="width: 38%;">REJECTION AUDIT & OFFICER REASON</th>
-                            <th style="width: 14%; text-align:center;">EVIDENCE</th>
+                            <th style="width: 32%;">INCIDENT & CITIZEN INPUT</th>
+                            <th class="mobile-hide" style="width: 18%;">JURISDICTION</th>
+                            <th class="mobile-hide" style="width: 36%;">REJECTION AUDIT & OFFICER REASON</th>
+                            <th class="mobile-hide" style="width: 14%; text-align:center;">EVIDENCE</th>
                         </tr>
                     </thead>
                     <tbody id="binTableBody">
@@ -335,18 +339,22 @@ $pie_values   = json_encode(array_values($type_counts));
                                 <td>
                                     <div class="incident-title-text" style="color: #d32f2f;"><?php echo htmlspecialchars($rinc['incident_type']); ?></div>
                                     <div class="incident-date-text"><?php echo $rinc['date_str']; ?></div>
+                                    <div class="mobile-sub-badges">
+                                        <span class="badge" style="background: #424242;"><?php echo htmlspecialchars($rinc['barangay']); ?></span>
+                                        <span class="badge" style="background: #b71c1c;">REJECTED</span>
+                                    </div>
                                     <div class="reporter-log-snippet"><?php echo $r_log; ?></div>
                                 </td>
-                                <td>
+                                <td class="mobile-hide">
                                     <span style="font-weight: 800; font-size: 0.95rem;"><?php echo htmlspecialchars($rinc['barangay']); ?></span>
                                 </td>
-                                <td>
+                                <td class="mobile-hide">
                                     <div style="font-size: 0.85rem; font-weight: 700; line-height: 1.4; color: var(--text-secondary, #475569);">
                                         <i class='bx bx-error-circle' style="color: #d32f2f; vertical-align: middle;"></i>
                                         <?php echo htmlspecialchars($reject_reason); ?>
                                     </div>
                                 </td>
-                                <td style="text-align:center;">
+                                <td class="mobile-hide" style="text-align:center;">
                                     <div class="btn-action-group">
                                         <button type="button" class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewEvidence('<?php echo $safe_img; ?>', '<?php echo $safe_type; ?>', '<?php echo $safe_brgy; ?>')"><i class='bx bx-image'></i></button>
                                         <button type="button" class="btn-table-icon bg-blue" data-logs="<?= htmlspecialchars($rinc['all_logs'] ?? '', ENT_QUOTES, 'UTF-8') ?>" data-type="<?= htmlspecialchars($rinc['incident_type'], ENT_QUOTES, 'UTF-8') ?>" onclick="event.stopPropagation(); openLogModal(this)"><i class='bx bx-list-ul'></i></button>

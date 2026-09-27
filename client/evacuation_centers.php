@@ -59,12 +59,12 @@ if ($role === 'superadmin') {
     <?php include 'navbar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 30px;">
-            <h1 style="color: #333; margin: 0; font-size: 2rem;">Barangay Command</h1>
-            <p style="color: #666; margin-top: 5px; font-weight: 800;">
-                Jurisdiction: <span style="color: #d32f2f;"><?php echo htmlspecialchars($assigned_brgy ?: 'Unassigned'); ?></span>
-            </p>
-        </header>
+        <header class="page-header">
+    <div>
+        <h1>Barangay Command</h1>
+        <p>Jurisdiction: <span style="color: var(--color-critical, #d32f2f); font-weight: 800;"><?php echo htmlspecialchars($assigned_brgy ?: 'Unassigned'); ?></span></p>
+    </div>
+</header>
 
         <div class="table-container">
             <div class="header-section">
