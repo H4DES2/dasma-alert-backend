@@ -1801,35 +1801,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $theme       = strtolower(trim($_POST['theme'] ?? 'light'));
         $font_size   = trim($_POST['font_size'] ?? '16px');
         $sound_alert = isset($_POST['sound_alert']) ? (int)$_POST['sound_alert'] : 1;
-        
-        $check = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'sound_alert'");
-        if ($check && $check->num_rows === 0) {
-            $conn->query("ALTER TABLE user_profiles ADD COLUMN sound_alert TINYINT(1) DEFAULT 1");
+        $target_uid  = !empty($user_id) ? (int)$user_id : (int)($_SESSION['user_id'] ?? $_SESSION['admin_id'] ?? 0);
+
+        if ($target_uid > 0) {
+            $stmt = $conn->prepare("
+                INSERT INTO user_profiles (user_id, theme, font_size, sound_alert) 
+                VALUES (?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE 
+                    theme = VALUES(theme), 
+                    font_size = VALUES(font_size), 
+                    sound_alert = VALUES(sound_alert)
+            ");
+            $stmt->bind_param("issi", $target_uid, $theme, $font_size, $sound_alert);
+            $stmt->execute();
+            $stmt->close();
+
+            $_SESSION['theme'] = $theme;
+            $_SESSION['font_size'] = $font_size;
+            $_SESSION['sound_alert'] = $sound_alert;
         }
-        $check_t = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'theme'");
-        if ($check_t && $check_t->num_rows === 0) {
-            $conn->query("ALTER TABLE user_profiles ADD COLUMN theme VARCHAR(20) DEFAULT 'light'");
-            $conn->query("ALTER TABLE user_profiles ADD COLUMN font_size VARCHAR(20) DEFAULT '16px'");
-        }
-        
-        $check_prof = $conn->query("SELECT user_id FROM user_profiles WHERE user_id = " . (int)$user_id);
-        if ($check_prof && $check_prof->num_rows > 0) {
-            $stmt = $conn->prepare("UPDATE user_profiles SET theme = ?, font_size = ?, sound_alert = ? WHERE user_id = ?");
-            $stmt->bind_param("ssii", $theme, $font_size, $sound_alert, $user_id);
-        } else {
-            $stmt = $conn->prepare("INSERT INTO user_profiles (user_id, theme, font_size, sound_alert) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("issi", $user_id, $theme, $font_size, $sound_alert);
-        }
-        
-        $stmt->execute();
-        $stmt->close();
-        
-        // Persist theme and font size across page refreshes
-        $_SESSION['theme'] = $theme;
-        $_SESSION['font_size'] = $font_size;
-        $_SESSION['sound_alert'] = $sound_alert;
-        
-        ob_end_clean(); 
+
+        while (ob_get_level() > 0) { ob_end_clean(); }
         echo json_encode(['success' => true]);
         exit();
     }
