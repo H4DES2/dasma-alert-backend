@@ -4,10 +4,11 @@ ini_set('memory_limit', '512M');
 
 require_once __DIR__ . '/php/config.php';
 
-// Ensure the spatial column exists
-$conn->query("ALTER TABLE barangays ADD COLUMN IF NOT EXISTS boundary MULTIPOLYGON NULL SRID 4326");
-@$conn->query("CREATE SPATIAL INDEX IF NOT EXISTS idx_barangay_boundary ON barangays(boundary)");
-
+$check_col = $conn->query("SHOW COLUMNS FROM barangays LIKE 'boundary'");
+if ($check_col && $check_col->num_rows === 0) {
+    $conn->query("ALTER TABLE barangays ADD COLUMN boundary MULTIPOLYGON NULL SRID 4326");
+    @$conn->query("CREATE SPATIAL INDEX idx_barangay_boundary ON barangays(boundary)");
+}
 $jsonFile = __DIR__ . '/dasmarinas_barangays.geojson';
 if (!file_exists($jsonFile)) {
     die("File dasmarinas_barangays.geojson not found on server.\n");
