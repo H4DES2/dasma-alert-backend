@@ -7,6 +7,34 @@ const API_PATH = window.location.pathname.includes('/alert/')
     ? '/alert/admin/admin_actions.php' 
     : '../admin/admin_actions.php';
 
+// 8 Core Incident Types with icons and color accents
+const INCIDENT_STYLES = {
+    'accident':      { icon: 'bx-car',          color: '#FB8C00' }, // Amber / Orange
+    'crime':         { icon: 'bxs-shield',      color: '#1E88E5' }, // Shield Blue
+    'environmental': { icon: 'bx-water',        color: '#00ACC1' }, // Cyan / Water
+    'fire':          { icon: 'bxs-flame',       color: '#E53935' }, // Fire Red
+    'hazard':        { icon: 'bx-error-circle', color: '#FF7043' }, // Coral Hazard
+    'health':        { icon: 'bx-virus',        color: '#8E24AA' }, // Purple
+    'medical':       { icon: 'bxs-first-aid',   color: '#00897B' }, // Teal / Medical Green
+    'rescue':        { icon: 'bxs-shield-plus', color: '#039BE5' }  // Rescue Blue
+};
+
+const SEVERITY_COLORS = {
+    'critical': '#d32f2f', // Vivid Crimson Red
+    'major':    '#e65100', // Deep Orange
+    'minor':    '#f59e0b', // Amber / Gold
+    'info':     '#0288d1', // Blue
+    'pending':  '#757575'  // Slate Grey
+};
+
+function getIncidentStyle(type) {
+    const key = (type || '').trim().toLowerCase();
+    for (const [k, v] of Object.entries(INCIDENT_STYLES)) {
+        if (key.includes(k)) return v;
+    }
+    return { icon: 'bx-error', color: '#d32f2f' };
+}
+
 function closeModal(id) { 
     const el = document.getElementById(id);
     if (el) el.style.display = 'none'; 
@@ -65,20 +93,42 @@ function customConfirm(title, message, iconClass, color, confirmCallback) {
     }
 }
 
-function getIncidentIcon(type) {
-    let iconClass = 'bxs-map-pin', iconColor = '#555555'; 
-    let t = (type || '').toLowerCase();
-    if (t.includes('fire')) { iconClass = 'bxs-flame'; iconColor = '#d32f2f'; } 
-    else if (t.includes('accident')) { iconClass = 'bxs-car-crash'; iconColor = '#f57c00'; } 
-    else if (t.includes('medical')) { iconClass = 'bx-plus-medical'; iconColor = '#388e3c'; }
-    else if (t.includes('rescue')) { iconClass = 'bx-support'; iconColor = '#1976d2'; } 
-    else if (t.includes('hazard')) { iconClass = 'bx-error'; iconColor = '#fbc02d'; } 
-    else if (t.includes('crime') || t.includes('police')) { iconClass = 'bxs-shield'; iconColor = '#222222'; } 
+function getIncidentIcon(type, severity, backupRequested) {
+    const style = getIncidentStyle(type);
+    const s = (severity || 'pending').toLowerCase();
+    const ringColor = SEVERITY_COLORS[s] || SEVERITY_COLORS['pending'];
+    
+    let isCritical = (s === 'critical' || backupRequested == 1); 
+    let pulseClass = isCritical ? 'marker-pulse-critical' : '';
+
+    const iconHtml = `
+        <div style="
+            position: relative;
+            width: 34px;
+            height: 34px;
+            background: ${style.color};
+            border: 2.5px solid ${ringColor};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        ">
+            <i class="bx ${style.icon}" style="
+                transform: rotate(45deg);
+                color: #ffffff;
+                font-size: 18px;
+            "></i>
+        </div>
+    `;
+
     return L.divIcon({ 
-        html: `<i class='bx ${iconClass}' style='color: ${iconColor}; font-size: 32px;'></i>`, 
-        className: 'custom-leaflet-icon', 
-        iconSize: [32, 32], 
-        iconAnchor: [16, 32] 
+        html: iconHtml, 
+        className: `custom-leaflet-pin ${pulseClass}`, 
+        iconSize: [34, 34], 
+        iconAnchor: [17, 34],
+        popupAnchor: [0, -32]
     });
 }
 
@@ -174,9 +224,14 @@ function fetchLocalData() {
                 markerLayer.clearLayers();
                 data.map.forEach(inc => {
                     if (inc.latitude && inc.longitude) {
-                        L.marker([inc.latitude, inc.longitude], { icon: getIncidentIcon(inc.incident_type) })
-                         .addTo(markerLayer)
-                         .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}`);
+                        const sev = (inc.severity || 'Pending').toLowerCase();
+                        const sevColor = SEVERITY_COLORS[sev] || SEVERITY_COLORS['pending'];
+
+                        L.marker([inc.latitude, inc.longitude], { 
+                            icon: getIncidentIcon(inc.incident_type, inc.severity, inc.backup_requested) 
+                        })
+                        .addTo(markerLayer)
+                        .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:${sevColor}; font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>`);
                     }
                 });
                 lastMapHash = JSON.stringify(data.map);
@@ -589,6 +644,7 @@ function toggleBackupRow(id) {
         row.style.display = (row.style.display === 'none' || row.style.display === '') ? 'table-row' : 'none';
     }
 }
+
 function escalateToSuperadmin(incidentId) {
     const idInput = document.getElementById('escalate_incident_id');
     const reasonInput = document.getElementById('escalate_reason');
@@ -645,6 +701,7 @@ function submitEscalateToSuperadmin() {
             }
         });
 }
+
 function cancelEscalation(incidentId) {
     customConfirm("Cancel Backup Request?", "Dismiss this backup request and return the incident to normal status?", "bx-undo", "#d32f2f", function() {
         const fd = new FormData();
@@ -670,6 +727,7 @@ function cancelEscalation(incidentId) {
             });
     });
 }
+
 window.cancelEscalation = cancelEscalation;
 window.submitEscalateToSuperadmin = submitEscalateToSuperadmin;
 window.openDeployModal = openDeployModal;

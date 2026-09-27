@@ -10,6 +10,34 @@ const API_PATH = window.location.pathname.includes('/alert/')
     ? '/alert/admin/admin_actions.php' 
     : 'admin_actions.php';
 
+// 8 Core Incident Types with icons and color accents
+const INCIDENT_STYLES = {
+    'accident':      { icon: 'bx-car',          color: '#FB8C00' }, // Amber / Orange
+    'crime':         { icon: 'bxs-shield',      color: '#1E88E5' }, // Shield Blue
+    'environmental': { icon: 'bx-water',        color: '#00ACC1' }, // Cyan / Water
+    'fire':          { icon: 'bxs-flame',       color: '#E53935' }, // Fire Red
+    'hazard':        { icon: 'bx-error-circle', color: '#FF7043' }, // Coral Hazard
+    'health':        { icon: 'bx-virus',        color: '#8E24AA' }, // Purple
+    'medical':       { icon: 'bxs-first-aid',   color: '#00897B' }, // Teal / Medical Green
+    'rescue':        { icon: 'bxs-shield-plus', color: '#039BE5' }  // Rescue Blue
+};
+
+const SEVERITY_COLORS = {
+    'critical': '#D32F2F', // Vivid Crimson Red
+    'major':    '#E65100', // Deep Orange
+    'minor':    '#F59E0B', // Amber / Gold
+    'info':     '#0288D1', // Blue
+    'pending':  '#757575'  // Slate Grey
+};
+
+function getIncidentStyle(type) {
+    const key = (type || '').trim().toLowerCase();
+    for (const [k, v] of Object.entries(INCIDENT_STYLES)) {
+        if (key.includes(k)) return v;
+    }
+    return { icon: 'bx-error', color: '#D32F2F' };
+}
+
 function initAudio() {
     if (!audioCtx) {
         audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -142,26 +170,41 @@ function toggleBackupRow(incidentId) {
 }
 
 function getIncidentIcon(type, severity, backupRequested) { 
-    let iconClass = 'bxs-map-pin', iconColor = '#64748b'; 
-    let t = (type || '').toLowerCase(); 
-    let s = (severity || '').toLowerCase();
+    const style = getIncidentStyle(type);
+    const s = (severity || 'pending').toLowerCase();
+    const ringColor = SEVERITY_COLORS[s] || SEVERITY_COLORS['pending'];
     
     let isCritical = (s === 'critical' || backupRequested == 1); 
-
-    if (t.includes('fire')) { iconClass = 'bxs-flame'; iconColor = '#ef4444'; } 
-    else if (t.includes('accident')) { iconClass = 'bxs-car-crash'; iconColor = '#f59e0b'; } 
-    else if (t.includes('medical')) { iconClass = 'bx-plus-medical'; iconColor = '#10b981'; } 
-    else if (t.includes('rescue')) { iconClass = 'bx-support'; iconColor = '#3b82f6'; } 
-    else if (t.includes('hazard')) { iconClass = 'bx-error'; iconColor = '#f59e0b'; } 
-    else if (t.includes('crime') || t.includes('police')) { iconClass = 'bxs-shield'; iconColor = '#1e293b'; } 
-    
     let pulseClass = isCritical ? 'marker-pulse-critical' : '';
 
+    const iconHtml = `
+        <div style="
+            position: relative;
+            width: 34px;
+            height: 34px;
+            background: ${style.color};
+            border: 2.5px solid ${ringColor};
+            border-radius: 50% 50% 50% 0;
+            transform: rotate(-45deg);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.35);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        ">
+            <i class="bx ${style.icon}" style="
+                transform: rotate(45deg);
+                color: #ffffff;
+                font-size: 18px;
+            "></i>
+        </div>
+    `;
+
     return L.divIcon({ 
-        html: `<i class='bx ${iconClass}' style='color: ${iconColor}; font-size: 32px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.3));'></i>`, 
-        className: `custom-leaflet-icon ${pulseClass}`, 
-        iconSize: [32, 32], 
-        iconAnchor: [16, 32] 
+        html: iconHtml, 
+        className: `custom-leaflet-pin ${pulseClass}`, 
+        iconSize: [34, 34], 
+        iconAnchor: [17, 34],
+        popupAnchor: [0, -32]
     }); 
 }
 
@@ -181,7 +224,7 @@ function applyDashboardUpdates(data) {
                 if (firstRow) {
                     let text = firstRow.innerHTML.toLowerCase();
                     if (text.includes('critical')) incidentSeverity = 'critical';
-                    else if (text.includes('major') || text.includes('warning')) incidentSeverity = 'major';
+                    else if (text.includes('major')) incidentSeverity = 'major';
                 }
             }
             playSynthesizedSound(incidentSeverity);
@@ -222,11 +265,14 @@ function applyDashboardUpdates(data) {
                     ? `<br><small style="color:${acc > 30 ? '#f59e0b' : '#3b82f6'};">Location accuracy: \u00b1${Math.round(acc)}m</small>`
                     : '';
 
+                const sev = (inc.severity || 'Pending').toLowerCase();
+                const sevColor = SEVERITY_COLORS[sev] || SEVERITY_COLORS['pending'];
+
                 L.marker([lat, lng], { 
                     icon: getIncidentIcon(inc.incident_type, inc.severity, inc.backup_requested) 
                 })
                 .addTo(incidentLayer)
-                .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:var(--color-critical); font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>${accuracyLine}`); 
+                .bindPopup(`<b>${inc.incident_type}</b><br>${inc.barangay}<br><small style="color:${sevColor}; font-weight:bold;">Severity: ${inc.severity || 'Pending'}</small>${accuracyLine}`); 
 
                 if (hasAccuracy) {
                     let displayRadius = Math.min(acc, 200);
@@ -334,16 +380,15 @@ document.addEventListener('DOMContentLoaded', function() {
             maxZoom: 18, attribution: 'Esri Satellite'
         });
 
-        // Strict Dasmariñas City Bounding Coordinates
         const dasmaBounds = L.latLngBounds(
             [14.2600, 120.9100],
             [14.3750, 121.0100]
         );
 
         map = L.map('dasma-map', {
-            preferCanvas: true,            // Switches rendering to hardware-accelerated Canvas (fixes SVG lag)
-            updateWhenIdle: true,          // Prevents redrawing tiles/vectors while actively dragging
-            updateWhenZooming: false,       // Pauses layer refreshes mid-zoom
+            preferCanvas: true,
+            updateWhenIdle: true,
+            updateWhenZooming: false,
             center: [14.3294, 120.9367],
             zoom: 13,
             minZoom: 12,
@@ -351,18 +396,19 @@ document.addEventListener('DOMContentLoaded', function() {
             maxBounds: dasmaBounds,
             maxBoundsViscosity: 0.9,
             layers: [osmStreet]
-            });
-           let isUserDraggingMap = false;
+        });
 
-            map.on('movestart dragstart', () => {
-                isUserDraggingMap = true;
-            });
+        let isUserDraggingMap = false;
 
-                map.on('moveend dragend', () => {
-                    setTimeout(() => {
-                        isUserDraggingMap = false;
-                    }, 400);
-                }); 
+        map.on('movestart dragstart', () => {
+            isUserDraggingMap = true;
+        });
+
+        map.on('moveend dragend', () => {
+            setTimeout(() => {
+                isUserDraggingMap = false;
+            }, 400);
+        }); 
 
         incidentLayer = L.layerGroup().addTo(map); 
         evacLayer = L.layerGroup().addTo(map);

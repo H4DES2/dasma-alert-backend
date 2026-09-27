@@ -827,7 +827,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 $btn_icon = (!empty($safe_img) && $safe_img !== 'NULL') ? 'bx-camera' : 'bx-info-circle';
                 $evidence_btn = "<button class='btn-sm' style='background:$btn_color; margin: 0 auto;' onclick='event.stopPropagation(); viewEvidence(\"$safe_img\", \"$safe_type\", \"$safe_brgy\", \"$exact_date\", \"$exact_time\", \"$safe_rep\", \"$safe_logs\", \"$safe_extra\", $safe_backup)'><i class='bx $btn_icon'></i></button>";
 
-                $sev_badge = ($inc['severity'] === 'Critical') ? 'critical' : (($inc['severity'] === 'Major') ? 'major' : 'warning');
+                $sev_clean = strtolower(trim($inc['severity'] ?? 'pending'));
+                if ($sev_clean === 'critical') {
+                    $sev_badge = 'critical';
+                } elseif ($sev_clean === 'major') {
+                    $sev_badge = 'major';
+                } elseif ($sev_clean === 'minor') {
+                    $sev_badge = 'minor';
+                } else {
+                    $sev_badge = 'info';
+                }
                 $display_sev = htmlspecialchars(strtoupper($inc['severity'] ?? 'PENDING'));
 
                 $status_html = "";
