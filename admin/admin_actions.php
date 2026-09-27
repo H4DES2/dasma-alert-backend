@@ -1798,8 +1798,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'save_preferences') {
-        $theme       = $_POST['theme'] ?? 'light';
-        $font_size   = $_POST['font_size'] ?? '16px';
+        $theme       = strtolower(trim($_POST['theme'] ?? 'light'));
+        $font_size   = trim($_POST['font_size'] ?? '16px');
         $sound_alert = isset($_POST['sound_alert']) ? (int)$_POST['sound_alert'] : 1;
         
         $check = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'sound_alert'");
@@ -1824,6 +1824,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute();
         $stmt->close();
         
+        // Persist theme and font size across page refreshes
+        $_SESSION['theme'] = $theme;
+        $_SESSION['font_size'] = $font_size;
         $_SESSION['sound_alert'] = $sound_alert;
         
         ob_end_clean(); 
