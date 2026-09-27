@@ -15,8 +15,9 @@ document.addEventListener("DOMContentLoaded", function() {
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
     const textColor = isDarkMode ? '#8b949e' : '#888';
 
+    // 1. Incident Type Breakdown Pie Chart
     const pieCanvas = document.getElementById('typePieChart');
-    if (pieCanvas) {
+    if (pieCanvas && (window.typeData || []).length > 0) {
         new Chart(pieCanvas.getContext('2d'), {
             type: 'pie',
             data: {
@@ -50,10 +51,52 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // 2. Citizen Sentiment Donut Chart
+    const sentimentCanvas = document.getElementById('sentimentPieChart');
+    const sentimentValues = window.sentimentData || [];
+    const totalSentiment = sentimentValues.reduce((a, b) => a + parseInt(b, 10), 0);
+
+    if (sentimentCanvas && totalSentiment > 0) {
+        new Chart(sentimentCanvas.getContext('2d'), {
+            type: 'doughnut',
+            data: {
+                labels: window.sentimentLabels || [],
+                datasets: [{
+                    data: sentimentValues,
+                    backgroundColor: ['#d32f2f', '#f57c00', '#0288d1', '#388e3c'],
+                    borderWidth: 2,
+                    borderColor: isDarkMode ? '#161b22' : '#ffffff',
+                    hoverOffset: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { 
+                        position: 'bottom', 
+                        labels: { padding: 12, font: { weight: 'bold', size: 11 }, color: textColor } 
+                    },
+                    datalabels: {
+                        color: '#ffffff',
+                        font: { weight: 'bold', size: 13 },
+                        formatter: (value) => {
+                            if (value === 0) return '';
+                            let pct = Math.round((value / totalSentiment) * 100);
+                            return pct >= 5 ? pct + '%' : '';
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // 3. Disaster Seasonality Line Chart
     renderSeasonality();
 
+    // 4. Evac Center Capacity Bar Chart
     const evacCanvas = document.getElementById('evacOverflowChart');
-    if (evacCanvas) {
+    if (evacCanvas && (window.evacLabels || []).length > 0) {
         new Chart(evacCanvas.getContext('2d'), {
             type: 'bar',
             data: {
@@ -75,14 +118,15 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
+    // 5. Leaflet Spatial Hotspots Heatmap
     const heatmapEl = document.getElementById('heatmap');
-    if (heatmapEl) {
-        let dasmaBounds = L.latLngBounds([14.2700, 120.9150], [14.3750, 121.0100]);
-        const map = L.map('heatmap', { center: [14.3294, 120.9368], zoom: 14, minZoom: 13, maxBounds: dasmaBounds });
+    if (heatmapEl && typeof L !== 'undefined') {
+        let dasmaBounds = L.latLngBounds([14.2400, 120.9000], [14.3800, 121.0200]);
+        const map = L.map('heatmap', { center: [14.3294, 120.9368], zoom: 13, minZoom: 12, maxBounds: dasmaBounds });
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
         
         const heatData = window.heatData || [];
-        if (heatData.length > 0) {
+        if (heatData.length > 0 && typeof L.heatLayer === 'function') {
             L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 15 }).addTo(map);
         }
     }
@@ -97,6 +141,7 @@ function renderSeasonality() {
     const now = new Date();
     
     let filtered = allSeasonDates.filter(dateStr => {
+        if (!dateStr) return false;
         if (filter === 'all') return true;
         const incDate = new Date(dateStr.replace(' ', 'T'));
         const diffDays = (now - incDate) / (1000 * 60 * 60 * 24);
@@ -169,7 +214,7 @@ function renderSeasonality() {
 }
 
 // -----------------------------------------------------
-// 3. REPORT BUILDER: TIMEFRAME & INCIDENT TYPE LOGIC
+// 2. REPORT BUILDER CONTROLS
 // -----------------------------------------------------
 function getTodayBounds() {
     const now = new Date();
@@ -193,7 +238,6 @@ function openReportModal() {
     const weekEnd = document.getElementById('rep_week_end');
     const monthInput = document.getElementById('rep_month');
 
-    // Future-date locks
     if (dayInput) { dayInput.max = b.dateStr; dayInput.value = b.dateStr; }
     if (weekStart) { weekStart.max = b.dateStr; }
     if (weekEnd) { weekEnd.max = b.dateStr; weekEnd.value = b.dateStr; }
@@ -219,7 +263,6 @@ function openReportModal() {
         }
     });
 
-    // Populate Incident & Accident Types Dropdown
     const typeSelect = document.getElementById('rep_incident_type');
     if (typeSelect) {
         const typesSet = new Set();
@@ -232,7 +275,6 @@ function openReportModal() {
             if (mainCat) categoriesSet.add(mainCat);
         });
 
-        // Ensure primary accident/emergency categories are present if matched
         ['Accident', 'Vehicular Accident', 'Fire', 'Medical', 'Rescue', 'Crime'].forEach(cat => {
             let hasMatch = false;
             typesSet.forEach(t => {
@@ -425,92 +467,6 @@ function processReportGeneration() {
     }
 }
 
-// -----------------------------------------------------
-// 2. DYNAMIC SEASONALITY FUNCTION
-// -----------------------------------------------------
-function renderSeasonality() {
-    const canvasElement = document.getElementById('seasonalityLineChart');
-    if (!canvasElement) return;
-
-    const filterEl = document.getElementById('seasonalityFilter');
-    const filter = filterEl ? filterEl.value : 'all';
-    const now = new Date();
-    
-    let filtered = allSeasonDates.filter(dateStr => {
-        if (filter === 'all') return true;
-        const incDate = new Date(dateStr.replace(' ', 'T'));
-        const diffDays = (now - incDate) / (1000 * 60 * 60 * 24);
-        
-        if (filter === 'day') return diffDays <= 1;
-        if (filter === 'weekly') return diffDays <= 7;
-        if (filter === 'monthly') return diffDays <= 30;
-        if (filter === 'quarterly') return diffDays <= 90;
-        if (filter === 'yearly') return diffDays <= 365;
-        return true;
-    });
-
-    let timelineData = {};
-    [...filtered].sort().forEach(dateStr => {
-        let dateObj = new Date(dateStr.replace(' ', 'T'));
-        let day = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-        timelineData[day] = (timelineData[day] || 0) + 1;
-    });
-
-    const labels = Object.keys(timelineData);
-    const data = Object.values(timelineData);
-
-    const overlay = document.getElementById('seasonalityOverlay');
-    if (overlay) {
-        overlay.style.display = (labels.length === 0) ? 'flex' : 'none';
-    }
-
-    const ctx = canvasElement.getContext('2d');
-
-    if (lineChartInstance) {
-        lineChartInstance.data.labels = labels;
-        lineChartInstance.data.datasets[0].data = data;
-        lineChartInstance.update();
-    } else {
-        const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
-        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-        const textColor = isDarkMode ? '#8b949e' : '#888';
-        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(211, 47, 47, 0.5)'); 
-        gradient.addColorStop(1, 'rgba(211, 47, 47, 0.0)'); 
-
-        lineChartInstance = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Incidents',
-                    data: data,
-                    borderColor: '#d32f2f',
-                    backgroundColor: gradient,
-                    borderWidth: 3,
-                    fill: true,
-                    tension: 0.4,
-                    pointBackgroundColor: '#ffffff',
-                    pointBorderColor: '#d32f2f',
-                    pointRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false }, datalabels: { display: false } },
-                scales: {
-                    x: { grid: { display: false }, ticks: { color: textColor, font: { weight: 'bold' } } },
-                    y: { beginAtZero: true, grid: { color: gridColor, drawBorder: false }, ticks: { stepSize: 1, color: textColor, font: { weight: 'bold' } } }
-                }
-            }
-        });
-    }
-}
-
-// -----------------------------------------------------
-// PDF GENERATOR UPDATE (Inside Section 3)
-// -----------------------------------------------------
 function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, groupByType) {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('landscape');
@@ -525,7 +481,6 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
 
     let startY = 30;
 
-    // --- RENDER DYNAMIC PIE CHART BREAKDOWN BEFORE INCIDENTS ---
     if (vaultRows.length > 0 || binRows.length > 0) {
         const typeCounts = {};
         const combined = [...vaultRows, ...binRows];
@@ -537,7 +492,6 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
         const labels = Object.keys(typeCounts);
         const data = Object.values(typeCounts);
 
-        // Create an off-screen canvas to render the breakdown
         const canvas = document.createElement('canvas');
         canvas.width = 600;
         canvas.height = 300;
@@ -561,7 +515,7 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
             },
             options: {
                 responsive: false,
-                animation: false, // Critical to capture synchronously
+                animation: false,
                 plugins: {
                     legend: { position: 'right', labels: { font: { size: 14 } } },
                     datalabels: { display: false } 
@@ -569,7 +523,6 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
             }
         });
 
-        // Set solid white background behind chart
         const ctx = canvas.getContext('2d');
         ctx.globalCompositeOperation = 'destination-over';
         ctx.fillStyle = '#ffffff';
@@ -583,15 +536,12 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
         
         doc.addImage(imgData, 'PNG', 14, startY + 4, 120, 60);
         
-        // Clean up memory
         tempChart.destroy();
         document.body.removeChild(canvas);
 
-        startY += 72; // Shift start point for tables below the graph
+        startY += 72;
     }
-    // --- END GRAPH INJECTION ---
 
-    // 1. INCIDENT ARCHIVE VAULT
     if (vaultRows.length > 0) {
         doc.setFontSize(14);
         doc.setTextColor(33, 33, 33);
@@ -658,7 +608,6 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
         }
     }
 
-    // 2. REPORT BIN & REJECTION AUDIT
     if (binRows.length > 0) {
         if (startY > 155) { doc.addPage(); startY = 20; }
 
@@ -858,7 +807,7 @@ function backupAllReports() {
 }
 
 // -----------------------------------------------------
-// 6. GENERAL CONTROLS & MODALS
+// 3. GENERAL CONTROLS & MODALS
 // -----------------------------------------------------
 function applyFilters() { 
     let typeVal = document.getElementById('typeFilter')?.value || 'all';
@@ -949,7 +898,7 @@ function stopBroadcast(id) {
 }
 
 // -----------------------------------------------------
-// 7. MOBILE MODAL LOGIC
+// 4. MOBILE MODAL LOGIC
 // -----------------------------------------------------
 function openMobileModal(row, type) {
     if (window.innerWidth > 768) return; 
@@ -999,44 +948,7 @@ function openMobileModal(row, type) {
 
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
-const sentimentCanvas = document.getElementById('sentimentPieChart');
-    const sentimentValues = window.sentimentData || [];
-    const totalSentiment = sentimentValues.reduce((a, b) => a + parseInt(b, 10), 0);
 
-    if (sentimentCanvas && totalSentiment > 0) {
-        new Chart(sentimentCanvas.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: window.sentimentLabels || [],
-                datasets: [{
-                    data: sentimentValues,
-                    backgroundColor: ['#d32f2f', '#f57c00', '#0288d1', '#388e3c'],
-                    borderWidth: 2,
-                    borderColor: isDarkMode ? '#161b22' : '#ffffff',
-                    hoverOffset: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { 
-                        position: 'bottom', 
-                        labels: { padding: 12, font: { weight: 'bold', size: 11 }, color: textColor } 
-                    },
-                    datalabels: {
-                        color: '#ffffff',
-                        font: { weight: 'bold', size: 13 },
-                        formatter: (value) => {
-                            if (value === 0) return '';
-                            let pct = Math.round((value / totalSentiment) * 100);
-                            return pct >= 5 ? pct + '%' : '';
-                        }
-                    }
-                }
-            }
-        });
-    }
 // Window bindings
 window.openReportModal = openReportModal;
 window.handlePeriodChange = handlePeriodChange;

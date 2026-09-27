@@ -220,7 +220,14 @@ $types_res = $conn->query("SELECT DISTINCT incident_type FROM incidents WHERE st
 $unique_types = [];
 while ($t = $types_res->fetch_assoc()) { $unique_types[] = $t['incident_type']; }
 
-$chart_type_res = $conn->query("SELECT incident_type, COUNT(*) as count FROM incidents WHERE status = 'archived' {$chart_query_cfg['clause']} GROUP BY incident_type ORDER BY count DESC");
+// Broaden breakdown to all non-rejected incident reports
+$chart_type_res = $conn->query("
+    SELECT incident_type, COUNT(*) as count 
+    FROM incidents 
+    WHERE status NOT IN ('rejected', 'spam', 'out_of_range') {$chart_query_cfg['clause']} 
+    GROUP BY incident_type 
+    ORDER BY count DESC
+");
 $type_labels = []; $type_data = []; $type_colors = [];
 $palette = ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#0097a7', '#0288d1'];
 $color_idx = 0;
@@ -235,7 +242,12 @@ $dates_res = $conn->query("SELECT created_at FROM incidents WHERE status NOT IN 
 $seasonality_dates = [];
 while ($row = $dates_res->fetch_assoc()) { $seasonality_dates[] = $row['created_at']; }
 
-$evac_res = $conn->query("SELECT name, capacity, current_occupants FROM evacuation_centers ORDER BY current_occupants DESC LIMIT 10");
+$evac_res = $conn->query("
+    SELECT name, capacity, COALESCE(current_occupants, 0) as current_occupants 
+    FROM evacuation_centers 
+    ORDER BY capacity DESC 
+    LIMIT 10
+");
 $evac_labels = []; $evac_capacity = []; $evac_occupants = [];
 while ($row = $evac_res->fetch_assoc()) {
     $evac_labels[] = strlen($row['name']) > 15 ? substr($row['name'], 0, 15) . '...' : $row['name'];
@@ -813,7 +825,7 @@ unset($inc_item);
         </div>
     </div>                                       
 
-<script>
+<script nonce="<?= CSP_NONCE ?>">
     window.sentimentData    = <?= json_encode(array_values($sentiment_counts)) ?>;
     window.sentimentLabels  = <?= json_encode(array_keys($sentiment_counts)) ?>;
     window.allIncidents      = <?= $js_incidents ?? '[]' ?>;
