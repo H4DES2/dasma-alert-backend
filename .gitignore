@@ -6,4 +6,5 @@ uploads/announcements/*
 uploads/profile/*
 phl_admin4.geojson
 *.geojson
+!dasmarinas_barangays.geojson
 scripts_archive/
