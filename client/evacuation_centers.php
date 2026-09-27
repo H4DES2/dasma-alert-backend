@@ -43,7 +43,6 @@ if ($role === 'superadmin') {
     $stmt->execute();
     $evac_centers = $stmt->get_result();
 }
-
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -52,8 +51,6 @@ if ($role === 'superadmin') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Evacuation Centers | Barangay Command</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="../css/client/navbar.css">
     <link rel="stylesheet" href="../css/client/evacuation_centers.css">
 </head>
@@ -75,9 +72,6 @@ if ($role === 'superadmin') {
                     <h2>Evacuation Centers</h2>
                     <p>Manage local shelters and track live occupancy.</p>
                 </div>
-                <button class="btn-action btn-add" onclick="openAddModal()">
-                    <i class='bx bx-plus-circle'></i> Add Facility
-                </button>
             </div>
 
             <div class="table-wrapper">
@@ -103,10 +97,18 @@ if ($role === 'superadmin') {
                                 $bar_color = '#388e3c'; 
                                 if ($pct >= 80) $bar_color = '#f57c00'; 
                                 if ($pct >= 100) $bar_color = '#d32f2f'; 
+
+                                $f_type = strtolower($row['facility_type'] ?? 'temporary');
+                                $f_bg = ($f_type === 'permanent') ? '#1565c0' : '#7b1fa2';
                             ?>
                             <tr class="clickable-row" onclick="handleRowClick(this, '<?php echo $row['id']; ?>', '<?php echo htmlspecialchars($row['name'], ENT_QUOTES); ?>', '<?php echo $row['current_occupants']; ?>', '<?php echo strtolower($row['status']); ?>')">
                                 <td>
-                                    <strong><?php echo htmlspecialchars($row['name']); ?></strong>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <strong><?php echo htmlspecialchars($row['name']); ?></strong>
+                                        <span class="badge" style="background: <?= $f_bg ?>; font-size: 0.65rem; padding: 2px 7px; text-transform: uppercase; color: #fff;">
+                                            <?= htmlspecialchars($f_type) ?>
+                                        </span>
+                                    </div>
                                     <i class='bx bx-chevron-right mobile-expand-icon'></i>
                                 </td>
                                 <td>
@@ -141,41 +143,6 @@ if ($role === 'superadmin') {
             </div>
         </div>
     </main>
-
-    <div id="addModal" class="modal">
-        <div class="modal-content" style="max-width: 550px; position: relative;">
-            <div class="close-modal" onclick="closeModal('addModal')"><i class='bx bx-x'></i></div>
-            <div class="modal-header">
-                <h3 style="color: #228b22;"><i class='bx bx-building-house'></i> New Facility</h3>
-            </div>
-            <div class="modal-body" style="max-height: 70vh; overflow-y: auto; padding-right: 10px;">
-                <label>Facility Name</label>
-                <input type="text" id="addName" class="modal-input" placeholder="e.g. Brgy. Hall Covered Court">
-                
-                <!-- 🚀 RESTORED: Barangay Input Field (Read-only for Admins, Editable for Superadmins) -->
-                <div style="display: flex; gap: 15px;">
-                    <div style="flex: 1;">
-                        <label>Barangay</label>
-                        <input type="text" id="addBarangay" class="modal-input" placeholder="e.g. San Agustin">
-                    </div>
-                    <div style="flex: 1;">
-                        <label>Max Capacity (Pax)</label>
-                        <input type="number" id="addCapacity" class="modal-input" placeholder="e.g. 500">
-                    </div>
-                </div>
-                
-                <label>Pin Location on Map (Required)</label>
-                <div id="add-evac-map" style="height: 200px; width: 100%; border-radius: 10px; margin-bottom: 15px; border: 1px solid #ccc; z-index: 10;"></div>
-                <input type="hidden" id="addLat">
-                <input type="hidden" id="addLng">
-                
-                <div style="display: flex; gap: 10px; margin-top: 10px;">
-                    <button class="modal-cancel-btn" onclick="closeModal('addModal')">Cancel</button>
-                    <button class="btn-action btn-add" style="flex: 2; justify-content: center;" onclick="submitAdd()">Save Facility</button>
-                </div>
-            </div>
-        </div>
-    </div>
 
     <div id="manageModal" class="modal">
         <div class="modal-content" style="position: relative;">
@@ -219,6 +186,7 @@ if ($role === 'superadmin') {
             <div style="display: flex; gap: 12px;" id="uniModalButtons"></div>
         </div>
     </div>
+
 <script>
     window.APP_ROLE = <?= json_encode($role); ?>;
     window.ASSIGNED_BRGY = <?= json_encode($assigned_brgy); ?>;

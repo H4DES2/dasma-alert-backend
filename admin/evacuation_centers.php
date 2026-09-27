@@ -106,7 +106,7 @@ if ($result && $result->num_rows > 0) {
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th>Facility Name</th>
+                            <th>Facility Name & Type</th>
                             <th>Barangay</th>
                             <th style="width: 380px;">Occupancy & Tents</th>
                             <th>Status</th>
@@ -132,10 +132,18 @@ if ($result && $result->num_rows > 0) {
                                 $bar_color = '#388e3c';
                                 if ($percentage >= 80) $bar_color = '#fbc02d';
                                 if ($percentage >= 100) $bar_color = '#d32f2f';
+
+                                $f_type = strtolower($center['facility_type'] ?? 'temporary');
+                                $f_bg = ($f_type === 'permanent') ? '#1565c0' : '#7b1fa2';
                             ?>
                             <tr class="clickable-row" onclick="openMobileModal(this)">
                                 <td>
-                                    <strong style="font-size: 1.1rem; color: #1976d2;"><?php echo htmlspecialchars($center['name']); ?></strong>
+                                    <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                        <strong style="font-size: 1.1rem; color: #1976d2;"><?php echo htmlspecialchars($center['name']); ?></strong>
+                                        <span class="badge" style="background: <?= $f_bg ?>; font-size: 0.65rem; padding: 3px 8px; text-transform: uppercase;">
+                                            <?= htmlspecialchars($f_type) ?>
+                                        </span>
+                                    </div>
                                 </td>
                                 <td><i class='bx bxs-map-pin' style="color: #d32f2f; opacity: 0.7;"></i> <?php echo htmlspecialchars($center['barangay']); ?></td>
                                 <td>
@@ -165,6 +173,7 @@ if ($result && $result->num_rows > 0) {
                                                 data-occupants="<?php echo $occupants; ?>" 
                                                 data-capacity="<?php echo $capacity; ?>" 
                                                 data-status="<?php echo htmlspecialchars($center['status'], ENT_QUOTES); ?>" 
+                                                data-facility-type="<?php echo htmlspecialchars($f_type, ENT_QUOTES); ?>" 
                                                 onclick="event.stopPropagation(); openManageModal(this)">
                                             <i class='bx bx-edit-alt'></i> Manage
                                         </button>
@@ -185,6 +194,7 @@ if ($result && $result->num_rows > 0) {
         </div>
     </main>
 
+    <?php if ($role === 'superadmin'): ?>
     <div id="addModal" class="modal">
         <div class="modal-content" style="max-width: 550px;">
             <div class="modal-header">
@@ -210,6 +220,12 @@ if ($result && $result->num_rows > 0) {
                         <input type="number" id="addCapacity" class="modal-input" placeholder="e.g. 500">
                     </div>
                 </div>
+
+                <label>Facility Classification</label>
+                <select id="addFacilityType" class="modal-select" style="margin-bottom: 15px;">
+                    <option value="temporary">Temporary (Court, School, Tent City)</option>
+                    <option value="permanent">Permanent (Designated Multi-Purpose Evac Center)</option>
+                </select>
                 
                 <label>Pin Facility Location</label>
                 <div id="modalMap" style="height: 250px; width: 100%; border-radius: 14px; border: 1px solid #e2e8f0; margin-bottom: 15px; z-index: 1;"></div>
@@ -232,6 +248,7 @@ if ($result && $result->num_rows > 0) {
             </div>
         </div>
     </div>
+    <?php endif; ?>
 
     <div id="manageModal" class="modal">
         <div class="modal-content">
@@ -247,13 +264,19 @@ if ($result && $result->num_rows > 0) {
                 <input type="number" id="manageOccupants" class="modal-input" oninput="checkCapacityStatus()">
                 
                 <label>Facility Status</label>
-                <select id="manageStatus" class="modal-select">
+                <select id="manageStatus" class="modal-select" style="margin-bottom: 12px;">
                     <option value="open">OPEN (Accepting)</option>
                     <option value="full">FULL / CLOSED (At Capacity)</option>
                     <option value="closed">CLOSED (Inactive)</option>
                 </select>
+
+                <label>Facility Classification</label>
+                <select id="manageFacilityType" class="modal-select">
+                    <option value="temporary">Temporary (Court, School, Tent City)</option>
+                    <option value="permanent">Permanent (Designated Multi-Purpose Evac Center)</option>
+                </select>
                 
-                <div style="display: flex; gap: 15px; margin-top: 10px;">
+                <div style="display: flex; gap: 15px; margin-top: 15px;">
                     <button class="modal-cancel-btn" onclick="closeModal('manageModal')">Cancel</button>
                     <button class="btn-action btn-manage" style="flex: 2; justify-content: center;" onclick="saveManage()">Update Status</button>
                 </div>

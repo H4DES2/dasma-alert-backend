@@ -118,6 +118,10 @@ $check_col_up = $conn->query("SHOW COLUMNS FROM user_profiles LIKE 'is_online'")
 if ($check_col_up && $check_col_up->num_rows === 0) {
     $conn->query("ALTER TABLE user_profiles ADD COLUMN is_online TINYINT(1) DEFAULT 0");
 }
+$check_evac_col = $conn->query("SHOW COLUMNS FROM evacuation_centers LIKE 'facility_type'");
+if ($check_evac_col && $check_evac_col->num_rows === 0) {
+    $conn->query("ALTER TABLE evacuation_centers ADD COLUMN facility_type ENUM('permanent', 'temporary') NOT NULL DEFAULT 'temporary'");
+}
 // =========================================================================================
 // Rate limiting guard for mutating administrative operations
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -1828,20 +1832,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'add_center') { 
-        requireRole($ADMIN_TIER_ROLES, $role);
-        $name = $_POST['name'] ?? '';
-        $barangay = $_POST['barangay'] ?? '';
-        $capacity = (int)($_POST['capacity'] ?? 0);
-        $lat = (float)($_POST['latitude'] ?? 0.0);
-        $lng = (float)($_POST['longitude'] ?? 0.0);
+        requireRole(['superadmin'], $role); // Strictly restricted to Superadmin
+        $name          = trim($_POST['name'] ?? '');
+        $barangay      = trim($_POST['barangay'] ?? '');
+        $capacity      = (int)($_POST['capacity'] ?? 0);
+        $lat           = (float)($_POST['latitude'] ?? 0.0);
+        $lng           = (float)($_POST['longitude'] ?? 0.0);
+        $facility_type = strtolower(trim($_POST['facility_type'] ?? 'temporary'));
+        if (!in_array($facility_type, ['permanent', 'temporary'], true)) {
+            $facility_type = 'temporary';
+        }
         
         $occupants = 0; $status = 'closed';
         $point_wkt = "POINT($lng $lat)";
-        $stmt = $conn->prepare("INSERT INTO evacuation_centers (name, barangay, latitude, longitude, capacity, current_occupants, status, geo_point) VALUES (?, ?, ?, ?, ?, ?, ?, ST_PointFromText(?))");
+        $stmt = $conn->prepare("INSERT INTO evacuation_centers (name, barangay, latitude, longitude, capacity, current_occupants, status, facility_type, geo_point) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_PointFromText(?))");
         if ($stmt) {
-            $stmt->bind_param("ssddiiss", $name, $barangay, $lat, $lng, $capacity, $occupants, $status, $point_wkt);
+            $stmt->bind_param("ssddiisss", $name, $barangay, $lat, $lng, $capacity, $occupants, $status, $facility_type, $point_wkt);
             if ($stmt->execute()) { ob_end_clean(); echo "success"; }
-            else { ob_end_clean(); echo "error"; }
+            else { ob_end_clean(); echo "Database Error: " . $stmt->error; }
             $stmt->close();
         }
         exit();
@@ -1849,13 +1857,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     if ($action === 'update_evac_center') {
         requireRole($ADMIN_TIER_ROLES, $role);
-        $id = isset($_POST['id']) ? (int)$_POST['id'] : 0;
-        $occupants = isset($_POST['occupants']) ? (int)$_POST['occupants'] : 0;
-        $status = isset($_POST['status']) ? $_POST['status'] : 'closed';
+        $id            = isset($_POST['id']) ? (int)$_POST['id'] : 0;
+        $occupants     = isset($_POST['occupants']) ? (int)$_POST['occupants'] : 0;
+        $status        = isset($_POST['status']) ? $_POST['status'] : 'closed';
+        $facility_type = strtolower(trim($_POST['facility_type'] ?? 'temporary'));
+        if (!in_array($facility_type, ['permanent', 'temporary'], true)) {
+            $facility_type = 'temporary';
+        }
 
         if ($id > 0) {
-            $stmt = $conn->prepare("UPDATE evacuation_centers SET current_occupants = ?, status = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?");
-            $stmt->bind_param("isi", $occupants, $status, $id);
+            $stmt = $conn->prepare("UPDATE evacuation_centers SET current_occupants = ?, status = ?, facility_type = ?, last_updated = CURRENT_TIMESTAMP WHERE id = ?");
+            $stmt->bind_param("issi", $occupants, $status, $facility_type, $id);
             
             if ($stmt->execute()) { echo "success"; } else { echo "Database Error: " . $stmt->error; }
             $stmt->close();
