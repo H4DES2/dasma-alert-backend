@@ -265,23 +265,33 @@ body {
 .bg-blue { background: var(--color-info); } 
 .bg-red { background: var(--color-critical); }
 
-/* 🚀 2-COLUMN SIDE-BY-SIDE CHARTS ROW */
 .analytics-charts-row {
     display: grid;
     grid-template-columns: 1fr 1.25fr;
     gap: 25px;
     width: 100%;
     margin-bottom: 25px;
+    min-width: 0;
 }
-
+.analytics-charts-row > .sitting-panel {
+    min-width: 0;
+    overflow: hidden;
+}
 .chart-wrapper { 
     width: 100%; 
+    max-width: 100%;
     position: relative; 
-    min-height: 280px; 
-    max-height: 340px;
+    min-height: 260px; 
+    max-height: 320px;
     display: flex;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
+}
+
+.chart-wrapper canvas {
+    max-width: 100% !important;
+    max-height: 100% !important;
 }
 
 /* 🚀 REPORT BIN & 6 AUDIT KPI CARDS */
@@ -473,7 +483,6 @@ html.global-dark-mode .close-modal {
     border-color: var(--border-color) !important;
 }
 
-/* 📱 RESPONSIVE RULES */
 @media (max-width: 1200px) {
     .analytics-charts-row { 
         grid-template-columns: 1fr; 
@@ -484,9 +493,13 @@ html.global-dark-mode .close-modal {
 }
 
 @media (max-width: 768px) {
+    body, html {
+        overflow-x: hidden !important;
+    }
     .main-content { 
-        padding: 10px 14px 40px !important; 
+        padding: 10px 12px 40px !important; 
         margin-top: 85px !important; 
+        overflow-x: hidden !important;
     }
     .page-header {
         flex-direction: column;
@@ -500,18 +513,30 @@ html.global-dark-mode .close-modal {
     .panel-header {
         flex-direction: column;
         align-items: stretch;
+        gap: 10px;
     }
     .filter-group {
         width: 100%;
     }
     .filter-group .filter-dropdown {
         flex: 1;
+        width: 100%;
     }
     .audit-kpi-grid { 
         grid-template-columns: repeat(2, 1fr); 
     }
     .sitting-panel { 
         padding: 16px; 
+        width: 100% !important;
+        max-width: 100% !important;
+    }
+    .analytics-charts-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+    }
+    .chart-wrapper {
+        min-height: 240px;
+        max-height: 280px;
     }
     .data-table {
         min-width: 100%;
@@ -523,7 +548,7 @@ html.global-dark-mode .close-modal {
         display: flex;
     }
     .data-table td {
-        padding: 16px 14px;
+        padding: 14px 12px;
     }
 }
 

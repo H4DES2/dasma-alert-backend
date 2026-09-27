@@ -1,21 +1,30 @@
 const allIncidents = window.allIncidents || [];
 const rejectedIncidents = window.rejectedIncidents || [];
 let lineChartInstance = null;
+let pieChartInstance = null;
 
 document.addEventListener("DOMContentLoaded", function() {
     const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
-    const textColor = isDarkMode ? '#8b949e' : '#888';
+    const textColor = isDarkMode ? '#a1a1aa' : '#64748b';
+    const isMobile = window.innerWidth <= 992;
 
     // 1. Doughnut Chart Breakdown
     const pieCanvas = document.getElementById('breakdownPieChart');
     if (pieCanvas) {
         const labels = window.pieLabels && window.pieLabels.length ? window.pieLabels : ['No Incident Data'];
         const values = window.pieValues && window.pieValues.length ? window.pieValues : [1];
+        
+        const palette = [
+            '#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', 
+            '#fbc02d', '#0097a7', '#0288d1', '#7b1fa2', '#c2185b', 
+            '#00796b', '#689f38', '#e64a19', '#5d4037', '#455a64'
+        ];
+        
         const colors = window.pieValues && window.pieValues.length 
-            ? ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#009688', '#795548']
-            : [isDarkMode ? '#21262d' : '#e2e8f0'];
+            ? labels.map((_, i) => palette[i % palette.length])
+            : [isDarkMode ? '#27272a' : '#e2e8f0'];
 
-        new Chart(pieCanvas.getContext('2d'), {
+        pieChartInstance = new Chart(pieCanvas.getContext('2d'), {
             type: 'doughnut',
             data: {
                 labels: labels,
@@ -23,16 +32,41 @@ document.addEventListener("DOMContentLoaded", function() {
                     data: values,
                     backgroundColor: colors,
                     borderWidth: 2,
-                    borderColor: isDarkMode ? '#161b22' : '#ffffff'
+                    borderColor: isDarkMode ? '#18181b' : '#ffffff',
+                    hoverOffset: 4
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                layout: {
+                    padding: { top: 8, bottom: 8, left: 8, right: 8 }
+                },
                 plugins: { 
                     legend: { 
-                        position: 'right', 
-                        labels: { color: textColor, font: { weight: 'bold' } } 
+                        position: isMobile ? 'bottom' : 'right',
+                        align: 'center',
+                        labels: { 
+                            boxWidth: 12,
+                            boxHeight: 12,
+                            padding: isMobile ? 8 : 12,
+                            color: textColor, 
+                            font: { 
+                                size: isMobile ? 11 : 12, 
+                                weight: '700',
+                                family: "'Plus Jakarta Sans', sans-serif" 
+                            } 
+                        } 
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                const val = context.parsed;
+                                const pct = total > 0 ? Math.round((val / total) * 100) : 0;
+                                return ` ${context.label}: ${val} (${pct}%)`;
+                            }
+                        }
                     }
                 }
             }
@@ -41,6 +75,18 @@ document.addEventListener("DOMContentLoaded", function() {
 
     populateTypeFilters();
     renderSeasonality();
+});
+
+// Dynamic Resize Watcher for Chart Layout
+window.addEventListener('resize', function() {
+    if (!pieChartInstance) return;
+    const isMobile = window.innerWidth <= 992;
+    const targetPos = isMobile ? 'bottom' : 'right';
+    if (pieChartInstance.options.plugins.legend.position !== targetPos) {
+        pieChartInstance.options.plugins.legend.position = targetPos;
+        pieChartInstance.options.plugins.legend.labels.font.size = isMobile ? 11 : 12;
+        pieChartInstance.update();
+    }
 });
 
 function populateTypeFilters() {
@@ -53,7 +99,7 @@ function populateTypeFilters() {
 
     const buildOptions = () => {
         let html = '<option value="all">All Types</option>';
-        typesSet.forEach(t => { html += `<option value="${t}">${t}</option>`; });
+        Array.from(typesSet).sort().forEach(t => { html += `<option value="${t}">${t}</option>`; });
         return html;
     };
 
@@ -78,7 +124,8 @@ function renderSeasonality() {
         dataPoints = new Array(12).fill(0);
 
         dataset.forEach(inc => {
-            const incDate = new Date(inc.created_at);
+            if (!inc.created_at) return;
+            const incDate = new Date(inc.created_at.replace(' ', 'T'));
             if (filter === 'year') {
                 const diffDays = (now - incDate) / (1000 * 60 * 60 * 24);
                 if (diffDays > 365) return;
@@ -119,7 +166,7 @@ function renderSeasonality() {
     const ctx = canvasElement.getContext('2d');
     const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
     const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)';
-    const textColor = isDarkMode ? '#8b949e' : '#888';
+    const textColor = isDarkMode ? '#a1a1aa' : '#64748b';
 
     let gradient = ctx.createLinearGradient(0, 0, 0, 300);
     gradient.addColorStop(0, 'rgba(211, 47, 47, 0.45)');
@@ -184,7 +231,7 @@ function matchesFilters(inc, timeFilter, typeFilter) {
     }
     if (timeFilter === 'all') return true;
 
-    const incDate = new Date(inc.created_at);
+    const incDate = new Date((inc.created_at || '').replace(' ', 'T'));
     const now = new Date();
     const diffDays = (now - incDate) / (1000 * 60 * 60 * 24);
 
@@ -223,13 +270,17 @@ function filterVaultData() {
             <td>
                 <div class="incident-title-text">${inc.incident_type}</div>
                 <div class="incident-date-text">${inc.date_str}</div>
+                <div class="mobile-sub-badges">
+                    <span class="badge ${badge}">${(inc.severity || 'PENDING').toUpperCase()}</span>
+                    <span class="badge" style="background: #424242;">${inc.barangay}</span>
+                </div>
                 <div class="reporter-log-snippet">${repLog}</div>
             </td>
-            <td>
+            <td class="mobile-hide">
                 <div style="font-weight: 800; font-size: 0.95rem;">${inc.barangay}</div>
                 <span class="badge ${badge}" style="margin-top: 5px;">${(inc.severity || 'PENDING').toUpperCase()}</span>
             </td>
-            <td>
+            <td class="mobile-hide">
                 <div class="timeline-meta">
                     <div><b>Reported:</b> <span>${inc.reported_time || 'Unknown'}</span></div>
                     <div><b>Arrived:</b> <span>${inc.arrived_time || 'Unknown'}</span></div>
@@ -237,7 +288,7 @@ function filterVaultData() {
                     <div style="color: var(--color-critical, #d32f2f); font-weight: 800;"><b>Total Time:</b> <span>${totalTime}</span></div>
                 </div>
             </td>
-            <td style="text-align:center;">
+            <td class="mobile-hide" style="text-align:center;">
                 <div class="btn-action-group">
                     <button type="button" class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewEvidence('${safeImg}', '${safeType}', '${safeBrgy}')"><i class='bx bx-image'></i></button>
                     <button type="button" class="btn-table-icon bg-blue" data-logs="${logsAttr}" data-type="${safeType}" onclick="event.stopPropagation(); openLogModal(this)"><i class='bx bx-list-ul'></i></button>
@@ -461,10 +512,10 @@ function viewEvidence(imagePath, incidentType, brgy) {
     document.getElementById('evidenceCaption').innerText = `Visual Evidence: ${incidentType} in Brgy. ${brgy}`; 
     document.getElementById('evidenceModal').style.display = 'flex'; 
     document.getElementById('evidenceModal')?.addEventListener('click', function(e) {
-    if (e.target.id === 'evidenceModal') {
-        closeModal('evidenceModal');
-    }
-});
+        if (e.target.id === 'evidenceModal') {
+            closeModal('evidenceModal');
+        }
+    });
 }
 
 function deleteArchived(id) {

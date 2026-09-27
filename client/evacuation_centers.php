@@ -109,7 +109,6 @@ if ($role === 'superadmin') {
                                             <?= htmlspecialchars($f_type) ?>
                                         </span>
                                     </div>
-                                    <i class='bx bx-chevron-right mobile-expand-icon'></i>
                                 </td>
                                 <td>
                                     <div style="display: flex; justify-content: space-between; font-weight: 800; font-size: 0.85rem; color: #888;">
