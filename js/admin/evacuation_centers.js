@@ -103,16 +103,19 @@ function initOverviewMap() {
         overviewMap = null;
     }
 
-    // Expand bounds further south (14.2300) and north (14.4000) so border pins remain visible
-    const dasmaBounds = [[14.2300, 120.8900], [14.4000, 121.0200]];
-    
-    // Set tight minimum zoom so the user cannot zoom out beyond Dasmariñas
+    const dasmaStrictBounds = L.latLngBounds(
+        [14.2400, 120.9000], // Southwest coordinate (Langkaan/Silang edge)
+        [14.3800, 121.0000]  // Northeast coordinate (Salawag/Imus edge)
+    );
+
     overviewMap = L.map('evac-overview-map', {
         center: [14.3260, 120.9420],
         zoom: 13,
         minZoom: 12.5,
         maxZoom: 18,
-        zoomSnap: 0.5
+        zoomSnap: 0.5,
+        maxBounds: dasmaStrictBounds,
+        maxBoundsViscosity: 1.0 // 1.0 provides a rigid, unmovable boundary wall
     });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -123,7 +126,8 @@ function initOverviewMap() {
     setTimeout(() => {
         if (overviewMap) {
             overviewMap.invalidateSize();
-            overviewMap.setView([14.3260, 120.9420], 13);
+            overviewMap.fitBounds(dasmaStrictBounds);
+            overviewMap.setMaxBounds(dasmaStrictBounds);
         }
     }, 200);
 
