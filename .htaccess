@@ -5,6 +5,21 @@ ServerSignature Off
     Header unset X-Powered-By
     Header always unset X-Powered-By
 
+    # 1. Clickjacking Protection
+    Header always set X-Frame-Options "SAMEORIGIN"
+
+    # 2. Prevent MIME/Content-Type Sniffing
+    Header always set X-Content-Type-Options "nosniff"
+
+    # 3. HTTP Strict Transport Security (HSTS)
+    Header always set Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+
+    # 4. Cross-Origin Referrer Policy
+    Header always set Referrer-Policy "strict-origin-when-cross-origin"
+
+    # 5. Global Content Security Policy (allows inline button handlers + Leaflet map providers)
+    Header always set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://unpkg.com https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; script-src-attr 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://fonts.gstatic.com https://unpkg.com data:; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://mt1.google.com https://*.google.com https://res.cloudinary.com https://api.cloudinary.com https://unpkg.com https://*.arcgisonline.com https://server.arcgisonline.com https://services.arcgisonline.com https://*.arcgis.com https://*.basemaps.cartocdn.com; connect-src 'self' https://api.cloudinary.com https://router.project-osrm.org; object-src 'none'; frame-src 'self'; frame-ancestors 'self'; base-uri 'self'; form-action 'self';"
+
     # Ensure browsers revalidate PHP files while caching static assets
     <FilesMatch "\.(css|js|png|jpg|jpeg|gif|ico|svg|woff|woff2)$">
         Header set Cache-Control "max-age=2592000, public"
