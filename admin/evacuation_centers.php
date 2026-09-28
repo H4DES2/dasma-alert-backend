@@ -115,7 +115,7 @@ if ($result && $result->num_rows > 0) {
             <span style="display:flex; align-items:center; gap:6px; color:#607d8b;"><span style="width:10px; height:10px; border-radius:50%; background:#607d8b; display:inline-block;"></span> Closed</span>
         </div>
     </div>
-    <div id="evac-overview-map" style="width:100%; height:380px; border-radius:16px; border:1px solid #edf2f7; z-index:1;"></div>
+    <div id="evac-overview-map" style="width:100%; height:450px; border-radius:16px; border:1px solid #edf2f7; z-index:1;"></div>
 </div>
         </div>
         <div class="table-container">
