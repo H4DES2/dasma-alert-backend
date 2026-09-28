@@ -72,6 +72,8 @@ function getReadableLocation($lat, $lng, $fallbackText) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <!-- Allow Leaflet tile providers, Cloudinary evidence, and local resources -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' https:; img-src 'self' data: blob: https://*.tile.openstreetmap.org https://*.arcgisonline.com https://*.arcgis.com https://*.basemaps.cartocdn.com https://res.cloudinary.com; connect-src 'self' https:;">
     <title><?php echo ucfirst($role); ?> | Command Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>

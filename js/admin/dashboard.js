@@ -351,10 +351,8 @@ document.addEventListener('DOMContentLoaded', function() {
             attribution: '&copy; OpenStreetMap &copy; CARTO'
         });
 
-        const esriSatellite = L.tileLayer('https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
             maxZoom: 18,
-            maxNativeZoom: 18,
-            subdomains: ['server', 'services'],
             attribution: 'Tiles &copy; Esri'
         });
 
