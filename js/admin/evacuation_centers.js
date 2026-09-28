@@ -98,6 +98,11 @@ function initOverviewMap() {
     const mapElement = document.getElementById('evac-overview-map');
     if (!mapElement) return;
 
+    if (overviewMap) {
+        overviewMap.remove();
+        overviewMap = null;
+    }
+
     const dasmaBounds = [[14.2600, 120.9000], [14.3800, 120.9800]];
     
     overviewMap = L.map('evac-overview-map', {
@@ -110,6 +115,10 @@ function initOverviewMap() {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap'
     }).addTo(overviewMap);
+
+    setTimeout(() => {
+        if (overviewMap) overviewMap.invalidateSize();
+    }, 200);
 
     const centers = window.EVAC_CENTERS || [];
     const markers = [];
@@ -308,7 +317,6 @@ function openMobileModal(row) {
 
     document.getElementById('mobileEvacModal').style.display = 'flex';
 }
-
 window.closeModal = closeModal;
 window.openAddModal = openAddModal;
 window.addCenter = addCenter;
@@ -317,3 +325,10 @@ window.openManageModal = openManageModal;
 window.saveManage = saveManage;
 window.handleDelete = handleDelete;
 window.openMobileModal = openMobileModal;
+window.initOverviewMap = initOverviewMap;
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initOverviewMap);
+} else {
+    initOverviewMap();
+}

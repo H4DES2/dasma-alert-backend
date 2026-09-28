@@ -333,10 +333,10 @@ if ($result && $result->num_rows > 0) {
         </div>
     </div>                                       
     <script>
-        window.APP_ROLE = <?php echo json_encode($role); ?>;
-        window.APP_ASSIGNED_BRGY = <?php echo json_encode($my_brgy); ?>;
-        window.EVAC_CENTERS = <?php echo json_encode($centers); ?>;
-    </script>
-    <script src="../js/admin/evacuation_centers.js?v=<?= filemtime('../js/admin/evacuation_centers.js') ?>" defer></script>
+    window.APP_ROLE = <?php echo json_encode($role); ?>;
+    window.APP_ASSIGNED_BRGY = <?php echo json_encode($my_brgy); ?>;
+    window.EVAC_CENTERS = <?php echo json_encode($centers); ?>;
+</script>
+<script src="../js/admin/evacuation_centers.js?v=<?= filemtime('../js/admin/evacuation_centers.js') ?>" defer></script>
 </body>
 </html>
