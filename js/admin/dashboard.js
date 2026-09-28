@@ -221,13 +221,23 @@ function applyDashboardUpdates(data) {
         kpiAct.innerText = data.kpi.active; 
     }
 
-    const kpiDep = document.getElementById('kpi-deployed'); if (kpiDep) kpiDep.innerText = data.kpi.deployed; 
-    
+    const kpiDep = document.getElementById('kpi-deployed'); if (kpiDep) kpiDep.innerText = data.kpi.deployed;
+    const kpiEvac = document.getElementById('kpi-evacuees');
+     
+    if (kpiEvac) {
+        kpiEvac.innerText = data.kpi ? (data.kpi.evacuees ?? 0) : 0;
+    }
+
+    // Restore Evacuees hover details
     if (data.kpi_details) {
         const actDet = document.getElementById('kpi-active-details');
         if (actDet) actDet.innerHTML = data.kpi_details.active.length ? data.kpi_details.active.map(d => `<div>${d}</div>`).join('') : '<div>All clear.</div>';
+        
         const depDet = document.getElementById('kpi-deployed-details');
         if (depDet) depDet.innerHTML = data.kpi_details.deployed.length ? data.kpi_details.deployed.map(d => `<div>${d}</div>`).join('') : '<div>No teams active.</div>';
+        
+        const evacDet = document.getElementById('kpi-evacuees-details');
+        if (evacDet) evacDet.innerHTML = data.kpi_details.evacuees.length ? data.kpi_details.evacuees.map(d => `<div>${d}</div>`).join('') : '<div>All empty.</div>';
     }
 
     const tBody = document.getElementById('triage-table-body');

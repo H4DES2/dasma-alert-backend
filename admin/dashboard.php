@@ -97,7 +97,6 @@ function getReadableLocation($lat, $lng, $fallbackText) {
     <?php include 'navbar.php'; ?>
     <main class="main-content">
 
-        <!-- 🚀 Optimized 3-Card KPI Summary Grid -->
         <div class="kpi-grid">
             <div class="kpi-card red">
                 <div class="kpi-header-row">
@@ -122,6 +121,19 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                     </div>
                 </div>
                 <div class="kpi-details-container" id="kpi-deployed-details">
+                    <div><div class="skeleton skeleton-text" style="margin: 0;"></div></div>
+                    <div><div class="skeleton skeleton-text short" style="margin: 0;"></div></div>
+                </div>
+            </div>
+            <div class="kpi-card green">
+                <div class="kpi-header-row">
+                    <div class="kpi-icon-wrapper"><i class='bx bxs-group'></i></div>
+                    <div class="kpi-card-content">
+                        <h3 id="kpi-evacuees"><span class="skeleton skeleton-text" style="height: 36px; width: 60px; margin: 0;"></span></h3>
+                        <p>Total Evacuees</p>
+                    </div>
+                </div>
+                <div class="kpi-details-container" id="kpi-evacuees-details">
                     <div><div class="skeleton skeleton-text" style="margin: 0;"></div></div>
                     <div><div class="skeleton skeleton-text short" style="margin: 0;"></div></div>
                 </div>
