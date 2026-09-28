@@ -174,7 +174,9 @@ function initOverviewMap() {
 
     if (markers.length > 0) {
         const group = L.featureGroup(markers);
-        overviewMap.fitBounds(group.getBounds().pad(0.1));
+        overviewMap.fitBounds(group.getBounds().pad(0.05), {
+            maxZoom: 13
+        });
     }
 }
 function addCenter() {
