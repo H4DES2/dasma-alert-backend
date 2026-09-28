@@ -25,12 +25,15 @@ session_write_close();
 $u_data = ($res = $conn->query("SELECT barangay FROM users WHERE id = $user_id")) ? $res->fetch_assoc() : null;
 $my_brgy = $u_data['barangay'] ?? '';
 
-// Role-based query
+$columns = "id, name, barangay, capacity, current_occupants, status, facility_type, 
+            COALESCE(latitude, ST_Y(geo_point)) AS latitude, 
+            COALESCE(longitude, ST_X(geo_point)) AS longitude";
+
 if ($role === 'superadmin') {
-    $query = "SELECT * FROM evacuation_centers ORDER BY name ASC";
+    $query = "SELECT $columns FROM evacuation_centers ORDER BY name ASC";
 } else {
     $safe_brgy = $conn->real_escape_string($my_brgy);
-    $query = "SELECT * FROM evacuation_centers WHERE barangay = '$safe_brgy' ORDER BY name ASC";
+    $query = "SELECT $columns FROM evacuation_centers WHERE barangay = '$safe_brgy' ORDER BY name ASC";
 }
 
 $result = $conn->query($query);
@@ -113,8 +116,6 @@ if ($result && $result->num_rows > 0) {
             </div>
             <div id="evac-overview-map" style="width:100%; height:420px; border-radius:16px; border:1px solid #edf2f7; z-index:1;"></div>
         </div>
-
-        <div class="table-container">
         <div class="table-container">
             <div class="table-wrapper">
                 <table class="data-table">

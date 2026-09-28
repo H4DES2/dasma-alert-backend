@@ -118,15 +118,19 @@ function initOverviewMap() {
 
     setTimeout(() => {
         if (overviewMap) overviewMap.invalidateSize();
-    }, 200);
+    }, 250);
 
-    const centers = window.EVAC_CENTERS || [];
+    const rawCenters = window.EVAC_CENTERS || [];
+    const centers = typeof rawCenters === 'string' ? JSON.parse(rawCenters) : rawCenters;
     const markers = [];
 
     centers.forEach(c => {
         const lat = parseFloat(c.latitude);
         const lng = parseFloat(c.longitude);
-        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
+
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
+            return;
+        }
 
         const status = (c.status || 'open').toLowerCase();
         let pinColor = '#2e7d32'; // open
@@ -169,7 +173,7 @@ function initOverviewMap() {
 
     if (markers.length > 0) {
         const group = L.featureGroup(markers);
-        overviewMap.fitBounds(group.getBounds().pad(0.15));
+        overviewMap.fitBounds(group.getBounds().pad(0.1));
     }
 }
 function addCenter() {
