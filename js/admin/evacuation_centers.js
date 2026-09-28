@@ -103,12 +103,13 @@ function initOverviewMap() {
         overviewMap = null;
     }
 
-    const dasmaBounds = [[14.2600, 120.9000], [14.3800, 120.9800]];
+    // Expand bounds further south (14.2300) and north (14.4000) so border pins remain visible
+    const dasmaBounds = [[14.2300, 120.8900], [14.4000, 121.0200]];
     
     overviewMap = L.map('evac-overview-map', {
         maxBounds: dasmaBounds,
-        maxBoundsViscosity: 0.9,
-        minZoom: 12
+        maxBoundsViscosity: 0.5,
+        minZoom: 11
     }).setView([14.3294, 120.9368], 13);
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
