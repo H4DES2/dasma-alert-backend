@@ -106,11 +106,14 @@ function initOverviewMap() {
     // Expand bounds further south (14.2300) and north (14.4000) so border pins remain visible
     const dasmaBounds = [[14.2300, 120.8900], [14.4000, 121.0200]];
     
+    // Set tight minimum zoom so the user cannot zoom out beyond Dasmariñas
     overviewMap = L.map('evac-overview-map', {
-        maxBounds: dasmaBounds,
-        maxBoundsViscosity: 0.5,
-        minZoom: 11
-    }).setView([14.3294, 120.9368], 13);
+        center: [14.3260, 120.9420],
+        zoom: 13,
+        minZoom: 12.5,
+        maxZoom: 18,
+        zoomSnap: 0.5
+    });
 
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
@@ -118,8 +121,11 @@ function initOverviewMap() {
     }).addTo(overviewMap);
 
     setTimeout(() => {
-        if (overviewMap) overviewMap.invalidateSize();
-    }, 250);
+        if (overviewMap) {
+            overviewMap.invalidateSize();
+            overviewMap.setView([14.3260, 120.9420], 13);
+        }
+    }, 200);
 
     const rawCenters = window.EVAC_CENTERS || [];
     const centers = typeof rawCenters === 'string' ? JSON.parse(rawCenters) : rawCenters;
@@ -171,13 +177,6 @@ function initOverviewMap() {
 
         markers.push(marker);
     });
-
-    if (markers.length > 0) {
-        const group = L.featureGroup(markers);
-        overviewMap.fitBounds(group.getBounds().pad(0.05), {
-            maxZoom: 13
-        });
-    }
 }
 function addCenter() {
     if (role !== 'superadmin') {
