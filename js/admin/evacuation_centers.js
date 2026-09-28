@@ -92,7 +92,77 @@ function openAddModal() {
         }
     }, 150);
 }
+let overviewMap = null;
 
+function initOverviewMap() {
+    const mapElement = document.getElementById('evac-overview-map');
+    if (!mapElement) return;
+
+    const dasmaBounds = [[14.2600, 120.9000], [14.3800, 120.9800]];
+    
+    overviewMap = L.map('evac-overview-map', {
+        maxBounds: dasmaBounds,
+        maxBoundsViscosity: 0.9,
+        minZoom: 12
+    }).setView([14.3294, 120.9368], 13);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19,
+        attribution: '&copy; OpenStreetMap'
+    }).addTo(overviewMap);
+
+    const centers = window.EVAC_CENTERS || [];
+    const markers = [];
+
+    centers.forEach(c => {
+        const lat = parseFloat(c.latitude);
+        const lng = parseFloat(c.longitude);
+        if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) return;
+
+        const status = (c.status || 'open').toLowerCase();
+        let pinColor = '#2e7d32'; // open
+        if (status === 'full') pinColor = '#d32f2f';
+        else if (status === 'closed') pinColor = '#607d8b';
+
+        const customIcon = L.divIcon({
+            className: 'custom-leaflet-icon',
+            html: `
+                <div style="background:${pinColor}; width:32px; height:32px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:white; border:2.5px solid white; box-shadow:0 3px 8px rgba(0,0,0,0.35); font-size:16px;">
+                    <i class='bx bxs-home-heart'></i>
+                </div>
+            `,
+            iconSize: [32, 32],
+            iconAnchor: [16, 16],
+            popupAnchor: [0, -18]
+        });
+
+        const occupants = parseInt(c.current_occupants, 10) || 0;
+        const capacity = parseInt(c.capacity, 10) || 1;
+        const pct = Math.round((occupants / capacity) * 100);
+
+        const marker = L.marker([lat, lng], { icon: customIcon })
+            .addTo(overviewMap)
+            .bindPopup(`
+                <div style="font-family: inherit; min-width: 180px;">
+                    <strong style="color: #1976d2; font-size: 0.95rem;">${c.name}</strong><br>
+                    <small style="color: #555; font-weight:700;"><i class='bx bxs-map-pin'></i> ${c.barangay}</small>
+                    <hr style="margin: 6px 0; border: none; border-top: 1px solid #eee;">
+                    <div style="font-size: 0.82rem; font-weight:600; line-height: 1.4;">
+                        <span>Status: <b style="text-transform:uppercase; color:${pinColor};">${c.status}</b></span><br>
+                        <span>Capacity: ${occupants} / ${capacity} PAX (${pct}%)</span><br>
+                        <span style="text-transform:capitalize;">Type: ${c.facility_type || 'Temporary'}</span>
+                    </div>
+                </div>
+            `);
+
+        markers.push(marker);
+    });
+
+    if (markers.length > 0) {
+        const group = L.featureGroup(markers);
+        overviewMap.fitBounds(group.getBounds().pad(0.15));
+    }
+}
 function addCenter() {
     if (role !== 'superadmin') {
         return customAlert("Access Denied", "Only CDRRMO Superadmins can register facilities.", "bx-shield-x", "#d32f2f");

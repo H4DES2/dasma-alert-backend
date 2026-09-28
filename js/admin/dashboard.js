@@ -1,6 +1,5 @@
-let map, incidentLayer, evacLayer; 
-let lastTableHTML = ""; 
-let evacsVisible = false;
+let map, incidentLayer;
+let lastTableHTML = "";
 let previousIncidentCount = -1; 
 let audioCtx = null;
 let soundEnabled = window.soundEnabled ?? false;
@@ -139,18 +138,6 @@ function customConfirm(title, message, iconClass, color, confirmCallback) {
     document.getElementById('uniConfirmBtn').onclick = function() { closeModal('universalModal'); confirmCallback(); };
 }
 
-function toggleEvacLayer() { 
-    const btn = document.getElementById('evac-toggle-btn'); 
-    if (map.hasLayer(evacLayer)) {
-        map.removeLayer(evacLayer);
-        if (btn) { btn.style.background = "var(--surface-card)"; btn.style.color = "var(--text-primary)"; }
-    } else {
-        map.addLayer(evacLayer);
-        if (btn) { btn.style.background = "rgba(16, 185, 129, 0.15)"; btn.style.color = "#10b981"; }
-        syncDashboard();
-    }
-}
-
 function toggleCluster(key) {
     let rows = document.querySelectorAll('.cluster-row-' + key);
     let icon = document.getElementById('icon_' + key);
@@ -235,15 +222,12 @@ function applyDashboardUpdates(data) {
     }
 
     const kpiDep = document.getElementById('kpi-deployed'); if (kpiDep) kpiDep.innerText = data.kpi.deployed; 
-    const kpiEvac = document.getElementById('kpi-evacuees'); if (kpiEvac) kpiEvac.innerText = data.kpi.evacuees; 
     
     if (data.kpi_details) {
         const actDet = document.getElementById('kpi-active-details');
         if (actDet) actDet.innerHTML = data.kpi_details.active.length ? data.kpi_details.active.map(d => `<div>${d}</div>`).join('') : '<div>All clear.</div>';
         const depDet = document.getElementById('kpi-deployed-details');
         if (depDet) depDet.innerHTML = data.kpi_details.deployed.length ? data.kpi_details.deployed.map(d => `<div>${d}</div>`).join('') : '<div>No teams active.</div>';
-        const evacDet = document.getElementById('kpi-evacuees-details');
-        if (evacDet) evacDet.innerHTML = data.kpi_details.evacuees.length ? data.kpi_details.evacuees.map(d => `<div>${d}</div>`).join('') : '<div>All empty.</div>';
     }
 
     const tBody = document.getElementById('triage-table-body');
@@ -284,26 +268,6 @@ function applyDashboardUpdates(data) {
                         interactive: false
                     }).addTo(incidentLayer);
                 }
-            }
-        });
-    }
-
-    if (typeof evacLayer !== 'undefined' && data.evac_centers) {
-        evacLayer.clearLayers();
-        data.evac_centers.forEach(evac => {
-            let lat = parseFloat(evac.latitude);
-            let lng = parseFloat(evac.longitude);
-            
-            if (!isNaN(lat) && !isNaN(lng) && lat !== 0 && lng !== 0) {
-                let eIcon = L.divIcon({ 
-                    html: `<i class='bx bxs-home-heart' style='color: #10b981; font-size: 28px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));'></i>`, 
-                    className: 'custom-leaflet-icon', 
-                    iconSize: [28, 28], 
-                    iconAnchor: [14, 28] 
-                });
-                L.marker([lat, lng], { icon: eIcon })
-                    .addTo(evacLayer)
-                    .bindPopup(`<b>${evac.name}</b><br>Barangay: ${evac.barangay}<br>Occupants: ${evac.current_occupants} / ${evac.capacity}`);
             }
         });
     }
@@ -410,8 +374,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 400);
         }); 
 
-        incidentLayer = L.layerGroup().addTo(map); 
-        evacLayer = L.layerGroup().addTo(map);
+        incidentLayer = L.layerGroup().addTo(map);
 
         const baseMaps = {
             "Street Map": osmStreet,
@@ -420,10 +383,8 @@ document.addEventListener('DOMContentLoaded', function() {
         };
 
         const overlayMaps = {
-            "Active Incidents": incidentLayer,
-            "Evacuation Centers": evacLayer
+            "Active Incidents": incidentLayer
         };
-
         L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
     }
 
@@ -879,7 +840,6 @@ window.viewEvidence = viewEvidence;
 window.toggleCluster = toggleCluster;
 window.toggleBackupRow = toggleBackupRow;
 window.toggleSound = toggleSound;
-window.toggleEvacLayer = toggleEvacLayer;
 window.syncDashboard = syncDashboard;
 window.closeModal = closeModal;
 window.openAnnouncementModal = openAnnouncementModal;

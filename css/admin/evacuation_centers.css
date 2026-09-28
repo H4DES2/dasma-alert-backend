@@ -332,3 +332,13 @@
         /* Mobile Box Detail Style */
         .mobile-detail-box { background: #f8f9fa; padding: 16px; border-radius: 14px; border: 1px solid #edf2f7; margin-bottom: 15px; }
         html.global-dark-mode .mobile-detail-box { background: #0d1117; border-color: #30363d; }
+        
+        html.global-dark-mode .evac-map-container {
+            background: #161b22 !important;
+            border-color: #30363d !important;
+            box-shadow: 0 25px 60px rgba(0,0,0,0.6) !important;
+        }
+
+        html.global-dark-mode #evac-overview-map {
+            border-color: #30363d !important;
+        }
