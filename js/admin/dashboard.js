@@ -341,17 +341,19 @@ document.addEventListener('DOMContentLoaded', function() {
     const mapContainer = document.getElementById('dasma-map');
     if (mapContainer) {
         const osmStreet = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19, attribution: 'OpenStreetMap'
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors'
         });
 
-        const darkMatter = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const darkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
             maxZoom: 19,
-            attribution: 'OpenStreetMap',
-            className: 'dark-map-tiles'
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd'
         });
 
         const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 18, attribution: 'Esri Satellite'
+            maxZoom: 18,
+            attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
         });
 
         const dasmaBounds = L.latLngBounds(
@@ -361,8 +363,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
         map = L.map('dasma-map', {
             preferCanvas: true,
-            updateWhenIdle: true,
-            updateWhenZooming: false,
             center: [14.3294, 120.9367],
             zoom: 13,
             minZoom: 12,
@@ -372,6 +372,17 @@ document.addEventListener('DOMContentLoaded', function() {
             layers: [osmStreet]
         });
 
+        // Trigger redraw when changing base layers (Satellite, Street, Dark)
+        map.on('baselayerchange', function(e) {
+            setTimeout(() => {
+                map.invalidateSize();
+            }, 100);
+        });
+
+        setTimeout(() => {
+            map.invalidateSize();
+        }, 200);
+        
         let isUserDraggingMap = false;
 
         map.on('movestart dragstart', () => {
