@@ -792,3 +792,13 @@ path.leaflet-interactive {
 .leaflet-overlay-pane svg path {
     pointer-events: none;
 }
+/* Restrict dark filter strictly to OpenStreetMap dark tiles */
+.leaflet-tile-pane .dark-map-tiles {
+    filter: brightness(0.6) invert(1) contrast(3) hue-rotate(200deg) saturate(0.3) brightness(0.7) !important;
+}
+
+/* Ensure satellite tiles are NEVER inverted or washed out */
+.leaflet-tile-pane img[src*="arcgisonline"] {
+    filter: none !important;
+    opacity: 1 !important;
+}
