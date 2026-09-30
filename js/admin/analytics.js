@@ -51,14 +51,14 @@ document.addEventListener("DOMContentLoaded", function() {
         });
     }
 
-    // 2. Citizen Sentiment Donut Chart
+    // 2. Citizen Sentiment Pie Chart
     const sentimentCanvas = document.getElementById('sentimentPieChart');
     const sentimentValues = window.sentimentData || [];
     const totalSentiment = sentimentValues.reduce((a, b) => a + parseInt(b, 10), 0);
 
     if (sentimentCanvas && totalSentiment > 0) {
         new Chart(sentimentCanvas.getContext('2d'), {
-            type: 'doughnut',
+            type: 'pie',
             data: {
                 labels: window.sentimentLabels || [],
                 datasets: [{
