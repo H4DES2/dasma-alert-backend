@@ -40,16 +40,16 @@ function broadcastToAllDevices(mysqli $conn, string $title, string $body, array 
         return;
     }
 
-    $project_id = getenv('FIREBASE_PROJECT_ID') ?: 'dasma-alert';
-    $access_token = getenv('FIREBASE_ACCESS_TOKEN') ?: '';
+    $project_id = 'dasma-alert';
+    $access_token = function_exists('getFirebaseAccessToken') ? getFirebaseAccessToken() : '';
 
     while ($row = $res->fetch_assoc()) {
         $token = $row['device_token'];
         if (function_exists('sendPushNotification')) {
             sendPushNotification($access_token, $project_id, $token, $title, $body, $extraData);
         }
-    } // closes while loop
-} // closes broadcastToAllDevices function
+    }
+}// closes broadcastToAllDevices function
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
     if (strcasecmp(trim($fallback), 'Burol Main') === 0) {
         $fallback = 'Burol';
