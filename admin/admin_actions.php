@@ -1,5 +1,6 @@
 <?php
 require_once '../php/config.php';
+require_once __DIR__ . '/../../dasma_api/send_push_notification.php';
 
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
@@ -33,7 +34,22 @@ function requireRole(array $allowedRoles, $role) {
         exit();
     }
 }
+function broadcastToAllDevices(mysqli $conn, string $title, string $body, array $extraData = []): void {
+    $res = $conn->query("SELECT DISTINCT device_token FROM user_device_tokens WHERE device_token IS NOT NULL AND device_token != ''");
+    if (!$res || $res->num_rows === 0) {
+        return;
+    }
 
+    $project_id = getenv('FIREBASE_PROJECT_ID') ?: 'dasma-alert';
+    $access_token = getenv('FIREBASE_ACCESS_TOKEN') ?: '';
+
+    while ($row = $res->fetch_assoc()) {
+        $token = $row['device_token'];
+        if (function_exists('sendPushNotification')) {
+            sendPushNotification($access_token, $project_id, $token, $title, $body, $extraData);
+        }
+    } // closes while loop
+} // closes broadcastToAllDevices function
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
     if (strcasecmp(trim($fallback), 'Burol Main') === 0) {
         $fallback = 'Burol';
@@ -308,6 +324,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
 
         if ($stmt->execute()) {
             $stmt->close();
+
+            // 🔔 SEND PUSH NOTIFICATION ON NEW ANNOUNCEMENT
+            if (!$id) {
+                $ann_title = "📢 Advisory: " . $title;
+                broadcastToAllDevices($conn, $ann_title, $message, [
+                    'type' => 'announcement'
+                ]);
+            }
+
             echo "success";
         } else {
             echo "Database Execute Error: " . $stmt->error;
@@ -1437,17 +1462,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($action === 'send_broadcast') {
         requireRole(['superadmin'], $role);
-        $title = $_POST['title'] ?? '';
-        $message = $_POST['message'] ?? '';
-        $severity = $_POST['severity'] ?? 'info';
+        $title = trim($_POST['title'] ?? '');
+        $message = trim($_POST['message'] ?? '');
+        $severity = trim($_POST['severity'] ?? 'info');
+
         if (!empty($title) && !empty($message)) {
             $stmt = $conn->prepare("INSERT INTO broadcasts (title, message, severity, is_active) VALUES (?, ?, ?, 1)");
             $stmt->bind_param("sss", $title, $message, $severity);
-            if ($stmt->execute()) { ob_end_clean(); echo json_encode(['success' => true]); } 
-            else { ob_end_clean(); echo json_encode(['success' => false, 'message' => $stmt->error]); }
+            if ($stmt->execute()) {
+                // 🔔 DISPATCH HIGH-PRIORITY PUSH TO ALL DEVICES
+                $broadcast_title = "🚨 [" . strtoupper($severity) . "] " . $title;
+                broadcastToAllDevices($conn, $broadcast_title, $message, [
+                    'type' => 'broadcast',
+                    'severity' => $severity
+                ]);
+
+                ob_end_clean();
+                echo json_encode(['success' => true]);
+            } else {
+                ob_end_clean();
+                echo json_encode(['success' => false, 'message' => $stmt->error]);
+            }
             $stmt->close();
         } else {
-            ob_end_clean(); echo json_encode(['success' => false, 'message' => 'Missing fields']);
+            ob_end_clean();
+            echo json_encode(['success' => false, 'message' => 'Missing fields']);
         }
         exit();
     }
