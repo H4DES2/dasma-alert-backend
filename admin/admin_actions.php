@@ -39,21 +39,27 @@ function requireRole(array $allowedRoles, $role) {
     }
 }
 function broadcastToAllDevices(mysqli $conn, string $title, string $body, array $extraData = []): void {
+    if (!function_exists('sendPushNotification') || !function_exists('getFirebaseAccessToken')) {
+    error_log('[Broadcast] send_push_notification.php was not loaded (path issue)');
+    return;
+}
     $res = $conn->query("SELECT DISTINCT device_token FROM user_device_tokens WHERE device_token IS NOT NULL AND device_token != ''");
-    if (!$res || $res->num_rows === 0) {
+    if (!$res || $res->num_rows === 0) return;
+
+    $access_token = getFirebaseAccessToken();
+    if ($access_token === '') {
+        error_log('[Broadcast] No FCM access token - check FIREBASE_CREDENTIALS env var');
         return;
     }
 
-    $project_id = 'dasma-alert';
-    $access_token = function_exists('getFirebaseAccessToken') ? getFirebaseAccessToken() : '';
-
+    $sent = 0; $failed = 0;
     while ($row = $res->fetch_assoc()) {
-        $token = $row['device_token'];
-        if (function_exists('sendPushNotification')) {
-            sendPushNotification($access_token, $project_id, $token, $title, $body, $extraData);
-        }
+        sendPushNotification($access_token, 'dasma-alert', $row['device_token'], $title, $body, $extraData)
+            ? $sent++ : $failed++;
     }
-}// closes broadcastToAllDevices function
+    error_log("[Broadcast] sent=$sent failed=$failed");
+}
+
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
     if (strcasecmp(trim($fallback), 'Burol Main') === 0) {
         $fallback = 'Burol';
