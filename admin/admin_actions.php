@@ -3,8 +3,9 @@ $push_helper = __DIR__ . '/../php/send_push_notification.php';
 if (file_exists($push_helper)) {
     require_once $push_helper;
 } elseif (file_exists(__DIR__ . '/../../dasma_api/send_push_notification.php')) {
-    require_once __DIR__ . '/../../dasma_api/send_push_notification.php'; // local XAMPP fallback
+    require_once __DIR__ . '/../../dasma_api/send_push_notification.php';
 }
+error_log('[Push] helper path checked: ' . $push_helper . ' exists=' . (file_exists($push_helper) ? 'yes' : 'no'));
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
