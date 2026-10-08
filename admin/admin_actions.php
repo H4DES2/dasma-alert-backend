@@ -1,10 +1,9 @@
 <?php
-require_once '../php/config.php';
-$push_helper = __DIR__ . '/../../dasma_api/send_push_notification.php';
+$push_helper = __DIR__ . '/../php/send_push_notification.php';
 if (file_exists($push_helper)) {
     require_once $push_helper;
-} elseif (file_exists(__DIR__ . '/../dasma_api/send_push_notification.php')) {
-    require_once __DIR__ . '/../dasma_api/send_push_notification.php';
+} elseif (file_exists(__DIR__ . '/../../dasma_api/send_push_notification.php')) {
+    require_once __DIR__ . '/../../dasma_api/send_push_notification.php'; // local XAMPP fallback
 }
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
