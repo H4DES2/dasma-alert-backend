@@ -1,4 +1,8 @@
 <?php
+require_once '../php/config.php';
+error_log('[Push] __DIR__=' . __DIR__
+    . ' | php/ helper exists=' . (file_exists(__DIR__ . '/../php/send_push_notification.php') ? 'yes' : 'no')
+    . ' | php/ contents=' . implode(',', array_slice(scandir(__DIR__ . '/../php'), 2)));
 $push_helper = __DIR__ . '/../php/send_push_notification.php';
 if (file_exists($push_helper)) {
     require_once $push_helper;
