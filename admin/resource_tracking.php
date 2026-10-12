@@ -39,27 +39,30 @@ if ($b_res) {
 
 // KPI queries with prepared statements
 if ($role === 'admin' && !empty($my_brgy)) {
-    $like_brgy = '%' . $my_brgy . '%';
+        // Exact barangay match only (Burol ≠ Burol I/II/III)
+    $brgy_cond = "(LOWER(TRIM(assigned_barangay)) = LOWER(?)
+                   OR LOWER(TRIM(assigned_barangay)) = 'city-wide'
+                   OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')";
 
-    $s = $conn->prepare("SELECT COUNT(*) as count FROM response_teams WHERE (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')");
-    $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
-    $total_teams = (int)$s->get_result()->fetch_assoc()['count']; $s->close();
+    $countTeams = function (string $status_sql = '') use ($conn, $brgy_cond, $my_brgy): int {
+        $s = $conn->prepare("SELECT COUNT(*) AS count FROM response_teams WHERE $status_sql $brgy_cond");
+        $s->bind_param("s", $my_brgy);
+        $s->execute();
+        $n = (int)$s->get_result()->fetch_assoc()['count'];
+        $s->close();
+        return $n;
+    };
 
-    $s = $conn->prepare("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('available', 'operational') AND (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')");
-    $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
-    $avail_teams = (int)$s->get_result()->fetch_assoc()['count']; $s->close();
+    $total_teams = $countTeams();
+    $avail_teams = $countTeams("LOWER(TRIM(status)) IN ('available','operational') AND");
+    $dep_teams   = $countTeams("LOWER(TRIM(status)) IN ('deployed','on-scene') AND");
+    $maint_teams = $countTeams("LOWER(TRIM(status)) = 'maintenance' AND");
 
-    $s = $conn->prepare("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('deployed','on-scene') AND (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')");
-    $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
-    $dep_teams = (int)$s->get_result()->fetch_assoc()['count']; $s->close();
-
-    $s = $conn->prepare("SELECT COUNT(*) as count FROM response_teams WHERE status = 'maintenance' AND (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '')");
-    $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
-    $maint_teams = (int)$s->get_result()->fetch_assoc()['count']; $s->close();
-
-    $s = $conn->prepare("SELECT * FROM response_teams WHERE (assigned_barangay = ? OR assigned_barangay LIKE ? OR LOWER(TRIM(assigned_barangay)) = 'city-wide' OR assigned_barangay IS NULL OR TRIM(assigned_barangay) = '') ORDER BY status ASC, team_type ASC");
-    $s->bind_param("ss", $my_brgy, $like_brgy); $s->execute();
-    $teams_result = $s->get_result(); $s->close();
+    $s = $conn->prepare("SELECT * FROM response_teams WHERE $brgy_cond ORDER BY status ASC, team_type ASC");
+    $s->bind_param("s", $my_brgy);
+    $s->execute();
+    $teams_result = $s->get_result();
+    $s->close();
 } else {
     $total_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams")->fetch_assoc()['count'] ?? 0);
     $avail_teams  = (int)($conn->query("SELECT COUNT(*) as count FROM response_teams WHERE status IN ('available', 'operational')")->fetch_assoc()['count'] ?? 0);
