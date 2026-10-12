@@ -24,11 +24,13 @@ $safe_brgy = $conn->real_escape_string($my_brgy);
 
 $team_filter = "";
 if ($role === 'admin' || $role === 'barangay_admin') {
-    // Only local units for barangay admin
-    $team_filter = " AND (
-        TRIM(assigned_barangay) = '$safe_brgy' 
-        OR assigned_barangay LIKE '%$safe_brgy%'
-    )";
+    if ($my_brgy !== '') {
+        // Exact sector match only (Burol is not Burol I/II/III)
+        $team_filter = " AND LOWER(TRIM(assigned_barangay)) = LOWER('$safe_brgy') ";
+    } else {
+        // No barangay on the account: show nothing rather than everything
+        $team_filter = " AND 1=0 ";
+    }
 }
 
 // --- FETCH KPI DATA ---
