@@ -688,10 +688,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $city_limits = " AND (latitude BETWEEN 14.2600 AND 14.3750 AND longitude BETWEEN 120.9100 AND 121.0100) ";
         
         if ($role === 'admin' || $role === 'barangay_admin') {
-            $brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
+            $brgy_filter = " AND (barangay = ? OR LOWER(TRIM(barangay)) = LOWER(?)) ";
             $types .= "ss";
             $params[] = $admin_brgy;
-            $params[] = "%" . $admin_brgy . "%";
+            $params[] = $admin_brgy;
         }
         
         $query = "SELECT id, incident_type, barangay, latitude, longitude, accuracy_meters, backup_requested FROM incidents WHERE status NOT IN ('archived', 'resolved', 'rejected') $brgy_filter $city_limits ORDER BY CASE severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, created_at DESC";
@@ -747,10 +747,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $target = 'Burol';
         }
         if (!empty($target) && strtolower($target) !== 'all barangays' && strtolower($target) !== 'all') {
-            $brgy_filter = " AND (i.barangay = ? OR i.barangay LIKE ?) ";
-            $evac_brgy_filter = " AND (barangay = ? OR barangay LIKE ?) ";
-            $types .= "ss"; $params[] = $target; $params[] = "%" . $target . "%";
-            $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = "%" . $target . "%";
+            $brgy_filter = " AND (i.barangay = ? OR LOWER(TRIM(i.barangay)) = LOWER(?)) ";
+            $evac_brgy_filter = " AND (barangay = ? OR LOWER(TRIM(barangay)) = LOWER(?)) ";
+            $types .= "ss"; $params[] = $target; $params[] = $target;
+            $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = $target;
         }
 
         if (!function_exists('executeSyncQuery')) {
@@ -918,9 +918,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                     // Only Barangay Admin can recall their local units. Superadmin can only recall City Backup units.
                     if ($role !== 'superadmin') {
                         $action_btns .= "<button class='btn-sm' style='background:#d32f2f; padding: 6px 12px; font-size: 0.8rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); cancelDispatch(\"$dispatch_id\")'><i class='bx bx-undo'></i> Recall</button>";
-                        if ($inc['backup_requested'] == 0) { 
-                            $action_btns .= "<button class='btn-sm' style='background:#f57c00; padding: 6px 12px; font-size: 0.8rem; width: 100%; justify-content: center;' onclick='event.stopPropagation(); requestBackup(\"$dispatch_id\")'><i class='bx bxs-error-circle'></i> Need Backup</button>"; 
-                        }
                     } else {
                         // Superadmin viewing an active/dispatched incident handled locally
                         $action_btns .= "<span style='color:#666; font-size:0.75rem; font-weight:bold; font-style:italic;'><i class='bx bx-shield'></i> Handled Locally</span>";
@@ -981,17 +978,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                                 </div>";
                             }
                         } else {
-                        // Pending at Barangay Level: Count remaining available local teams for this barangay
-                        $brgy_target_name = trim($inc['barangay'] ?? $admin_brgy);
+                        // Count with the same rule as get_available_teams: the admin's own sector, exact match
+                        $count_brgy = trim((string)$admin_brgy) !== '' ? trim($admin_brgy) : trim($inc['barangay'] ?? '');
                         $check_avail = $conn->prepare("
                             SELECT COUNT(*) as avail_count 
                             FROM response_teams 
                             WHERE LOWER(TRIM(status)) IN ('operational', 'on duty')
-                              AND (current_incident_id IS NULL OR current_incident_id = 0)
-                              AND (assigned_barangay = ? OR assigned_barangay LIKE ?)
+                            AND (current_incident_id IS NULL OR current_incident_id = 0)
+                            AND LOWER(TRIM(assigned_barangay)) = LOWER(?)
                         ");
-                        $like_brgy = "%" . $brgy_target_name . "%";
-                        $check_avail->bind_param("ss", $brgy_target_name, $like_brgy);
+                        $check_avail->bind_param("s", $count_brgy);
                         $check_avail->execute();
                         $avail_res = $check_avail->get_result()->fetch_assoc();
                         $avail_units = (int)($avail_res['avail_count'] ?? 0);
@@ -1386,22 +1382,37 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($action === 'update_team_status') {
-        requireRole($ADMIN_TIER_ROLES, $role);
-        $id = (int)$_POST['id'];
-        $status = strtolower(trim($_POST['status']));
-        
-        // Normalize any incoming 'available' status straight to 'operational'
-        if ($status === 'available' || $status === 'operational') {
-            $stmt = $conn->prepare("UPDATE response_teams SET status = 'operational', current_incident_id = NULL WHERE id = ?");
-            $stmt->bind_param("i", $id);
-        } else {
-            $stmt = $conn->prepare("UPDATE response_teams SET status = ? WHERE id = ?");
-            $stmt->bind_param("si", $status, $id);
-        }
-        if ($stmt->execute()) { ob_end_clean(); echo "success"; } else { ob_end_clean(); echo "error"; }
-        $stmt->close();
-        exit();
+    requireRole($ADMIN_TIER_ROLES, $role);
+    $id = (int)$_POST['id'];
+    $status = strtolower(trim($_POST['status']));
+    if ($status === 'available') { $status = 'operational'; }
+
+    // Only allow statuses this endpoint is meant to set
+    if (!in_array($status, ['operational', 'on duty', 'maintenance'], true)) {
+        ob_end_clean(); echo "Invalid status."; exit();
     }
+
+    // Barangay admins can only change their own sector's units
+    if ($role === 'admin' || $role === 'barangay_admin') {
+        $g = $conn->prepare("SELECT id FROM response_teams WHERE id = ? AND LOWER(TRIM(assigned_barangay)) = LOWER(?)");
+        $g->bind_param("is", $id, $admin_brgy);
+        $g->execute();
+        $owned = $g->get_result()->fetch_assoc();
+        $g->close();
+        if (!$owned) { ob_end_clean(); echo "Permission denied."; exit(); }
+    }
+
+    if ($status === 'operational') {
+        $stmt = $conn->prepare("UPDATE response_teams SET status = 'operational', current_incident_id = NULL WHERE id = ?");
+        $stmt->bind_param("i", $id);
+    } else {
+        $stmt = $conn->prepare("UPDATE response_teams SET status = ? WHERE id = ?");
+        $stmt->bind_param("si", $status, $id);
+    }
+    if ($stmt->execute()) { ob_end_clean(); echo "success"; } else { ob_end_clean(); echo "error"; }
+    $stmt->close();
+    exit();
+}
 
     if ($action === 'add_team') {
         requireRole($ADMIN_TIER_ROLES, $role);
@@ -1538,13 +1549,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($role === 'admin' || $role === 'barangay_admin') {
             $check_ph = implode(',', array_fill(0, count($team_ids), '?'));
             $check_types = str_repeat('i', count($team_ids));
-            $like_b = "%" . $admin_brgy . "%";
+            $like_b = $admin_brgy;
 
             $stmt_guard = $conn->prepare("
                 SELECT COUNT(*) as valid_count 
                 FROM response_teams 
                 WHERE id IN ($check_ph) 
-                  AND (TRIM(assigned_barangay) = ? OR assigned_barangay LIKE ?)
+                  AND (TRIM(assigned_barangay) = ? OR LOWER(TRIM(assigned_barangay)) = LOWER(?))
             ");
 
             if ($stmt_guard) {
