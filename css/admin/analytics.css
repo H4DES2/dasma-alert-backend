@@ -480,3 +480,37 @@ html.global-dark-mode .mobile-detail-box {
     background: #0d1117; 
     border-color: #30363d; 
 }
+
+/* ===== AI FORECAST PANEL (full-width row under the grid) ===== */
+.ai-panel { width: 100%; }
+
+.ai-panel .panel-header > div:last-child { flex-wrap: wrap; }
+
+.ai-panel .table-scroll-wrapper { max-height: 560px; overflow-x: auto; }
+
+/* auto layout so long text can breathe; min-width keeps columns readable */
+.ai-table { table-layout: auto; min-width: 860px; }
+.ai-table th, .ai-table td { overflow-wrap: break-word; word-break: normal; }
+.ai-table td { font-size: 0.9rem; line-height: 1.5; vertical-align: top; }
+.ai-table td small, .ai-table td .hazard-detail { display: block; margin-top: 6px; font-size: 0.8rem; font-weight: 500; color: #666; line-height: 1.45; }
+
+/* stops "H I G H" stacking letter by letter */
+.ai-table .badge, #aiForecastTable .badge { white-space: nowrap; word-break: keep-all; overflow-wrap: normal; writing-mode: horizontal-tb; }
+
+/* summary banner: calmer reading width */
+#aiSummaryBanner { line-height: 1.6; font-weight: 500 !important; }
+
+html.global-dark-mode #aiSummaryBanner { background: #0d1b2a !important; color: #9ecbff !important; border-left-color: #58a6ff !important; }
+html.global-dark-mode .ai-table td small, html.global-dark-mode .ai-table td .hazard-detail { color: #8b949e; }
+
+/* archive/bin tables: keep the 4th "Action" column from being squeezed */
+.data-table th.exclude-export, .data-table td.exclude-export { min-width: 110px; }
+
+/* mobile: let the forecast table scroll sideways instead of breaking */
+@media (max-width: 768px) {
+    .ai-panel .table-scroll-wrapper { overflow-x: auto !important; border: 1px solid #edf2f7 !important; }
+    .ai-panel .data-table, .ai-panel .data-table tbody { display: table !important; width: auto !important; }
+    .ai-panel .data-table thead { display: table-header-group !important; }
+    .ai-panel .data-table td:nth-child(n+2) { display: table-cell !important; }
+    .ai-panel .data-table td { display: table-cell !important; padding: 12px !important; }
+}
