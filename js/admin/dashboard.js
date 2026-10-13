@@ -345,17 +345,6 @@ document.addEventListener('DOMContentLoaded', function() {
             attribution: '&copy; OpenStreetMap contributors'
         });
 
-        const darkMatter = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-            maxZoom: 19,
-            subdomains: 'abcd',
-            attribution: '&copy; OpenStreetMap &copy; CARTO'
-        });
-
-        const esriSatellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-            maxZoom: 18,
-            attribution: 'Tiles &copy; Esri'
-        });
-
         const dasmaBounds = L.latLngBounds(
             [14.2500, 120.9000],
             [14.3850, 121.0200]
@@ -371,16 +360,9 @@ document.addEventListener('DOMContentLoaded', function() {
             layers: [osmStreet]
         });
 
-        // Clear any leftover CSS filter and force recalculation on layer change
-        map.on('baselayerchange', function(e) {
-            setTimeout(() => {
-                map.invalidateSize();
-            }, 100);
-        });
-
         setTimeout(() => {
             map.invalidateSize();
-        }, 200)
+        }, 200);
 
         let isUserDraggingMap = false;
 
@@ -394,18 +376,8 @@ document.addEventListener('DOMContentLoaded', function() {
             }, 400);
         }); 
 
+        // Active incidents marker layer
         incidentLayer = L.layerGroup().addTo(map);
-
-        const baseMaps = {
-            "Street Map": osmStreet,
-            "Dark Mode": darkMatter,
-            "Satellite": esriSatellite
-        };
-
-        const overlayMaps = {
-            "Active Incidents": incidentLayer
-        };
-        L.control.layers(baseMaps, overlayMaps, { position: 'topright' }).addTo(map);
     }
 
     initSSE();
