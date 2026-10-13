@@ -101,7 +101,7 @@ if ($type_filter !== 'all') {
     $params[] = "%" . $type_filter . "%";
 }
 
-// 2. OPTIMIZED ARCHIVED INCIDENTS (Index-Friendly Aggregations)
+// 2. OPTIMIZED ARCHIVED INCIDENTS
 $query = "
     SELECT i.id, i.barangay, i.incident_type, i.severity, i.latitude, i.longitude, i.image_path, i.created_at,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -131,7 +131,7 @@ $archived_incidents = ($res = $stmt->get_result()) ? $res->fetch_all(MYSQLI_ASSO
 $stmt->close();
 $js_incidents = json_encode($archived_incidents ?: []);
 
-// 3. OPTIMIZED DETAILED REPORT BIN (Limit & Flattened Aggregation)
+// 3. OPTIMIZED DETAILED REPORT BIN
 $bin_query = "
     SELECT i.id, i.barangay, i.incident_type, i.status, i.image_path, i.created_at, i.admin_remarks,
            DATE_FORMAT(i.created_at, '%b %d, %Y - %h:%i %p') as date_str,
@@ -141,7 +141,7 @@ $bin_query = "
            b_log.all_logs
     FROM incidents i 
     LEFT JOIN spam_reports sr ON i.id = sr.incident_id
-   LEFT JOIN (
+    LEFT JOIN (
         SELECT il.incident_id,
                SUBSTRING_INDEX(GROUP_CONCAT(il.log_message ORDER BY il.created_at ASC SEPARATOR '|||'), '|||', 1) as initial_log,
                GROUP_CONCAT(CONCAT(DATE_FORMAT(il.created_at, '%h:%i %p'), '|-|', IFNULL(u.username, 'System'), '|-|', il.log_message) 
@@ -189,7 +189,44 @@ unset($bin_row);
 
 $total_rejected = count($bin_incidents);
 
-// 5. UNIFIED SINGLE-PASS SENTIMENT EVALUATION
+// 5. SENTIMENT EVALUATION
+function analyzeIncidentSentiment(?string $text): array {
+    if (empty($text)) {
+        return ['score' => 0, 'label' => 'Neutral', 'urgency' => 'Low'];
+    }
+    
+    $clean = mb_strtolower(trim($text), 'UTF-8');
+    
+    $panicWords = [
+        'help', 'saklolo', 'tulong', 'emergency', 'sunog', 'fire', 'trapped', 'nakulong',
+        'dying', 'namamatay', 'unconscious', 'dugo', 'bleeding', 'baril', 'gun', 'patay',
+        'dead', 'critical', 'severe', 'explosion', 'sabog', 'drown', 'nalulunod', 'collapse'
+    ];
+    $distressWords = [
+        'injured', 'sugatan', 'accident', 'banggaan', 'flood', 'baha', 'hirap', 'pain',
+        'sakit', 'attack', 'smoke', 'usok', 'leak', 'falling', 'danger', 'delikado',
+        'broken', 'bali', 'crime', 'robbery', 'holdap', 'lost', 'nawawala'
+    ];
+    $calmWords = [
+        'clear', 'safe', 'resolved', 'okay', 'stable', 'minor', 'controlled', 'ayos'
+    ];
+
+    $panicHits = 0;
+    foreach ($panicWords as $w) { if (str_contains($clean, $w)) $panicHits++; }
+
+    $distressHits = 0;
+    foreach ($distressWords as $w) { if (str_contains($clean, $w)) $distressHits++; }
+
+    $calmHits = 0;
+    foreach ($calmWords as $w) { if (str_contains($clean, $w)) $calmHits++; }
+
+    if ($panicHits >= 1) return ['score' => -0.85, 'label' => 'Panic / Severe Distress', 'urgency' => 'Critical'];
+    if ($distressHits >= 1) return ['score' => -0.45, 'label' => 'Distress / Heightened Anxiety', 'urgency' => 'Elevated'];
+    if ($calmHits >= 1) return ['score' => 0.40, 'label' => 'Calm / Controlled', 'urgency' => 'Low'];
+
+    return ['score' => 0.0, 'label' => 'Neutral / Informative', 'urgency' => 'Normal'];
+}
+
 $sentiment_counts = [
     'Panic / Severe Distress'       => 0,
     'Distress / Heightened Anxiety' => 0,
@@ -197,30 +234,40 @@ $sentiment_counts = [
     'Calm / Controlled'             => 0
 ];
 
-foreach ($archived_incidents as &$inc_item) {
-    $s_eval = analyzeIncidentSentiment($inc_item['initial_log'] ?? '');
-    $inc_item['sentiment'] = $s_eval;
-    if (isset($sentiment_counts[$s_eval['label']])) {
-        $sentiment_counts[$s_eval['label']]++;
+$all_evaluated_reports = array_merge($archived_incidents ?? [], $bin_incidents ?? []);
+if (empty($all_evaluated_reports)) {
+    $fallback_logs = $conn->query("SELECT log_message FROM incident_logs ORDER BY id DESC LIMIT 50");
+    if ($fallback_logs) {
+        while ($l = $fallback_logs->fetch_assoc()) {
+            $all_evaluated_reports[] = ['initial_log' => $l['log_message']];
+        }
     }
 }
-unset($inc_item);
 
-foreach ($bin_incidents as $b_item) {
-    $s_eval = analyzeIncidentSentiment($b_item['initial_log'] ?? '');
-    if (isset($sentiment_counts[$s_eval['label']])) {
-        $sentiment_counts[$s_eval['label']]++;
+foreach ($all_evaluated_reports as $item) {
+    $text = $item['initial_log'] ?? $item['user_logs'] ?? '';
+    if (!empty($text)) {
+        $s_eval = analyzeIncidentSentiment($text);
+        if (isset($sentiment_counts[$s_eval['label']])) {
+            $sentiment_counts[$s_eval['label']]++;
+        }
     }
 }
 
 $has_sentiment_data = array_sum($sentiment_counts) > 0;
-// 5. CHARTS & BROADCASTS
+
+foreach ($archived_incidents as &$inc_item) {
+    $s_eval = analyzeIncidentSentiment($inc_item['initial_log'] ?? '');
+    $inc_item['sentiment'] = $s_eval;
+}
+unset($inc_item);
+
+// 6. CHARTS & BROADCASTS
 $broadcast_history = ($b_res = $conn->query("SELECT *, DATE_FORMAT(created_at, '%M %d, %Y - %h:%i %p') as date_str FROM broadcasts ORDER BY created_at DESC")) ? $b_res->fetch_all(MYSQLI_ASSOC) : [];
 $types_res = $conn->query("SELECT DISTINCT incident_type FROM incidents WHERE status = 'archived'");
 $unique_types = [];
 while ($t = $types_res->fetch_assoc()) { $unique_types[] = $t['incident_type']; }
 
-// Broaden breakdown to all non-rejected incident reports
 $chart_type_res = $conn->query("
     SELECT incident_type, COUNT(*) as count 
     FROM incidents 
@@ -229,11 +276,11 @@ $chart_type_res = $conn->query("
     ORDER BY count DESC
 ");
 $type_labels = []; $type_data = []; $type_colors = [];
-$palette = ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#0097a7', '#0288d1'];
+$palette = ['#0284c7', '#dc2626', '#d97706', '#16a34a', '#7c3aed', '#ca8a04', '#0d9488', '#2563eb', '#9333ea', '#e11d48'];
 $color_idx = 0;
 while ($row = $chart_type_res->fetch_assoc()) {
     $type_labels[] = strtoupper($row['incident_type']);
-    $type_data[] = $row['count'];
+    $type_data[] = (int)$row['count'];
     $type_colors[] = $palette[$color_idx % count($palette)];
     $color_idx++;
 }
@@ -261,100 +308,13 @@ foreach ($archived_incidents as $inc) {
         $heat_coords[] = [(float)$inc['latitude'], (float)$inc['longitude'], 0.8];
     }
 }
-function analyzeIncidentSentiment(?string $text): array {
-    if (empty($text)) {
-        return ['score' => 0, 'label' => 'Neutral', 'urgency' => 'Low'];
-    }
-    
-    $clean = mb_strtolower(trim($text), 'UTF-8');
-    
-    // Emergency & distress lexicon (English + Filipino/Tagalog)
-    $panicWords = [
-        'help', 'saklolo', 'tulong', 'emergency', 'sunog', 'fire', 'trapped', 'nakulong',
-        'dying', 'namamatay', 'unconscious', 'dugo', 'bleeding', 'baril', 'gun', 'patay',
-        'dead', 'critical', 'severe', 'explosion', 'sabog', 'drown', 'nalulunod', 'collapse'
-    ];
-    $distressWords = [
-        'injured', 'sugatan', 'accident', 'banggaan', 'flood', 'baha', 'hirap', 'pain',
-        'sakit', 'attack', 'smoke', 'usok', 'leak', 'falling', 'danger', 'delikado',
-        'broken', 'bali', 'crime', 'robbery', 'holdap', 'lost', 'nawawala'
-    ];
-    $calmWords = [
-        'clear', 'safe', 'resolved', 'okay', 'stable', 'minor', 'controlled', 'ayos'
-    ];
-
-    $panicHits = 0;
-    foreach ($panicWords as $w) {
-        if (str_contains($clean, $w)) $panicHits++;
-    }
-
-    $distressHits = 0;
-    foreach ($distressWords as $w) {
-        if (str_contains($clean, $w)) $distressHits++;
-    }
-
-    $calmHits = 0;
-    foreach ($calmWords as $w) {
-        if (str_contains($clean, $w)) $calmHits++;
-    }
-
-    if ($panicHits >= 1) {
-        return ['score' => -0.85, 'label' => 'Panic / Severe Distress', 'urgency' => 'Critical'];
-    } elseif ($distressHits >= 1) {
-        return ['score' => -0.45, 'label' => 'Distress / Heightened Anxiety', 'urgency' => 'Elevated'];
-    } elseif ($calmHits >= 1) {
-        return ['score' => 0.40, 'label' => 'Calm / Controlled', 'urgency' => 'Low'];
-    }
-
-    return ['score' => 0.0, 'label' => 'Neutral / Informative', 'urgency' => 'Normal'];
-}
-$sentiment_counts = [
-    'Panic / Severe Distress'       => 0,
-    'Distress / Heightened Anxiety' => 0,
-    'Neutral / Informative'         => 0,
-    'Calm / Controlled'             => 0
-];
-
-// Combine both archived incidents and bin/spam reports to evaluate all citizen descriptions
-$all_evaluated_reports = array_merge($archived_incidents ?? [], $bin_incidents ?? []);
-
-// If still empty, pull any available incident logs directly
-if (empty($all_evaluated_reports)) {
-    $fallback_logs = $conn->query("SELECT log_message FROM incident_logs ORDER BY id DESC LIMIT 50");
-    if ($fallback_logs) {
-        while ($l = $fallback_logs->fetch_assoc()) {
-            $all_evaluated_reports[] = ['initial_log' => $l['log_message']];
-        }
-    }
-}
-
-foreach ($all_evaluated_reports as $item) {
-    $text = $item['initial_log'] ?? $item['user_logs'] ?? '';
-    if (!empty($text)) {
-        $s_eval = analyzeIncidentSentiment($text);
-        if (isset($sentiment_counts[$s_eval['label']])) {
-            $sentiment_counts[$s_eval['label']]++;
-        }
-    }
-}
-
-$has_sentiment_data = array_sum($sentiment_counts) > 0;
-
-foreach ($archived_incidents as &$inc_item) {
-    $s_eval = analyzeIncidentSentiment($inc_item['initial_log'] ?? '');
-    $inc_item['sentiment'] = $s_eval;
-    if (isset($sentiment_counts[$s_eval['label']])) {
-        $sentiment_counts[$s_eval['label']]++;
-    }
-}
-unset($inc_item);
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Global Analytics | Command Center</title>
+    <title>City Analytics & Early Warning | CDRRMO Command</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -371,27 +331,102 @@ unset($inc_item);
     <?php include 'navbar.php'; ?>
 
     <main class="main-content">
-        <header style="margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 15px;">
+        <!-- COMMAND HEADER -->
+        <header class="analytics-header">
             <div>
-                <h1 style="color: #333; margin: 0; font-size: 2.2rem;">Global Analytics</h1>
-                <p style="color: #666; margin-top: 5px; font-weight: 800;">Command Center City-Wide Reports</p>
+                <div class="header-badge"><i class='bx bx-pulse'></i> Real-Time Telemetry & Reports</div>
+                <h1 class="header-title">City Global Analytics</h1>
+                <p class="header-subtitle">Dasmariñas City Disaster Risk Reduction & Management Command Dashboard</p>
             </div>
-            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
-    <button type="button" onclick="openReportModal()" class="btn-action" style="background: #d32f2f;">
-        <i class='bx bxs-file-pdf' style="font-size: 1.2rem;"></i> Generate Report
-    </button>
-    <button type="button" onclick="backupAllReports()" class="btn-action" style="background: #455a64;">
-        <i class='bx bx-archive-in' style="font-size: 1.2rem;"></i> Backup Reports
-    </button>
-</div>
+            <div class="header-actions">
+                <button type="button" onclick="openReportModal()" class="btn-action btn-danger-action">
+                    <i class='bx bxs-file-pdf'></i> Generate Report
+                </button>
+                <button type="button" onclick="backupAllReports()" class="btn-action btn-secondary-action">
+                    <i class='bx bx-archive-in'></i> Cold Backup
+                </button>
+            </div>
         </header>
 
+        <!-- 1. AI PREDICTIVE RISK & EARLY WARNING (TOP EXECUTIVE COMMAND DECK) -->
+        <section class="command-panel ai-predictive-deck">
+            <div class="panel-header">
+                <div class="panel-title-group">
+                    <div class="panel-icon-badge ai-icon-badge">
+                        <i class='bx bx-brain'></i>
+                    </div>
+                    <div>
+                        <h2>AI Predictive Risk & Early Warning Deck</h2>
+                        <p class="panel-subtitle">Proactive monthly incident forecasting powered by Gemini analyzing historical clusters & seasonal recurrences</p>
+                    </div>
+                </div>
+                <div class="panel-controls">
+                    <div class="control-cluster">
+                        <label for="aiForecastMonth" class="control-label">Forecast Month</label>
+                        <select id="aiForecastMonth" class="filter-select select-month">
+                            <option value="1">January</option>
+                            <option value="2">February</option>
+                            <option value="3">March</option>
+                            <option value="4">April</option>
+                            <option value="5">May</option>
+                            <option value="6">June</option>
+                            <option value="7">July</option>
+                            <option value="8">August</option>
+                            <option value="9">September</option>
+                            <option value="10" selected>October</option>
+                            <option value="11">November</option>
+                            <option value="12">December</option>
+                        </select>
+                    </div>
+                    <button type="button" id="btnRunAiForecast" class="btn-action btn-primary-action" onclick="loadAiForecast()">
+                        <i class='bx bx-refresh'></i> Generate Forecast
+                    </button>
+                </div>
+            </div>
+
+            <!-- Executive Summary Alert Banner -->
+            <div id="aiSummaryBanner" class="ai-summary-card" style="display: none;"></div>
+
+            <div class="table-scroll-wrapper ai-table-scroll">
+                <table class="data-table ai-table" id="aiForecastTable">
+                    <thead>
+                        <tr>
+                            <th style="width: 18%;">Barangay Jurisdiction</th>
+                            <th style="width: 25%;">Anticipated Hazard</th>
+                            <th style="width: 12%;">Risk Assessment</th>
+                            <th style="width: 17%;">Historical Confidence</th>
+                            <th style="width: 28%;">DRRM Recommended Protocols</th>
+                        </tr>
+                    </thead>
+                    <tbody id="aiForecastTableBody">
+                        <tr>
+                            <td colspan="5" class="table-empty-row">
+                                <i class='bx bx-radar bx-tada'></i>
+                                <span>Select a target month and click <strong>"Generate Forecast"</strong> to run predictive cluster modeling.</span>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- 2. MAIN SPLIT ANALYTICS GRID -->
         <div class="dashboard-grid">
+            <!-- LEFT COLUMN: Historical Operations & Audit -->
             <div class="main-col">
-                <div class="sitting-panel" style="flex: none;">
+                <!-- INCIDENT ARCHIVE VAULT -->
+                <div class="command-panel">
                     <div class="panel-header">
-                        <h2><i class='bx bxs-archive' style="color:#607d8b;"></i> Incident Archive Vault</h2>
-                        <div style="display:flex; gap: 10px; align-items: center;">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bxs-archive'></i>
+                            </div>
+                            <div>
+                                <h2>Incident Archive Vault</h2>
+                                <p class="panel-subtitle">Audited record of resolved city emergencies and response timelines</p>
+                            </div>
+                        </div>
+                        <div class="panel-controls">
                             <select id="vaultTimeFilter" class="filter-select" onchange="applyFilters()">
                                 <option value="all" <?= ($vault_time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
                                 <option value="today" <?= ($vault_time_filter === 'today') ? 'selected' : '' ?>>Today</option>
@@ -412,14 +447,14 @@ unset($inc_item);
                             <thead>
                                 <tr>
                                     <th style="width: 35%;">Incident & Logs</th>
-                                    <th style="width: 25%;">Location & Status</th>
+                                    <th style="width: 25%;">Location & Severity</th>
                                     <th style="width: 25%;">Response Timeline</th>
-                                    <th style="width: 15%; text-align: center;" class="exclude-export">Action</th>
+                                    <th style="width: 15%; text-align: center;" class="exclude-export">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($archived_incidents)): ?>
-                                    <tr><td colspan="4" style="text-align: center; color: #777; padding: 60px; font-weight: 700;">No records found in the vault.</td></tr>
+                                    <tr><td colspan="4" class="table-empty-row">No records found in the archive vault.</td></tr>
                                 <?php else: ?>
                                     <?php foreach ($archived_incidents as $inc): 
                                         $badge_class = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'info' : 'major');
@@ -432,23 +467,21 @@ unset($inc_item);
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
                                         <td>
-                                            <div style="font-weight: 900; font-size: 1.15rem; color: #1976d2; margin-bottom: 2px;">
-                                                <?= htmlspecialchars($inc['incident_type']) ?>
-                                            </div>
-                                            <div style="font-size: 0.8rem; color: #888; font-weight: 600; margin-bottom: 6px;"><?= $inc['date_str'] ?></div>
+                                            <div class="table-entity-title"><?= htmlspecialchars($inc['incident_type']) ?></div>
+                                            <div class="table-entity-time"><i class='bx bx-time-five'></i> <?= $inc['date_str'] ?></div>
                                             <div class="user-log-box">"<?= htmlspecialchars($inc['initial_log'] ?? 'No user details provided.') ?>"</div>
                                         </td>
                                         <td>
-                                            <span style="font-weight: 800; font-size: 0.95rem; color: #222; display:block; margin-bottom: 8px;"><?= htmlspecialchars($inc['barangay']) ?></span>
+                                            <span class="location-label"><?= htmlspecialchars($inc['barangay']) ?></span>
                                             <span class="badge <?= $badge_class ?>"><?= strtoupper($inc['severity']) ?></span>
                                         </td>
                                         <td>
                                             <div class="timeline-text">
                                                 <div class="timeline-row"><strong>Reported:</strong> <span><?= date('h:i A', $created) ?></span></div>
-                                                <div class="timeline-row"><strong style="color:#388e3c;">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Unknown' ?></span></div>
-                                                <div class="timeline-row"><strong style="color:#1976d2;">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Unknown' ?></span></div>
-                                                <div class="duration-text" style="margin-top: 8px; padding-top: 8px; border-top: 1px dashed #edf2f7; font-weight: 900; color: #d32f2f; display: flex; justify-content: space-between;">
-                                                    <span>Total Time:</span> <span><?= $duration_str ?></span>
+                                                <div class="timeline-row"><strong class="text-arrival">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Pending' ?></span></div>
+                                                <div class="timeline-row"><strong class="text-resolution">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Pending' ?></span></div>
+                                                <div class="duration-text">
+                                                    <span>Response Duration:</span> <span><?= $duration_str ?></span>
                                                 </div>
                                             </div>
                                         </td>
@@ -457,7 +490,7 @@ unset($inc_item);
                                                 <?php if (!empty($vaultImg)): ?>
                                                     <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
                                                 <?php endif; ?>
-                                                <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Logs"><i class='bx bx-list-ul'></i></button>
+                                                <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Timeline"><i class='bx bx-list-ul'></i></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -469,32 +502,33 @@ unset($inc_item);
                 </div>
 
                 <!-- REPORT BIN & REJECTION SUMMARY AUDIT -->
-                <div class="sitting-panel" style="flex: none;">
-                    <div class="panel-header" style="align-items: flex-start; flex-direction: column; gap: 8px;">
-                        <div style="display:flex; justify-content:space-between; width:100%; align-items:center;">
-                            <h2><i class='bx bxs-trash-alt' style="color:#d32f2f;"></i> Report Bin & Rejection Audit</h2>
-                            <span class="badge" style="background:#212121; font-size:0.8rem; padding: 8px 14px;"><?= $total_rejected ?> Total Rejections</span>
+                <div class="command-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge danger-icon-badge">
+                                <i class='bx bxs-trash-alt'></i>
+                            </div>
+                            <div>
+                                <h2>Report Bin & Rejection Audit</h2>
+                                <p class="panel-subtitle">Audited breakdown of filtered false alarms, pranks, and incomplete citizen submissions</p>
+                            </div>
                         </div>
-                        <p style="font-size: 0.85rem; color: #777; margin: 0; font-weight: 600;">Granular breakdown of filtered false alarms, pranks, and incomplete incident reports</p>
+                        <span class="badge badge-dark"><?= $total_rejected ?> Rejections Filtered</span>
                     </div>
 
                     <!-- SUMMARY STATS TILES -->
-                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 25px;">
+                    <div class="stats-metric-grid">
                         <?php foreach ($reject_categories_count as $cat_name => $count): 
                             $accent_border = match($cat_name) {
-                                'False Alarm'            => '#d32f2f',
-                                'Prank / Spam'           => '#6a1b9a',
-                                'Incomplete Information' => '#00838f',
-                                default                  => '#616161'
+                                'False Alarm'            => 'border-red',
+                                'Prank / Spam'           => 'border-purple',
+                                'Incomplete Information' => 'border-cyan',
+                                default                  => 'border-gray'
                             };
-                            $pct = $total_rejected > 0 ? round(($count / $total_rejected) * 100) : 0;
                         ?>
-                            <div style="background: #ffffff; border: 1px solid #e0e6ed; border-left: 5px solid <?= $accent_border ?>; padding: 14px; border-radius: 14px; box-shadow: 0 4px 12px rgba(0,0,0,0.03);">
-                                <div style="font-size: 0.72rem; color: #888; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px;"><?= $cat_name ?></div>
-                                <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top: 6px;">
-                                    <span style="font-size: 1.5rem; font-weight: 900; color: #222;"><?= $count ?></span>
-                                    <span style="font-size: 0.75rem; font-weight: 800; color: <?= $accent_border ?>;"><?= $pct ?>%</span>
-                                </div>
+                            <div class="metric-card <?= $accent_border ?>">
+                                <div class="metric-label"><?= $cat_name ?></div>
+                                <div class="metric-val"><?= number_format($count) ?></div>
                             </div>
                         <?php endforeach; ?>
                     </div>
@@ -506,51 +540,37 @@ unset($inc_item);
                                 <tr>
                                     <th style="width: 28%;">Incident & Citizen Input</th>
                                     <th style="width: 20%;">Jurisdiction</th>
-                                    <th style="width: 38%;">Rejection Audit & Officer Reason</th>
-                                    <th style="width: 14%; text-align: center;" class="exclude-export">Evidence</th>
+                                    <th style="width: 38%;">Rejection Audit & Reason</th>
+                                    <th style="width: 14%; text-align: center;" class="exclude-export">Audit</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($bin_incidents)): ?>
-                                    <tr><td colspan="4" style="text-align: center; color: #777; padding: 40px; font-weight: 700;">Report bin is clean. No rejected incidents.</td></tr>
+                                    <tr><td colspan="4" class="table-empty-row">Report bin clean. No recorded rejections.</td></tr>
                                 <?php else: ?>
                                     <?php foreach ($bin_incidents as $bin): 
                                         $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
                                         $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
-                                        $catColor = match($bin['parsed_category']) {
-                                            'False Alarm'            => '#d32f2f',
-                                            'Prank', 'Prank / Spam'  => '#6a1b9a',
-                                            'Incomplete Information' => '#00838f',
-                                            default                  => '#424242'
-                                        };
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
                                         <td>
-                                            <div style="font-weight: 900; font-size: 1.05rem; color: #333; margin-bottom: 2px;">
-                                                <?= htmlspecialchars($bin['incident_type']) ?>
-                                            </div>
-                                            <div style="font-size: 0.78rem; color: #888; font-weight: 600; margin-bottom: 6px;"><?= $bin['date_str'] ?></div>
-                                            <div class="user-log-box" style="border-left-color: #90caf9;">
-                                                <strong style="color:#1976d2; display:block; font-size: 0.7rem; text-transform: uppercase;">Citizen Description:</strong>
-                                                "<?= htmlspecialchars($bin['initial_log'] ?? 'No user log entered.') ?>"
+                                            <div class="table-entity-title text-muted-dark"><?= htmlspecialchars($bin['incident_type']) ?></div>
+                                            <div class="table-entity-time"><?= $bin['date_str'] ?></div>
+                                            <div class="user-log-box">
+                                                <strong>Citizen Log:</strong> "<?= htmlspecialchars($bin['initial_log'] ?? 'No log entered.') ?>"
                                             </div>
                                         </td>
                                         <td>
-                                            <span style="font-weight: 800; font-size: 0.95rem; color: #222; display:block; margin-bottom: 6px;"><?= htmlspecialchars($bin['barangay']) ?></span>
-                                            <span class="badge" style="background: #424242;">REJECTED</span>
+                                            <span class="location-label"><?= htmlspecialchars($bin['barangay']) ?></span>
+                                            <span class="badge badge-dark">REJECTED</span>
                                         </td>
                                         <td>
-                                            <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-                                                <span class="badge" style="background: <?= $catColor ?>; padding: 4px 8px; font-size: 0.65rem;">
-                                                    <?= strtoupper($bin['parsed_category']) ?>
-                                                </span>
-                                                <small style="color: #666; font-weight: 700;">
-                                                    <i class='bx bx-user-check' style="color:#1976d2;"></i> <?= htmlspecialchars($bin['parsed_officer']) ?>
-                                                </small>
+                                            <div class="rejection-meta">
+                                                <span class="badge badge-tag"><?= strtoupper($bin['parsed_category']) ?></span>
+                                                <small><i class='bx bx-user-check'></i> <?= htmlspecialchars($bin['parsed_officer']) ?></small>
                                             </div>
-                                            <div class="user-log-box" style="border-left-color: <?= $catColor ?>; background: #fff; margin-top: 4px;">
-                                                <strong style="display:block; font-size: 0.7rem; color: #555; text-transform:uppercase;">Official Explanation:</strong>
-                                                <?= htmlspecialchars($bin['parsed_notes']) ?>
+                                            <div class="user-log-box log-danger">
+                                                <strong>Officer Note:</strong> <?= htmlspecialchars($bin['parsed_notes']) ?>
                                             </div>
                                         </td>
                                         <td style="text-align: center; vertical-align: middle;" class="exclude-export">
@@ -569,21 +589,18 @@ unset($inc_item);
                     </div>
                 </div>
 
-                <div class="sitting-panel" style="flex: none;">
+                <!-- DISASTER SEASONALITY -->
+                <div class="command-panel">
                     <div class="panel-header">
-                        <h2><i class='bx bxs-home-heart' style="color:#1976d2;"></i> Evac Center Capacity</h2>
-                    </div>
-                    <div class="chart-wrapper">
-                        <?php if (empty($evac_labels)): ?>
-                            <div class="empty-overlay">No evacuation centers active.</div>
-                        <?php endif; ?>
-                        <canvas id="evacOverflowChart"></canvas>
-                    </div>
-                </div>
-
-                <div class="sitting-panel" style="flex: none;">
-                    <div class="panel-header" style="margin-bottom: 5px;">
-                        <h2><i class='bx bx-line-chart' style="color:#d32f2f;"></i> Disaster Seasonality</h2>
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bx-line-chart'></i>
+                            </div>
+                            <div>
+                                <h2>Disaster Seasonality & Recurrence Timeline</h2>
+                                <p class="panel-subtitle">Temporal frequency analysis across reporting periods</p>
+                            </div>
+                        </div>
                         <select id="seasonalityFilter" class="filter-select" onchange="renderSeasonality()">
                             <option value="all">All Time</option>
                             <option value="day">Single Day</option>
@@ -600,31 +617,59 @@ unset($inc_item);
                         <canvas id="seasonalityLineChart"></canvas>
                     </div>
                 </div>
+
+                <!-- EVAC CENTER CAPACITY -->
+                <div class="command-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bxs-home-heart'></i>
+                            </div>
+                            <div>
+                                <h2>Evacuation Center Occupancy & Headroom</h2>
+                                <p class="panel-subtitle">Real-time capacity tracking across city shelter assets</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="chart-wrapper">
+                        <?php if (empty($evac_labels)): ?>
+                            <div class="empty-overlay">No evacuation centers currently active.</div>
+                        <?php endif; ?>
+                        <canvas id="evacOverflowChart"></canvas>
+                    </div>
+                </div>
             </div>
+
+            <!-- RIGHT COLUMN: Spatial Hotspots, Breakdown, Sentiment & Broadcasts -->
             <div class="side-col">
-                <div class="sitting-panel" style="padding: 20px;">
-                    <div class="panel-header" style="margin-bottom: 15px;">
-                        <h2><i class='bx bxs-hot' style="color:#d32f2f;"></i> Spatial Hotspots</h2>
+                <!-- SPATIAL HOTSPOTS HEATMAP -->
+                <div class="command-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge danger-icon-badge">
+                                <i class='bx bxs-hot'></i>
+                            </div>
+                            <div>
+                                <h2>Spatial Hotspots</h2>
+                                <p class="panel-subtitle">Kernel density geospatial map</p>
+                            </div>
+                        </div>
                     </div>
                     <div id="heatmap"></div>
                 </div>
-                <div class="sitting-panel" style="flex: none;">
-    <div class="panel-header" style="margin-bottom: 5px;">
-        <h2><i class='bx bx-brain' style="color:#8e24aa;"></i> Citizen Sentiment Analysis</h2>
-    </div>
-    <p style="font-size: 0.8rem; color: #777; margin-bottom: 12px; font-weight: 600;">
-        Urgency & emotional distress detected from citizen descriptions
-    </p>
-    <div class="chart-wrapper">
-        <?php if (!$has_sentiment_data): ?>
-            <div class="empty-overlay">No citizen descriptions recorded yet.</div>
-        <?php endif; ?>
-        <canvas id="sentimentPieChart"></canvas>
-    </div>
-</div>
-                <div class="sitting-panel" style="flex: none;">
-                    <div class="panel-header" style="margin-bottom: 5px;">
-                        <h2><i class='bx bxs-pie-chart-alt-2' style="color:#f57c00;"></i> Breakdown</h2>
+
+                <!-- INCIDENT BREAKDOWN (FIXED HORIZONTAL DISTRIBUTION) -->
+                <div class="command-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bx-bar-chart-alt-2'></i>
+                            </div>
+                            <div>
+                                <h2>Incident Type Distribution</h2>
+                                <p class="panel-subtitle">Full rank of all historical non-rejected emergencies</p>
+                            </div>
+                        </div>
                         <select id="timeFilter" class="filter-select" onchange="applyFilters()">
                             <option value="today" <?= ($time_filter === 'today') ? 'selected' : '' ?>>Today</option>
                             <option value="week" <?= ($time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
@@ -633,46 +678,78 @@ unset($inc_item);
                             <option value="all" <?= ($time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
                         </select>
                     </div>
-                    <div class="chart-wrapper">
+                    <div class="breakdown-container">
                         <?php if (empty($type_data)): ?>
-                            <div class="empty-overlay">No data available.</div>
+                            <div class="empty-overlay">No incident data available.</div>
                         <?php else: ?>
-                            <canvas id="typePieChart"></canvas>
+                            <div class="breakdown-chart-scroll">
+                                <canvas id="typePieChart"></canvas>
+                            </div>
                         <?php endif; ?>
                     </div>
                 </div>
 
-                <div class="sitting-panel" style="flex: none;">
+                <!-- CITIZEN SENTIMENT ANALYSIS -->
+                <div class="command-panel">
                     <div class="panel-header">
-                        <h2><i class='bx bx-broadcast' style="color:#1976d2;"></i> Broadcast History</h2>
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge purple-icon-badge">
+                                <i class='bx bx-pulse'></i>
+                            </div>
+                            <div>
+                                <h2>Citizen Sentiment Audit</h2>
+                                <p class="panel-subtitle">Emotional distress & urgency detected in citizen submissions</p>
+                            </div>
+                        </div>
                     </div>
-                    <div class="table-scroll-wrapper" style="max-height: 250px;">
+                    <div class="chart-wrapper sentiment-chart-wrapper">
+                        <?php if (!$has_sentiment_data): ?>
+                            <div class="empty-overlay">No citizen descriptions recorded.</div>
+                        <?php endif; ?>
+                        <canvas id="sentimentPieChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- BROADCAST HISTORY -->
+                <div class="command-panel">
+                    <div class="panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bx-broadcast'></i>
+                            </div>
+                            <div>
+                                <h2>Broadcast History</h2>
+                                <p class="panel-subtitle">Official emergency bulletins</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="table-scroll-wrapper" style="max-height: 280px;">
                         <table class="data-table">
                             <thead>
                                 <tr>
-                                    <th>Alert Title & Date</th>
+                                    <th>Title & Date</th>
                                     <th>Severity</th>
-                                    <th style="text-align: center;">Status</th>
+                                    <th style="text-align: center;">Control</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($broadcast_history)): ?>
-                                    <tr><td colspan="3" style="text-align: center; color: #888; font-weight: bold; padding: 20px;">No broadcast history.</td></tr>
+                                    <tr><td colspan="3" class="table-empty-row">No broadcast history logged.</td></tr>
                                 <?php endif; ?>
                                 <?php foreach ($broadcast_history as $b): ?>
                                 <tr class="clickable-row" onclick="openMobileModal(this, 'broadcast')">
                                     <td>
-                                        <b style="color: #222; font-size: 0.95rem; display:block;"><?= htmlspecialchars($b['title']) ?></b>
-                                        <small style="color:#888; font-weight:600;"><?= $b['date_str'] ?></small>
+                                        <b class="broadcast-title"><?= htmlspecialchars($b['title']) ?></b>
+                                        <small class="table-entity-time"><?= $b['date_str'] ?></small>
                                     </td>
                                     <td><span class="badge <?= $b['severity'] ?>"><?= strtoupper($b['severity']) ?></span></td>
                                     <td style="text-align: center;">
                                         <?php if ($b['is_active']): ?>
-                                            <button class="btn-action" style="background: #d32f2f; padding: 6px 12px; font-size: 0.75rem; border-radius: 8px;" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
+                                            <button class="btn-action btn-stop" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
                                                 <i class='bx bx-stop-circle'></i> STOP
                                             </button>
                                         <?php else: ?>
-                                            <span class="badge ended">Ended</span>
+                                            <span class="badge badge-gray">ENDED</span>
                                         <?php endif; ?>
                                     </td>
                                 </tr>
@@ -683,201 +760,138 @@ unset($inc_item);
                 </div>
             </div>
         </div>
-            <!-- AI PREDICTIVE EARLY WARNING & HAZARD FORECAST -->
-                <div class="sitting-panel ai-panel" style="flex: none;">
-                    <div class="panel-header" style="flex-wrap: wrap; gap: 10px;">
-                        <div>
-                            <h2><i class='bx bx-brain' style="color:#d32f2f;"></i> AI Predictive Risk & Early Warning</h2>
-                            <p style="font-size: 0.82rem; color: #777; margin: 4px 0 0; font-weight: 600;">
-                                Proactive hazard forecasting powered by Gemini analyzing historical vault & hotspot recurrences
-                            </p>
-                        </div>
-                        <div style="display: flex; gap: 8px; align-items: center;">
-                            <select id="aiForecastMonth" class="filter-select">
-                                <option value="1">January</option>
-                                <option value="2">February</option>
-                                <option value="3">March</option>
-                                <option value="4">April</option>
-                                <option value="5">May</option>
-                                <option value="6">June</option>
-                                <option value="7">July</option>
-                                <option value="8">August</option>
-                                <option value="9">September</option>
-                                <option value="10" selected>October</option>
-                                <option value="11">November</option>
-                                <option value="12">December</option>
-                            </select>
-                            <button type="button" id="btnRunAiForecast" class="btn-action" style="background: #1976d2; padding: 7px 14px; font-size: 0.85rem;" onclick="loadAiForecast()">
-                                <i class='bx bx-refresh'></i> Generate Forecast
-                            </button>
-                        </div>
-                    </div>
 
-                    <!-- Executive Summary Banner -->
-                    <div id="aiSummaryBanner" style="display: none; background: #f0f7ff; border-left: 4px solid #1976d2; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.88rem; color: #0d47a1; font-weight: 600;">
-                    </div>
-
-                    <div class="table-scroll-wrapper">
-                        <table class="data-table ai-table" id="aiForecastTable">
-                            <thead>
-                                <tr>
-                                    <th style="width: 20%;">Barangay</th>
-                                    <th style="width: 25%;">Anticipated Hazard</th>
-                                    <th style="width: 12%;">Risk Level</th>
-                                    <th style="width: 18%;">Confidence / Pattern</th>
-                                    <th style="width: 25%;">DRRM Recommended Protocol</th>
-                                </tr>
-                            </thead>
-                            <tbody id="aiForecastTableBody">
-                                <tr>
-                                    <td colspan="5" style="text-align: center; color: #888; padding: 30px; font-weight: 600;">
-                                        Select a month and click "Generate Forecast" to analyze incident trends.
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
         <!-- CUSTOM REPORT BUILDER MODAL -->
-<div id="customReportModal" class="modal" style="z-index: 10007;">
-    <div class="modal-content" style="max-width: 520px; padding: 30px;">
-        <div class="close-modal" onclick="closeModal('customReportModal')"><i class='bx bx-x'></i></div>
-        <div class="modal-header" style="margin-bottom: 20px;">
-            <h3 style="margin: 0; color: #1976d2; display: flex; align-items: center; gap: 8px;">
-                <i class='bx bxs-report'></i> Custom Report Generator
-            </h3>
-            <p style="margin: 4px 0 0; font-size: 0.8rem; color: #777;">Configure reporting timeframe, jurisdiction, and export format.</p>
-        </div>
-
-        <div class="modal-body">
-            <!-- 1. Format Selection -->
-            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: #555; text-transform: uppercase;">Export Format</label>
-            <div style="display: flex; gap: 10px; margin-bottom: 16px;">
-                <label style="flex: 1; display: flex; align-items: center; gap: 8px; border: 1px solid #ddd; padding: 10px; border-radius: 10px; cursor: pointer;">
-                    <input type="radio" name="rep_format" value="pdf" checked>
-                    <span style="font-weight: 700; font-size: 0.85rem;"><i class='bx bxs-file-pdf' style="color:#d32f2f;"></i> PDF Document</span>
-                </label>
-                <label style="flex: 1; display: flex; align-items: center; gap: 8px; border: 1px solid #ddd; padding: 10px; border-radius: 10px; cursor: pointer;">
-                    <input type="radio" name="rep_format" value="csv">
-                    <span style="font-weight: 700; font-size: 0.85rem;"><i class='bx bx-spreadsheet' style="color:#388e3c;"></i> CSV Spreadsheet</span>
-                </label>
-            </div>
-
-            <!-- 2. Timeframe Selection -->
-            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: #555; text-transform: uppercase;">Timeframe Interval</label>
-            <select id="rep_period" class="filter-select" style="width: 100%; margin-bottom: 16px;" onchange="handlePeriodChange()">
-                <option value="day">Single Day</option>
-                <option value="weekly">Weekly Range (Up to 7 Days)</option>
-                <option value="monthly">Monthly</option>
-                <option value="quarterly">Quarterly</option>
-                <option value="yearly">Yearly</option>
-            </select>
-
-            <!-- 3. Dynamic Date Containers -->
-            <div id="period_inputs_container" style="background: #f8f9fa; border: 1px solid #edf2f7; border-radius: 12px; padding: 14px; margin-bottom: 16px;">
-                <!-- Day Input -->
-                <div id="box_day">
-                    <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Select Date</label>
-                    <input type="date" id="rep_day" class="filter-select" style="width: 100%;">
+        <div id="customReportModal" class="modal" style="z-index: 10007;">
+            <div class="modal-content modal-report-generator">
+                <div class="close-modal" onclick="closeModal('customReportModal')"><i class='bx bx-x'></i></div>
+                <div class="modal-header">
+                    <h3 class="modal-title-header"><i class='bx bxs-report'></i> Custom Report Generator</h3>
+                    <p class="modal-subtitle-header">Configure reporting timeframe, jurisdiction, and export format.</p>
                 </div>
 
-                <!-- Weekly Inputs -->
-                <div id="box_weekly" style="display: none;">
-                    <div style="display: flex; gap: 10px;">
-                        <div style="flex: 1;">
-                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Start Date (From)</label>
-                            <input type="date" id="rep_week_start" class="filter-select" style="width: 100%;" onchange="validateWeekRange()">
+                <div class="modal-body">
+                    <label class="form-section-label">Export Format</label>
+                    <div class="format-toggle-group">
+                        <label class="format-choice-card">
+                            <input type="radio" name="rep_format" value="pdf" checked>
+                            <span><i class='bx bxs-file-pdf text-red'></i> PDF Document</span>
+                        </label>
+                        <label class="format-choice-card">
+                            <input type="radio" name="rep_format" value="csv">
+                            <span><i class='bx bx-spreadsheet text-green'></i> CSV Spreadsheet</span>
+                        </label>
+                    </div>
+
+                    <label class="form-section-label">Timeframe Interval</label>
+                    <select id="rep_period" class="filter-select w-100 mb-3" onchange="handlePeriodChange()">
+                        <option value="day">Single Day</option>
+                        <option value="weekly">Weekly Range (Up to 7 Days)</option>
+                        <option value="monthly">Monthly</option>
+                        <option value="quarterly">Quarterly</option>
+                        <option value="yearly">Yearly</option>
+                    </select>
+
+                    <div id="period_inputs_container" class="period-input-box mb-3">
+                        <div id="box_day">
+                            <label class="input-sub-label">Select Date</label>
+                            <input type="date" id="rep_day" class="filter-select w-100">
                         </div>
-                        <div style="flex: 1;">
-                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">End Date (To)</label>
-                            <input type="date" id="rep_week_end" class="filter-select" style="width: 100%;" onchange="validateWeekRange()">
+
+                        <div id="box_weekly" style="display: none;">
+                            <div class="input-row-flex">
+                                <div>
+                                    <label class="input-sub-label">Start Date (From)</label>
+                                    <input type="date" id="rep_week_start" class="filter-select w-100" onchange="validateWeekRange()">
+                                </div>
+                                <div>
+                                    <label class="input-sub-label">End Date (To)</label>
+                                    <input type="date" id="rep_week_end" class="filter-select w-100" onchange="validateWeekRange()">
+                                </div>
+                            </div>
+                            <small id="week_validation_msg" class="validation-msg"></small>
+                        </div>
+
+                        <div id="box_monthly" style="display: none;">
+                            <label class="input-sub-label">Select Month</label>
+                            <input type="month" id="rep_month" class="filter-select w-100">
+                        </div>
+
+                        <div id="box_quarterly" style="display: none;">
+                            <div class="input-row-flex">
+                                <div>
+                                    <label class="input-sub-label">Year</label>
+                                    <select id="rep_quarter_year" class="filter-select w-100" onchange="updateQuarterOptions()"></select>
+                                </div>
+                                <div>
+                                    <label class="input-sub-label">Quarter</label>
+                                    <select id="rep_quarter_q" class="filter-select w-100"></select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div id="box_yearly" style="display: none;">
+                            <label class="input-sub-label">Select Year</label>
+                            <select id="rep_year" class="filter-select w-100"></select>
                         </div>
                     </div>
-                    <small id="week_validation_msg" style="color: #d32f2f; font-weight: 700; display: block; margin-top: 6px; font-size: 0.72rem;"></small>
-                </div>
 
-                <!-- Monthly Input -->
-                <div id="box_monthly" style="display: none;">
-                    <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Select Month</label>
-                    <input type="month" id="rep_month" class="filter-select" style="width: 100%;">
-                </div>
+                    <label class="form-section-label">Incident / Accident Type</label>
+                    <select id="rep_incident_type" class="filter-select w-100 mb-3">
+                        <option value="all">All Incident & Accident Types</option>
+                        <?php foreach($unique_types as $type): ?>
+                            <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars($type) ?></option>
+                        <?php endforeach; ?>
+                    </select>
 
-                <!-- Quarterly Input -->
-                <div id="box_quarterly" style="display: none;">
-                    <div style="display: flex; gap: 10px;">
-                        <div style="flex: 1;">
-                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Year</label>
-                            <select id="rep_quarter_year" class="filter-select" style="width: 100%;" onchange="updateQuarterOptions()"></select>
-                        </div>
-                        <div style="flex: 1;">
-                            <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Quarter</label>
-                            <select id="rep_quarter_q" class="filter-select" style="width: 100%;"></select>
-                        </div>
+                    <label class="form-section-label">Include Sections</label>
+                    <div class="checkbox-group mb-4">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="inc_vault" checked> Incident Archive Vault (Resolved Emergencies)
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="inc_bin" checked> Report Bin (False Alarms & Rejections Audit)
+                        </label>
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="inc_group_type" checked> Categorize & Filter by Incident Type (Separate Tables)
+                        </label>
                     </div>
-                </div>
 
-                <!-- Yearly Input -->
-                <div id="box_yearly" style="display: none;">
-                    <label style="display:block; margin-bottom: 4px; font-size: 0.75rem; font-weight: bold; color: #666;">Select Year</label>
-                    <select id="rep_year" class="filter-select" style="width: 100%;"></select>
+                    <button type="button" class="btn-action btn-primary-action w-100 p-3" onclick="processReportGeneration()">
+                        <i class='bx bx-download'></i> Generate & Download
+                    </button>
                 </div>
             </div>
-
-           <!-- 4. Incident / Accident Type Filter -->
-            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: var(--text-muted, #555); text-transform: uppercase;">Incident / Accident Type</label>
-            <select id="rep_incident_type" class="filter-select" style="width: 100%; margin-bottom: 16px;">
-                <option value="all">All Incident & Accident Types</option>
-                <?php foreach($unique_types as $type): ?>
-                    <option value="<?= htmlspecialchars($type) ?>"><?= htmlspecialchars($type) ?></option>
-                <?php endforeach; ?>
-            </select>
-
-            <!-- 5. Scope & Content -->
-            <label style="display:block; margin-bottom: 6px; font-weight: 800; font-size: 0.75rem; color: var(--text-muted, #555); text-transform: uppercase;">Include Sections</label>
-            <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
-                    <input type="checkbox" id="inc_vault" checked> Incident Archive Vault (Resolved Emergencies)
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
-                    <input type="checkbox" id="inc_bin" checked> Report Bin (False Alarms & Rejections Audit)
-                </label>
-                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer;">
-                    <input type="checkbox" id="inc_group_type" checked> Categorize & Filter by Incident Type (Separate Tables per Emergency)
-                </label>
-            </div>
-
-            <button type="button" class="btn-action" style="width: 100%; background: #1976d2; padding: 14px; font-size: 1rem;" onclick="processReportGeneration()">
-                <i class='bx bx-download'></i> Generate & Download
-            </button>
         </div>
-    </div>
-</div>
     </main>
 
+    <!-- TIMELINE LOG MODAL -->
     <div id="viewLogsModal" class="modal" style="z-index: 10006;">
         <div class="modal-content">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:25px; border-bottom:1px solid #f1f4f8; padding-bottom:15px;">
-                <h3 id="logIncidentTitle" style="margin:0; font-weight:900; color:#1976d2; font-size:1.4rem;">Timeline</h3>
-                <span style="cursor:pointer; font-size: 2.2rem; line-height:0.8; color:#aaa;" onclick="closeModal('viewLogsModal')">&times;</span>
+            <div class="modal-inline-header">
+                <h3 id="logIncidentTitle">Timeline</h3>
+                <span class="modal-close-cross" onclick="closeModal('viewLogsModal')">&times;</span>
             </div>
-            <div id="logContainer" style="max-height: 450px; overflow-y: auto;"></div>
+            <div id="logContainer" class="log-scroll-pane"></div>
         </div>
     </div>
 
-    <div id="viewPhotoModal" class="modal" style="background: rgba(0,0,0,0.85); z-index: 10006;">
-        <div class="modal-content" style="background: transparent; box-shadow: none; text-align: center; max-width: 800px; border: none;">
-            <span onclick="closeModal('viewPhotoModal')" style="color: white; font-size: 2.5rem; position: absolute; top: -40px; right: 0; cursor:pointer;">&times;</span>
-            <img id="evidencePhotoViewer" src="" style="max-width: 100%; max-height: 80vh; object-fit: contain; border-radius:12px; border: 3px solid #555;">
+    <!-- EVIDENCE PHOTO MODAL -->
+    <div id="viewPhotoModal" class="modal modal-photo-viewer" style="z-index: 10006;">
+        <div class="modal-content modal-photo-content">
+            <span onclick="closeModal('viewPhotoModal')" class="photo-close-btn">&times;</span>
+            <img id="evidencePhotoViewer" src="" alt="Evidence photo viewer">
         </div>
     </div>
 
+    <!-- MOBILE AUDIT MODAL -->
     <div id="mobileAnalyticsModal" class="modal" style="z-index: 10005;">
-        <div class="modal-content" style="max-width: 90%; padding: 24px;">
-            <div class="close-modal" onclick="closeModal('mobileAnalyticsModal')" style="position: absolute; top: 12px; right: 12px; background: rgba(0,0,0,0.6); color: #fff; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 1.4rem; z-index: 1000;"><i class='bx bx-x'></i></div>
-            <h3 id="m-analytics-title" style="margin-bottom: 16px; font-weight: 900; font-size: 1.3rem; padding-right: 30px; color: var(--text-primary);"></h3>
-            <div id="m-analytics-body" style="display: flex; flex-direction: column;"></div>
+        <div class="modal-content modal-mobile-drawer">
+            <div class="close-modal mobile-close-circle" onclick="closeModal('mobileAnalyticsModal')"><i class='bx bx-x'></i></div>
+            <h3 id="m-analytics-title" class="mobile-drawer-title"></h3>
+            <div id="m-analytics-body" class="mobile-drawer-body"></div>
         </div>
-    </div>                                       
+    </div>
 
 <script nonce="<?= CSP_NONCE ?>">
     window.sentimentData    = <?= json_encode(array_values($sentiment_counts)) ?>;

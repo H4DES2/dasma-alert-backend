@@ -12,38 +12,66 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     
     const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
-    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-    const textColor = isDarkMode ? '#8b949e' : '#888';
+    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const textColor = isDarkMode ? '#94a3b8' : '#64748b';
 
-    // 1. Incident Type Breakdown Pie Chart
-    const pieCanvas = document.getElementById('typePieChart');
-    if (pieCanvas && (window.typeData || []).length > 0) {
-        new Chart(pieCanvas.getContext('2d'), {
-            type: 'pie',
+    // 1. Fixed Incident Breakdown - Horizontal Ranked Distribution (NO PERCENTAGES, ALL DATA VISIBLE)
+    const typeCanvas = document.getElementById('typePieChart');
+    if (typeCanvas && (window.typeData || []).length > 0) {
+        const labels = window.typeLabels || [];
+        const dataValues = window.typeData || [];
+        const bgColors = window.typeColors || [];
+
+        // Adjust scrollable container height based on total items so every row breathes
+        const scrollContainer = typeCanvas.parentElement;
+        if (scrollContainer) {
+            const calculatedHeight = Math.max(280, labels.length * 30 + 40);
+            scrollContainer.style.height = `${calculatedHeight}px`;
+        }
+
+        new Chart(typeCanvas.getContext('2d'), {
+            type: 'bar',
             data: {
-                labels: window.typeLabels || [],
+                labels: labels,
                 datasets: [{
-                    data: window.typeData || [],
-                    backgroundColor: window.typeColors || [],
-                    borderWidth: 2,
-                    borderColor: isDarkMode ? '#161b22' : '#ffffff',
-                    hoverOffset: 6
+                    label: 'Total Incidents',
+                    data: dataValues,
+                    backgroundColor: bgColors,
+                    borderRadius: 4,
+                    borderSkipped: false,
+                    barThickness: 16
                 }]
             },
             options: {
+                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'right', labels: { padding: 20, font: { weight: 'bold' }, color: textColor } },
+                    legend: { display: false },
                     datalabels: {
-                        color: '#ffffff',
-                        font: { weight: 'bold', size: 16 },
-                        formatter: (value, context) => {
-                            let dataArr = context.chart.data.datasets[0].data;
-                            let total = 0;
-                            dataArr.forEach(data => { total += parseInt(data, 10); });
-                            let percentage = Math.round((value / total) * 100);
-                            return percentage >= 4 ? percentage + '%' : '';
+                        anchor: 'end',
+                        align: 'end',
+                        color: textColor,
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (value) => value // Exact numerical count only, NO percentages
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ` ${ctx.raw} incident${ctx.raw === 1 ? '' : 's'}`
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: gridColor },
+                        ticks: { color: textColor, precision: 0 }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: {
+                            color: textColor,
+                            font: { size: 10, weight: '600' }
                         }
                     }
                 }
@@ -58,33 +86,30 @@ document.addEventListener("DOMContentLoaded", function() {
 
     if (sentimentCanvas && totalSentiment > 0) {
         new Chart(sentimentCanvas.getContext('2d'), {
-            type: 'pie',
+            type: 'doughnut',
             data: {
                 labels: window.sentimentLabels || [],
                 datasets: [{
                     data: sentimentValues,
-                    backgroundColor: ['#d32f2f', '#f57c00', '#0288d1', '#388e3c'],
+                    backgroundColor: ['#dc2626', '#ea580c', '#0284c7', '#16a34a'],
                     borderWidth: 2,
-                    borderColor: isDarkMode ? '#161b22' : '#ffffff',
+                    borderColor: isDarkMode ? '#1e293b' : '#ffffff',
                     hoverOffset: 6
                 }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                cutout: '68%',
                 plugins: {
                     legend: { 
                         position: 'bottom', 
-                        labels: { padding: 12, font: { weight: 'bold', size: 11 }, color: textColor } 
+                        labels: { padding: 10, font: { weight: '600', size: 11 }, color: textColor } 
                     },
                     datalabels: {
                         color: '#ffffff',
-                        font: { weight: 'bold', size: 13 },
-                        formatter: (value) => {
-                            if (value === 0) return '';
-                            let pct = Math.round((value / totalSentiment) * 100);
-                            return pct >= 5 ? pct + '%' : '';
-                        }
+                        font: { weight: 'bold', size: 11 },
+                        formatter: (val) => val > 0 ? val : ''
                     }
                 }
             }
@@ -102,132 +127,21 @@ document.addEventListener("DOMContentLoaded", function() {
             data: {
                 labels: window.evacLabels || [],
                 datasets: [
-                    { label: 'Current Occupants', data: window.evacOccupants || [], backgroundColor: '#f57c00', borderRadius: 4 },
-                    { label: 'Total Capacity', data: window.evacCapacity || [], backgroundColor: '#1976d2', borderRadius: 4 }
+                    { label: 'Current Occupants', data: window.evacOccupants || [], backgroundColor: '#ea580c', borderRadius: 4 },
+                    { label: 'Total Capacity', data: window.evacCapacity || [], backgroundColor: '#0284c7', borderRadius: 4 }
                 ]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { datalabels: { display: false }, legend: { labels: { color: textColor } } },
+                plugins: { datalabels: { display: false }, legend: { labels: { color: textColor, font: { weight: '600' } } } },
                 scales: {
                     y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, precision: 0 } },
-                    x: { grid: { display: false }, ticks: { color: textColor } }
+                    x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } }
                 }
             }
         });
     }
-    // -----------------------------------------------------
-// 5. AI PREDICTIVE RISK ADVISORY
-// -----------------------------------------------------
-async function loadAiForecast() {
-    const monthSelect = document.getElementById('aiForecastMonth');
-    const tableBody = document.getElementById('aiForecastTableBody');
-    const summaryBanner = document.getElementById('aiSummaryBanner');
-    const btn = document.getElementById('btnRunAiForecast');
-
-    if (!monthSelect || !tableBody) return;
-
-    const monthVal = monthSelect.value;
-    btn.disabled = true;
-    btn.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Analyzing...`;
-
-    tableBody.innerHTML = `
-        <tr>
-            <td colspan="5" style="text-align: center; color: #1976d2; padding: 35px; font-weight: 700;">
-                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i>
-                Synthesizing historical patterns & spatial clusters with Gemini AI...
-            </td>
-        </tr>
-    `;
-
-    try {
-        // Point directly to alert/php/ai_predictor.php
-        const response = await fetch(`../php/ai_predictor.php?month=${encodeURIComponent(monthVal)}`);
-        
-        if (!response.ok) {
-            const errText = await response.text();
-            console.error('AI Predictor Server Error:', response.status, errText);
-            throw new Error(`Server returned HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-
-        if (!result.success || !result.prediction || !result.prediction.forecasts) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; color: #d32f2f; padding: 25px; font-weight: 700;">
-                        ${result.message || result.error || 'Unable to generate forecast for the chosen timeframe.'}
-                    </td>
-                </tr>
-            `;
-            if (summaryBanner) summaryBanner.style.display = 'none';
-            return;
-        }
-
-        const data = result.prediction;
-
-        if (summaryBanner && data.summary) {
-            summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Month Overview:</strong> ${data.summary}`;
-            summaryBanner.style.display = 'block';
-        }
-
-        if (data.forecasts.length === 0) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" style="text-align: center; color: #777; padding: 25px;">
-                        No elevated risk patterns detected for this month.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tableBody.innerHTML = data.forecasts.map(item => {
-            const risk = (item.risk_level || 'MODERATE').toUpperCase();
-            const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
-
-            return `
-                <tr>
-                    <td>
-                        <strong style="color: #222; font-size: 0.95rem;">${item.barangay}</strong>
-                    </td>
-                    <td>
-                        <div style="font-weight: 800; color: #1976d2; font-size: 0.95rem;">${item.hazard_type}</div>
-                        <small style="color: #666; display: block; margin-top: 3px;">${item.historical_basis || ''}</small>
-                    </td>
-                    <td>
-                        <span class="badge ${badgeClass}">${risk}</span>
-                    </td>
-                    <td>
-                        <span style="font-size: 0.85rem; font-weight: 700; color: #444;">${item.pattern_confidence}</span>
-                    </td>
-                    <td>
-                        <div style="font-size: 0.85rem; color: #2e7d32; font-weight: 700; line-height: 1.4;">
-                            <i class='bx bx-shield-quarter mr-1'></i> ${item.recommended_action}
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
-
-    } catch (err) {
-        console.error('Forecast error:', err);
-        tableBody.innerHTML = `
-            <tr>
-                <td colspan="5" style="text-align: center; color: #d32f2f; padding: 25px; font-weight: 700;">
-                    Connection to AI Predictor failed: ${err.message}. Open Browser DevTools (F12 > Console) for details.
-                </td>
-            </tr>
-        `;
-        if (summaryBanner) summaryBanner.style.display = 'none';
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class='bx bx-refresh'></i> Generate Forecast`;
-    }
-}
-
-window.loadAiForecast = loadAiForecast;
 
     // 5. Leaflet Spatial Hotspots Heatmap
     const heatmapEl = document.getElementById('heatmap');
@@ -243,6 +157,119 @@ window.loadAiForecast = loadAiForecast;
     }
 });
 
+// -----------------------------------------------------
+// 2. AI PREDICTIVE RISK ADVISORY FETCH LOGIC
+// -----------------------------------------------------
+async function loadAiForecast() {
+    const monthSelect = document.getElementById('aiForecastMonth');
+    const tableBody = document.getElementById('aiForecastTableBody');
+    const summaryBanner = document.getElementById('aiSummaryBanner');
+    const btn = document.getElementById('btnRunAiForecast');
+
+    if (!monthSelect || !tableBody) return;
+
+    const monthVal = monthSelect.value;
+    btn.disabled = true;
+    btn.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Analyzing...`;
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="5" class="table-empty-row text-primary font-weight-bold">
+                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
+                Synthesizing historical patterns & spatial clusters with Gemini AI...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const response = await fetch(`../php/ai_predictor.php?month=${encodeURIComponent(monthVal)}`);
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('AI Predictor Server Error:', response.status, errText);
+            throw new Error(`Server returned HTTP ${response.status}`);
+        }
+
+        const result = await response.json();
+
+        if (!result.success || !result.prediction || !result.prediction.forecasts) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="table-empty-row text-danger font-weight-bold">
+                        ${result.message || result.error || 'Unable to generate forecast for the selected month.'}
+                    </td>
+                </tr>
+            `;
+            if (summaryBanner) summaryBanner.style.display = 'none';
+            return;
+        }
+
+        const data = result.prediction;
+
+        if (summaryBanner && data.summary) {
+            summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Executive DRRM Advisory:</strong> ${data.summary}`;
+            summaryBanner.style.display = 'block';
+        }
+
+        if (data.forecasts.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" class="table-empty-row text-muted">
+                        No elevated risk patterns identified for this timeframe.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tableBody.innerHTML = data.forecasts.map(item => {
+            const risk = (item.risk_level || 'MODERATE').toUpperCase();
+            const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
+
+            return `
+                <tr>
+                    <td>
+                        <strong class="text-dark font-weight-bold">${item.barangay}</strong>
+                    </td>
+                    <td>
+                        <div class="hazard-type-title">${item.hazard_type}</div>
+                        <small class="hazard-type-basis">${item.historical_basis || ''}</small>
+                    </td>
+                    <td>
+                        <span class="badge ${badgeClass}">${risk}</span>
+                    </td>
+                    <td>
+                        <span class="confidence-tag">${item.pattern_confidence}</span>
+                    </td>
+                    <td>
+                        <div class="recommended-protocol-box">
+                            <i class='bx bx-shield-quarter'></i>
+                            <span>${item.recommended_action}</span>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        console.error('Forecast error:', err);
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" class="table-empty-row text-danger font-weight-bold">
+                    Connection to AI Predictor failed: ${err.message}. Open Browser DevTools for details.
+                </td>
+            </tr>
+        `;
+        if (summaryBanner) summaryBanner.style.display = 'none';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class='bx bx-refresh'></i> Generate Forecast`;
+    }
+}
+
+// -----------------------------------------------------
+// 3. SEASONALITY RENDERING
+// -----------------------------------------------------
 function renderSeasonality() {
     const canvasElement = document.getElementById('seasonalityLineChart');
     if (!canvasElement) return;
@@ -288,11 +315,11 @@ function renderSeasonality() {
         lineChartInstance.update();
     } else {
         const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
-        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.05)';
-        const textColor = isDarkMode ? '#8b949e' : '#888';
-        let gradient = ctx.createLinearGradient(0, 0, 0, 400);
-        gradient.addColorStop(0, 'rgba(211, 47, 47, 0.5)'); 
-        gradient.addColorStop(1, 'rgba(211, 47, 47, 0.0)'); 
+        const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+        const textColor = isDarkMode ? '#94a3b8' : '#64748b';
+        let gradient = ctx.createLinearGradient(0, 0, 0, 300);
+        gradient.addColorStop(0, 'rgba(220, 38, 38, 0.3)'); 
+        gradient.addColorStop(1, 'rgba(220, 38, 38, 0.0)'); 
 
         lineChartInstance = new Chart(ctx, {
             type: 'line',
@@ -301,14 +328,14 @@ function renderSeasonality() {
                 datasets: [{
                     label: 'Incidents',
                     data: data,
-                    borderColor: '#d32f2f',
+                    borderColor: '#dc2626',
                     backgroundColor: gradient,
-                    borderWidth: 3,
+                    borderWidth: 2,
                     fill: true,
-                    tension: 0.4,
+                    tension: 0.3,
                     pointBackgroundColor: '#ffffff',
-                    pointBorderColor: '#d32f2f',
-                    pointRadius: 4
+                    pointBorderColor: '#dc2626',
+                    pointRadius: 3
                 }]
             },
             options: {
@@ -316,8 +343,8 @@ function renderSeasonality() {
                 maintainAspectRatio: false,
                 plugins: { legend: { display: false }, datalabels: { display: false } },
                 scales: {
-                    x: { grid: { display: false }, ticks: { color: textColor, font: { weight: 'bold' } } },
-                    y: { beginAtZero: true, grid: { color: gridColor, drawBorder: false }, ticks: { stepSize: 1, color: textColor, font: { weight: 'bold' } } }
+                    x: { grid: { display: false }, ticks: { color: textColor, font: { weight: '600', size: 10 } } },
+                    y: { beginAtZero: true, grid: { color: gridColor }, ticks: { stepSize: 1, color: textColor } }
                 }
             }
         });
@@ -325,7 +352,7 @@ function renderSeasonality() {
 }
 
 // -----------------------------------------------------
-// 2. REPORT BUILDER CONTROLS
+// 4. REPORT BUILDER CONTROLS & EXPORTS
 // -----------------------------------------------------
 function getTodayBounds() {
     const now = new Date();
@@ -583,204 +610,68 @@ function generateCustomPDF(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
     const doc = new jsPDF('landscape');
 
     doc.setFontSize(18);
-    doc.setTextColor(25, 118, 210);
+    doc.setTextColor(2, 132, 199);
     doc.text('CDRRMO Dasmariñas Incident Report', 14, 15);
 
     doc.setFontSize(10);
-    doc.setTextColor(100, 100, 100);
+    doc.setTextColor(100, 116, 139);
     doc.text(`Timeframe: ${rangeLabel}  |  Filter: ${selectedTypeLabel}  |  Generated: ${new Date().toLocaleString()}`, 14, 22);
 
     let startY = 30;
 
-    if (vaultRows.length > 0 || binRows.length > 0) {
-        const typeCounts = {};
-        const combined = [...vaultRows, ...binRows];
-        combined.forEach(row => {
-            const t = row.incident_type || 'Uncategorized';
-            typeCounts[t] = (typeCounts[t] || 0) + 1;
-        });
-
-        const labels = Object.keys(typeCounts);
-        const data = Object.values(typeCounts);
-
-        const canvas = document.createElement('canvas');
-        canvas.width = 600;
-        canvas.height = 300;
-        canvas.style.position = 'absolute';
-        canvas.style.left = '-9999px';
-        document.body.appendChild(canvas);
-
-        const palette = ['#1976d2', '#d32f2f', '#f57c00', '#388e3c', '#8e24aa', '#fbc02d', '#0097a7', '#0288d1'];
-        const bgColors = labels.map((_, i) => palette[i % palette.length]);
-
-        const tempChart = new Chart(canvas.getContext('2d'), {
-            type: 'pie',
-            data: {
-                labels: labels,
-                datasets: [{
-                    data: data,
-                    backgroundColor: bgColors,
-                    borderWidth: 1,
-                    borderColor: '#ffffff'
-                }]
-            },
-            options: {
-                responsive: false,
-                animation: false,
-                plugins: {
-                    legend: { position: 'right', labels: { font: { size: 14 } } },
-                    datalabels: { display: false } 
-                }
-            }
-        });
-
-        const ctx = canvas.getContext('2d');
-        ctx.globalCompositeOperation = 'destination-over';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        const imgData = canvas.toDataURL('image/png', 1.0);
-        
-        doc.setFontSize(14);
-        doc.setTextColor(33, 33, 33);
-        doc.text('Incident Type Breakdown', 14, startY);
-        
-        doc.addImage(imgData, 'PNG', 14, startY + 4, 120, 60);
-        
-        tempChart.destroy();
-        document.body.removeChild(canvas);
-
-        startY += 72;
-    }
-
     if (vaultRows.length > 0) {
         doc.setFontSize(14);
-        doc.setTextColor(33, 33, 33);
+        doc.setTextColor(15, 23, 42);
         doc.text(`Incident Archive Vault (${vaultRows.length} Total Records)`, 14, startY);
         startY += 6;
 
-        if (groupByType) {
-            const vaultByType = {};
-            vaultRows.forEach(i => {
-                const t = i.incident_type || 'Uncategorized';
-                if (!vaultByType[t]) vaultByType[t] = [];
-                vaultByType[t].push(i);
-            });
+        const vData = vaultRows.map(i => [
+            i.id,
+            i.incident_type,
+            i.severity,
+            i.barangay,
+            i.created_at,
+            i.resolved_at || 'N/A',
+            i.initial_log || 'No details'
+        ]);
 
-            Object.keys(vaultByType).sort().forEach(typeKey => {
-                const rows = vaultByType[typeKey];
-                if (startY > 165) { doc.addPage(); startY = 20; }
+        doc.autoTable({
+            startY: startY + 2,
+            head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Description']],
+            body: vData,
+            theme: 'grid',
+            headStyles: { fillColor: [2, 132, 199] },
+            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+        });
 
-                doc.setFontSize(10);
-                doc.setTextColor(25, 118, 210);
-                doc.text(`• ${typeKey} (${rows.length} ${rows.length === 1 ? 'Record' : 'Records'})`, 14, startY);
-
-                const vData = rows.map(i => [
-                    i.id,
-                    i.severity,
-                    i.barangay,
-                    i.created_at,
-                    i.resolved_at || 'N/A',
-                    i.initial_log || 'No details'
-                ]);
-
-                doc.autoTable({
-                    startY: startY + 3,
-                    head: [['ID', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Description']],
-                    body: vData,
-                    theme: 'grid',
-                    headStyles: { fillColor: [25, 118, 210] },
-                    styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
-                });
-
-                startY = doc.lastAutoTable.finalY + 8;
-            });
-        } else {
-            const vData = vaultRows.map(i => [
-                i.id,
-                i.incident_type,
-                i.severity,
-                i.barangay,
-                i.created_at,
-                i.resolved_at || 'N/A',
-                i.initial_log || 'No details'
-            ]);
-
-            doc.autoTable({
-                startY: startY + 2,
-                head: [['ID', 'Type', 'Severity', 'Barangay', 'Reported', 'Resolved', 'Citizen Description']],
-                body: vData,
-                theme: 'grid',
-                headStyles: { fillColor: [25, 118, 210] },
-                styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
-            });
-
-            startY = doc.lastAutoTable.finalY + 12;
-        }
+        startY = doc.lastAutoTable.finalY + 12;
     }
 
     if (binRows.length > 0) {
         if (startY > 155) { doc.addPage(); startY = 20; }
 
         doc.setFontSize(14);
-        doc.setTextColor(211, 47, 47);
+        doc.setTextColor(220, 38, 38);
         doc.text(`Report Bin & Rejection Audit (${binRows.length} Total Records)`, 14, startY);
         startY += 6;
 
-        if (groupByType) {
-            const binByType = {};
-            binRows.forEach(b => {
-                const t = b.incident_type || 'Uncategorized';
-                if (!binByType[t]) binByType[t] = [];
-                binByType[t].push(b);
-            });
+        const bData = binRows.map(b => [
+            b.id,
+            b.incident_type,
+            b.barangay,
+            b.parsed_category || 'False Alarm',
+            b.parsed_officer || 'Officer',
+            b.parsed_notes || b.spam_reason || 'N/A'
+        ]);
 
-            Object.keys(binByType).sort().forEach(typeKey => {
-                const rows = binByType[typeKey];
-                if (startY > 165) { doc.addPage(); startY = 20; }
-
-                doc.setFontSize(10);
-                doc.setTextColor(211, 47, 47);
-                doc.text(`• ${typeKey} — Rejections (${rows.length} ${rows.length === 1 ? 'Record' : 'Records'})`, 14, startY);
-
-                const bData = rows.map(b => [
-                    b.id,
-                    b.barangay,
-                    b.parsed_category || 'False Alarm',
-                    b.parsed_officer || 'Officer',
-                    b.parsed_notes || b.spam_reason || 'N/A'
-                ]);
-
-                doc.autoTable({
-                    startY: startY + 3,
-                    head: [['ID', 'Barangay', 'Rejection Category', 'Audited By', 'Official Explanation']],
-                    body: bData,
-                    theme: 'grid',
-                    headStyles: { fillColor: [211, 47, 47] },
-                    styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
-                });
-
-                startY = doc.lastAutoTable.finalY + 8;
-            });
-        } else {
-            const bData = binRows.map(b => [
-                b.id,
-                b.incident_type,
-                b.barangay,
-                b.parsed_category || 'False Alarm',
-                b.parsed_officer || 'Officer',
-                b.parsed_notes || b.spam_reason || 'N/A'
-            ]);
-
-            doc.autoTable({
-                startY: startY + 2,
-                head: [['ID', 'Type', 'Barangay', 'Rejection Category', 'Audited By', 'Official Explanation']],
-                body: bData,
-                theme: 'grid',
-                headStyles: { fillColor: [211, 47, 47] },
-                styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
-            });
-        }
+        doc.autoTable({
+            startY: startY + 2,
+            head: [['ID', 'Type', 'Barangay', 'Rejection Category', 'Audited By', 'Official Explanation']],
+            body: bData,
+            theme: 'grid',
+            headStyles: { fillColor: [220, 38, 38] },
+            styles: { fontSize: 8, cellPadding: 2.5, overflow: 'linebreak' }
+        });
     }
 
     doc.save(`Dasma_Alert_Report_${rangeLabel.replace(/[^a-z0-9]/gi, '_')}.pdf`);
@@ -790,90 +681,40 @@ function generateCustomCSV(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
     let csv = `\uFEFF--- DASMARINAS CITY CDRRMO AUDIT REPORT ---\n`;
     csv += `TIMEFRAME: ${rangeLabel}\n`;
     csv += `FILTER: ${selectedTypeLabel}\n`;
-    csv += `GROUPED BY INCIDENT TYPE: ${groupByType ? 'YES' : 'NO'}\n`;
     csv += `GENERATED: ${new Date().toLocaleString()}\n\n`;
 
     if (vaultRows.length > 0) {
         csv += `--- INCIDENT ARCHIVE VAULT (${vaultRows.length} Total Records) ---\n`;
-        if (groupByType) {
-            const vaultByType = {};
-            vaultRows.forEach(i => {
-                const t = i.incident_type || 'Uncategorized';
-                if (!vaultByType[t]) vaultByType[t] = [];
-                vaultByType[t].push(i);
-            });
-
-            Object.keys(vaultByType).sort().forEach(typeKey => {
-                csv += `\n[TYPE: ${typeKey.toUpperCase()}]\n`;
-                csv += `ID,Severity,Barangay,Reported Date,Resolved Date,Citizen Description\n`;
-                vaultByType[typeKey].forEach(i => {
-                    csv += [
-                        i.id,
-                        i.severity,
-                        `"${i.barangay}"`,
-                        `"${i.created_at}"`,
-                        `"${i.resolved_at || 'N/A'}"`,
-                        `"${(i.initial_log || '').replace(/"/g, '""')}"`
-                    ].join(',') + '\n';
-                });
-            });
-        } else {
-            csv += `ID,Type,Severity,Barangay,Reported Date,Resolved Date,Citizen Description\n`;
-            vaultRows.forEach(i => {
-                csv += [
-                    i.id,
-                    `"${i.incident_type}"`,
-                    i.severity,
-                    `"${i.barangay}"`,
-                    `"${i.created_at}"`,
-                    `"${i.resolved_at || 'N/A'}"`,
-                    `"${(i.initial_log || '').replace(/"/g, '""')}"`
-                ].join(',') + '\n';
-            });
-        }
+        csv += `ID,Type,Severity,Barangay,Reported Date,Resolved Date,Citizen Description\n`;
+        vaultRows.forEach(i => {
+            csv += [
+                i.id,
+                `"${i.incident_type}"`,
+                i.severity,
+                `"${i.barangay}"`,
+                `"${i.created_at}"`,
+                `"${i.resolved_at || 'N/A'}"`,
+                `"${(i.initial_log || '').replace(/"/g, '""')}"`
+            ].join(',') + '\n';
+        });
         csv += '\n';
     }
 
     if (binRows.length > 0) {
         csv += `--- REPORT BIN REJECTION AUDIT (${binRows.length} Total Records) ---\n`;
-        if (groupByType) {
-            const binByType = {};
-            binRows.forEach(b => {
-                const t = b.incident_type || 'Uncategorized';
-                if (!binByType[t]) binByType[t] = [];
-                binByType[t].push(b);
-            });
-
-            Object.keys(binByType).sort().forEach(typeKey => {
-                csv += `\n[REJECTED TYPE: ${typeKey.toUpperCase()}]\n`;
-                csv += `ID,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation\n`;
-                binByType[typeKey].forEach(b => {
-                    csv += [
-                        b.id,
-                        `"${b.barangay}"`,
-                        `"${b.created_at}"`,
-                        `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
-                        `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
-                        `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
-                        `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`
-                    ].join(',') + '\n';
-                });
-            });
-        } else {
-            csv += `ID,Type,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation\n`;
-            binRows.forEach(b => {
-                csv += [
-                    b.id,
-                    `"${b.incident_type}"`,
-                    `"${b.barangay}"`,
-                    `"${b.created_at}"`,
-                    `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
-                    `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
-                    `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
-                    `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`
-                ].join(',') + '\n';
-            });
-        }
+        csv += `ID,Type,Barangay,Reported Date,Citizen Description,Reviewing Officer,Rejection Category,Official Explanation\n`;
+        binRows.forEach(b => {
+            csv += [
+                b.id,
+                `"${b.incident_type}"`,
+                `"${b.barangay}"`,
+                `"${b.created_at}"`,
+                `"${(b.initial_log || 'N/A').replace(/"/g, '""')}"`,
+                `"${(b.parsed_officer || 'Officer').replace(/"/g, '""')}"`,
+                `"${(b.parsed_category || 'False Alarm').replace(/"/g, '""')}"`,
+                `"${(b.parsed_notes || b.spam_reason || '').replace(/"/g, '""')}"`
+            ].join(',') + '\n';
+        });
     }
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -888,7 +729,7 @@ function generateCustomCSV(vaultRows, binRows, rangeLabel, selectedTypeLabel, gr
 }
 
 function backupAllReports() {
-    if (!confirm('Download a complete offline report backup snapshot (Archive Vault + Report Bin + Audit Logs)?')) {
+    if (!confirm('Download a complete offline report snapshot (Archive Vault + Report Bin + Audit Logs)?')) {
         return;
     }
 
@@ -918,7 +759,7 @@ function backupAllReports() {
 }
 
 // -----------------------------------------------------
-// 3. GENERAL CONTROLS & MODALS
+// 5. CONTROLS, MODALS & TIMELINES
 // -----------------------------------------------------
 function applyFilters() { 
     let typeVal = document.getElementById('typeFilter')?.value || 'all';
@@ -947,10 +788,10 @@ function viewLogs(logsString, incidentTitle) {
     container.innerHTML = '';
 
     if (!logsString || logsString === 'No logs recorded.' || logsString.trim() === '') {
-        container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">No timeline logs recorded.</div>';
+        container.innerHTML = '<div class="p-4 text-center text-muted">No timeline logs recorded.</div>';
     } else {
         const entries = logsString.split('|||').map(e => e.trim()).filter(Boolean);
-        let html = '<div style="display: flex; flex-direction: column; gap: 12px; padding: 10px 0;">';
+        let html = '<div class="log-entry-list">';
         entries.forEach(entry => {
             const parts = entry.split('|-|');
             const time = parts[0] || '';
@@ -958,8 +799,8 @@ function viewLogs(logsString, incidentTitle) {
             const msg = parts[2] || '';
             html += `
                 <div class="timeline-log-card">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                        <span class="timeline-log-meta">${time} - ${user}</span>
+                    <div class="timeline-log-header">
+                        <span class="timeline-log-meta">${time} — ${user}</span>
                     </div>
                     <div class="timeline-log-msg">${msg}</div>
                 </div>
@@ -992,7 +833,7 @@ function viewPhoto(url) {
 }
 
 function stopBroadcast(id) {
-    if (confirm("Stop this active broadcast?")) {
+    if (confirm("Terminate this active broadcast warning?")) {
         let fd = new FormData();
         fd.append('action', 'end_broadcast');
         fd.append('id', id);
@@ -1009,7 +850,7 @@ function stopBroadcast(id) {
 }
 
 // -----------------------------------------------------
-// 4. MOBILE MODAL LOGIC
+// 6. MOBILE MODAL LOGIC
 // -----------------------------------------------------
 function openMobileModal(row, type) {
     if (window.innerWidth > 768) return; 
@@ -1020,24 +861,24 @@ function openMobileModal(row, type) {
     let html = '';
     
     if (type === 'archive') {
-        titleEl.innerHTML = "Archive Details";
+        titleEl.innerHTML = "Archive Record";
         html += `<div class="mobile-detail-box"><small class="mobile-label">Incident & Logs</small>${cells[0].innerHTML}</div>`;
         html += `<div class="mobile-detail-box"><small class="mobile-label">Location & Status</small>${cells[1].innerHTML}</div>`;
         html += `<div class="mobile-detail-box"><small class="mobile-label">Response Timeline</small>${cells[2].innerHTML}</div>`;
-        html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container" style="display:flex; gap:10px; width:100%;">${cells[3].innerHTML}</div></div>`;
+        html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container">${cells[3].innerHTML}</div></div>`;
     } 
     else if (type === 'bin') {
-        titleEl.innerHTML = "Granular Rejection Audit";
+        titleEl.innerHTML = "Rejection Audit Record";
         html += `<div class="mobile-detail-box"><small class="mobile-label">Incident & Citizen Input</small>${cells[0].innerHTML}</div>`;
         html += `<div class="mobile-detail-box"><small class="mobile-label">Location & Status</small>${cells[1].innerHTML}</div>`;
         html += `<div class="mobile-detail-box"><small class="mobile-label">Audit & Explanation</small>${cells[2].innerHTML}</div>`;
-        html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container" style="display:flex; gap:10px; width:100%;">${cells[3].innerHTML}</div></div>`;
+        html += `<div style="margin-top: 5px;"><small class="mobile-label">Actions</small><div class="m-actions-container">${cells[3].innerHTML}</div></div>`;
     }
     else if (type === 'broadcast') {
-        titleEl.innerHTML = "Broadcast Details";
+        titleEl.innerHTML = "Broadcast Alert Details";
         html += `<div class="mobile-detail-box"><small class="mobile-label">Alert Title & Date</small>${cells[0].innerHTML}</div>`;
         html += `<div class="mobile-detail-box"><small class="mobile-label">Severity</small><div style="margin-top: 5px;">${cells[1].innerHTML}</div></div>`;
-        html += `<div style="margin-top: 5px;"><small class="mobile-label">Status & Actions</small><div class="m-actions-container" style="display:flex; flex-direction:column; gap:10px; width:100%;">${cells[2].innerHTML}</div></div>`;
+        html += `<div style="margin-top: 5px;"><small class="mobile-label">Status & Actions</small><div class="m-actions-container">${cells[2].innerHTML}</div></div>`;
     }
 
     bodyEl.innerHTML = html;
@@ -1054,8 +895,6 @@ function openMobileModal(row, type) {
             grp.style.justifyContent = 'center';
         }
     });
-
-    bodyEl.querySelectorAll('.mobile-expand-icon').forEach(icon => icon.style.display = 'none');
 
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
@@ -1074,3 +913,4 @@ window.openMobileModal = openMobileModal;
 window.renderSeasonality = renderSeasonality;
 window.applyFilters = applyFilters;
 window.stopBroadcast = stopBroadcast;
+window.loadAiForecast = loadAiForecast;
