@@ -45,45 +45,30 @@ function initAudio() {
         audioCtx.resume();
     }
 }
+// Path from admin/dashboard.php to your root assets folder
+const ALERT_SOUND_URL = '../assets/sounds/alert.mp3'; 
+const alertAudio = new Audio(ALERT_SOUND_URL);
 
 function playSynthesizedSound(severity) {
     if (!soundEnabled) return;
-    initAudio(); 
-    
-    const osc = audioCtx.createOscillator();
-    const gainNode = audioCtx.createGain();
-    
-    osc.connect(gainNode);
-    gainNode.connect(audioCtx.destination);
-    
-    if (severity === 'critical') {
-        osc.type = 'square';
-        osc.frequency.setValueAtTime(600, audioCtx.currentTime);
-        osc.frequency.linearRampToValueAtTime(1000, audioCtx.currentTime + 0.3);
-        osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 0.6);
-        osc.frequency.linearRampToValueAtTime(1000, audioCtx.currentTime + 0.9);
-        osc.frequency.linearRampToValueAtTime(600, audioCtx.currentTime + 1.2);
-        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        osc.start(audioCtx.currentTime);
-        osc.stop(audioCtx.currentTime + 1.5);
-    } else if (severity === 'major') {
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(800, audioCtx.currentTime);
-        gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.05);
-        gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.15);
-        gainNode.gain.linearRampToValueAtTime(0.5, audioCtx.currentTime + 0.25);
-        gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.35);
-        osc.start(audioCtx.currentTime);
-        osc.stop(audioCtx.currentTime + 0.4);
+
+    // Adjust volume/playback rate based on severity
+    const level = (severity || 'minor').toLowerCase();
+    if (level === 'critical') {
+        alertAudio.volume = 1.0;
+        alertAudio.playbackRate = 1.15; // Slightly faster/urgent
+    } else if (level === 'major') {
+        alertAudio.volume = 0.7;
+        alertAudio.playbackRate = 1.0;
     } else {
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-        gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.5);
-        osc.start(audioCtx.currentTime);
-        osc.stop(audioCtx.currentTime + 0.5);
+        alertAudio.volume = 0.4;
+        alertAudio.playbackRate = 0.9;
     }
+
+    alertAudio.currentTime = 0;
+    alertAudio.play().catch(err => {
+        console.error(`[Audio Error] Could not play ${ALERT_SOUND_URL}:`, err.message);
+    });
 }
 
 function toggleSound() {
