@@ -11,11 +11,43 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/config.php';
 
-// Target month to predict (defaults to current month)
+// ---------------------------------------------------------
+// 1. RESOLVE GEMINI_API_KEY FIRST
+// ---------------------------------------------------------
+$geminiApiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
+
+if (empty($geminiApiKey)) {
+    $envPath = __DIR__ . '/.env';
+    if (file_exists($envPath)) {
+        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || str_starts_with($line, '#')) continue;
+            if (str_contains($line, '=')) {
+                [$k, $v] = explode('=', $line, 2);
+                if (trim($k) === 'GEMINI_API_KEY') {
+                    $geminiApiKey = trim($v, " \t\n\r\0\x0B\"'");
+                    break;
+                }
+            }
+        }
+    }
+}
+
+if (empty($geminiApiKey)) {
+    echo json_encode([
+        'success' => false,
+        'message' => 'GEMINI_API_KEY is not defined in server environment or .env'
+    ]);
+    exit();
+}
+
+// ---------------------------------------------------------
+// 2. FETCH AGGREGATED INCIDENT DATA FROM MYSQL
+// ---------------------------------------------------------
 $target_month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
 $target_brgy  = isset($_GET['barangay']) ? trim($_GET['barangay']) : '';
 
-// 1. Fetch aggregated incident clusters
 $whereClauses = [
     "barangay IS NOT NULL",
     "barangay != ''",
@@ -78,25 +110,42 @@ $stmt->close();
 if (empty($dataset)) {
     echo json_encode([
         'success' => false,
-        'message' => 'No historical records found for the selected month.'
+        'message' => 'No historical records found for this month in the database.'
     ]);
     exit();
 }
 
-// 2. Resolve GEMINI_API_KEY from Environment or .env fallback
-$geminiApiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
+// ---------------------------------------------------------
+// 3. AUTO-DETECT ACTIVE GEMINI MODEL FOR YOUR API KEY
+// ---------------------------------------------------------
+$targetModel = getenv('GEMINI_MODEL') ?: ($_ENV['GEMINI_MODEL'] ?? '');
 
-if (empty($geminiApiKey)) {
-    $envPath = __DIR__ . '/.env';
-    if (file_exists($envPath)) {
-        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-        foreach ($lines as $line) {
-            $line = trim($line);
-            if (empty($line) || str_starts_with($line, '#')) continue;
-            if (str_contains($line, '=')) {
-                [$k, $v] = explode('=', $line, 2);
-                if (trim($k) === 'GEMINI_API_KEY') {
-                    $geminiApiKey = trim($v, " \t\n\r\0\x0B\"'");
+if (empty($targetModel)) {
+    $modelsListUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=" . urlencode($geminiApiKey);
+    $chModels = curl_init($modelsListUrl);
+    curl_setopt($chModels, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($chModels, CURLOPT_SSL_VERIFYPEER, false);
+    $modelsRes = curl_exec($chModels);
+    curl_close($chModels);
+
+    $modelsData = json_decode($modelsRes, true);
+    if (!empty($modelsData['models'])) {
+        // Find first Flash or available model supporting generateContent
+        foreach ($modelsData['models'] as $m) {
+            $name = str_replace('models/', '', $m['name']);
+            $methods = $m['supportedGenerationMethods'] ?? [];
+            if (in_array('generateContent', $methods, true) && stripos($name, 'flash') !== false) {
+                $targetModel = $name;
+                break;
+            }
+        }
+        // Fallback to any model that supports generateContent
+        if (empty($targetModel)) {
+            foreach ($modelsData['models'] as $m) {
+                $name = str_replace('models/', '', $m['name']);
+                $methods = $m['supportedGenerationMethods'] ?? [];
+                if (in_array('generateContent', $methods, true)) {
+                    $targetModel = $name;
                     break;
                 }
             }
@@ -104,14 +153,13 @@ if (empty($geminiApiKey)) {
     }
 }
 
-if (empty($geminiApiKey)) {
-    echo json_encode([
-        'success' => false,
-        'message' => 'GEMINI_API_KEY is not configured in server environment or .env'
-    ]);
-    exit();
+if (empty($targetModel)) {
+    $targetModel = 'gemini-2.0-flash';
 }
 
+// ---------------------------------------------------------
+// 4. BUILD PROMPT AND INVOKE API
+// ---------------------------------------------------------
 $monthNames = [
     1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
     5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
@@ -140,55 +188,55 @@ $systemInstruction = "You are DasmaAlert's Senior Disaster Risk Reduction & Pred
     . '  ]' . "\n"
     . "}";
 
+$fullPrompt = $systemInstruction . "\n\nTarget Prediction Month: {$monthLabel} (Month {$target_month})\n\nHistorical Incident Clusters:\n" . json_encode($dataset);
+
 $promptPayload = [
-    "systemInstruction" => [
-        "parts" => [["text" => $systemInstruction]]
-    ],
     "contents" => [
         [
             "parts" => [
-                [
-                    "text" => "Target Prediction Month: {$monthLabel} (Month {$target_month})\n\nHistorical Incident Clusters:\n" . json_encode($dataset)
-                ]
+                ["text" => $fullPrompt]
             ]
         ]
     ],
     "generationConfig" => [
-        "response_mime_type" => "application/json",
-        "temperature"        => 0.2
+        "temperature" => 0.2
     ]
 ];
 
-// Official Gemini API endpoint
-$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . urlencode($geminiApiKey);
+$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/" . urlencode($targetModel) . ":generateContent?key=" . urlencode($geminiApiKey);
 
 $ch = curl_init($apiUrl);
 curl_setopt($ch, CURLOPT_POST, true);
 curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json; charset=UTF-8']);
 curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($promptPayload));
 curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
 
 $apiResponse = curl_exec($ch);
 $httpStatus  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+$curlErr     = curl_error($ch);
 curl_close($ch);
 
-if ($httpStatus !== 200) {
+if ($httpStatus !== 200 || !empty($curlErr)) {
     echo json_encode([
-        'success'   => false,
-        'http_code' => $httpStatus,
-        'error'     => 'Gemini API call failed',
-        'details'   => json_decode($apiResponse, true) ?: $apiResponse
+        'success'    => false,
+        'http_code'  => $httpStatus,
+        'model_used' => $targetModel,
+        'error'      => 'Gemini API call failed',
+        'curl_err'   => $curlErr,
+        'details'    => json_decode($apiResponse, true) ?: $apiResponse
     ]);
     exit();
 }
 
 $decodedResult = json_decode($apiResponse, true);
-$rawTextJson = $decodedResult['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
-$parsedPrediction = json_decode($rawTextJson, true);
+$rawText = $decodedResult['candidates'][0]['content']['parts'][0]['text'] ?? '{}';
+$cleanJson = preg_replace('/^```(?:json)?\s*|\s*```$/i', '', trim($rawText));
+$parsedPrediction = json_decode($cleanJson, true);
 
 echo json_encode([
     'success'    => true,
+    'model_used' => $targetModel,
     'month'      => $monthLabel,
     'prediction' => $parsedPrediction
 ]);
