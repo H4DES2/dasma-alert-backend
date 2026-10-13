@@ -348,7 +348,7 @@ foreach ($archived_incidents as $inc) {
             </div>
         </header>
 
-        <!-- 1. AI PREDICTIVE RISK & EARLY WARNING (TOP EXECUTIVE COMMAND DECK) -->
+        <!-- 1. AI PREDICTIVE RISK & EARLY WARNING -->
         <section class="command-panel ai-predictive-deck">
             <div class="panel-header">
                 <div class="panel-title-group">
@@ -401,7 +401,7 @@ foreach ($archived_incidents as $inc) {
                     <tbody id="aiForecastTableBody">
                         <tr>
                             <td colspan="5" class="table-empty-row">
-                                <i class='bx bx-radar bx-tada'></i>
+                                <i class='bx bx-brain'></i>
                                 <span>Select a target month and click <strong>"Generate Forecast"</strong> to run predictive cluster modeling.</span>
                             </td>
                         </tr>
@@ -462,7 +462,21 @@ foreach ($archived_incidents as $inc) {
                                         $created = strtotime($inc['created_at']);
                                         $arrived = $inc['arrived_at'] ? strtotime($inc['arrived_at']) : null;
                                         $resolved = $inc['resolved_at'] ? strtotime($inc['resolved_at']) : null;
-                                        $duration_str = ($resolved && $created && $resolved >= $created) ? floor(($resolved - $created) / 60) . "m" : "N/A";
+
+                                        // Convert minutes to hours and minutes if total >= 60 mins
+                                        if ($resolved && $created && $resolved >= $created) {
+                                            $total_mins = (int)floor(($resolved - $created) / 60);
+                                            if ($total_mins >= 60) {
+                                                $hrs = (int)floor($total_mins / 60);
+                                                $mins_rem = $total_mins % 60;
+                                                $duration_str = $mins_rem > 0 ? "{$hrs}h {$mins_rem}m" : "{$hrs}h";
+                                            } else {
+                                                $duration_str = "{$total_mins}m";
+                                            }
+                                        } else {
+                                            $duration_str = "N/A";
+                                        }
+
                                         $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
                                     ?>
                                     <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
@@ -658,7 +672,7 @@ foreach ($archived_incidents as $inc) {
                     <div id="heatmap"></div>
                 </div>
 
-                <!-- INCIDENT BREAKDOWN (FIXED HORIZONTAL DISTRIBUTION) -->
+                <!-- INCIDENT BREAKDOWN -->
                 <div class="command-panel">
                     <div class="panel-header">
                         <div class="panel-title-group">
@@ -761,25 +775,29 @@ foreach ($archived_incidents as $inc) {
             </div>
         </div>
 
-        <!-- CUSTOM REPORT BUILDER MODAL -->
+        <!-- RESTORED: CUSTOM REPORT BUILDER MODAL -->
         <div id="customReportModal" class="modal" style="z-index: 10007;">
             <div class="modal-content modal-report-generator">
-                <div class="close-modal" onclick="closeModal('customReportModal')"><i class='bx bx-x'></i></div>
-                <div class="modal-header">
-                    <h3 class="modal-title-header"><i class='bx bxs-report'></i> Custom Report Generator</h3>
-                    <p class="modal-subtitle-header">Configure reporting timeframe, jurisdiction, and export format.</p>
+                <div class="modal-header-top">
+                    <div>
+                        <h3 class="modal-title-header"><i class='bx bxs-report'></i> Custom Report Generator</h3>
+                        <p class="modal-subtitle-header">Configure reporting timeframe, jurisdiction, and export format.</p>
+                    </div>
+                    <button type="button" class="modal-close-btn" onclick="closeModal('customReportModal')" aria-label="Close modal">
+                        <i class='bx bx-x'></i>
+                    </button>
                 </div>
 
                 <div class="modal-body">
                     <label class="form-section-label">Export Format</label>
-                    <div class="format-toggle-group">
+                    <div class="format-choice-grid">
                         <label class="format-choice-card">
                             <input type="radio" name="rep_format" value="pdf" checked>
-                            <span><i class='bx bxs-file-pdf text-red'></i> PDF Document</span>
+                            <span class="format-card-title"><i class='bx bxs-file-pdf text-red'></i> PDF Document</span>
                         </label>
                         <label class="format-choice-card">
                             <input type="radio" name="rep_format" value="csv">
-                            <span><i class='bx bx-spreadsheet text-green'></i> CSV Spreadsheet</span>
+                            <span class="format-card-title"><i class='bx bx-spreadsheet text-green'></i> CSV Spreadsheet</span>
                         </label>
                     </div>
 
@@ -865,21 +883,25 @@ foreach ($archived_incidents as $inc) {
         </div>
     </main>
 
-    <!-- TIMELINE LOG MODAL -->
+    <!-- FIXED: TIMELINE LOG MODAL -->
     <div id="viewLogsModal" class="modal" style="z-index: 10006;">
-        <div class="modal-content">
+        <div class="modal-content modal-timeline-modal">
             <div class="modal-inline-header">
                 <h3 id="logIncidentTitle">Timeline</h3>
-                <span class="modal-close-cross" onclick="closeModal('viewLogsModal')">&times;</span>
+                <button type="button" class="modal-close-btn" onclick="closeModal('viewLogsModal')" aria-label="Close timeline">
+                    <i class='bx bx-x'></i>
+                </button>
             </div>
             <div id="logContainer" class="log-scroll-pane"></div>
         </div>
     </div>
 
-    <!-- EVIDENCE PHOTO MODAL -->
+    <!-- FIXED: EVIDENCE PHOTO MODAL -->
     <div id="viewPhotoModal" class="modal modal-photo-viewer" style="z-index: 10006;">
+        <button type="button" class="photo-close-btn" onclick="closeModal('viewPhotoModal')" aria-label="Close evidence photo">
+            <i class='bx bx-x'></i>
+        </button>
         <div class="modal-content modal-photo-content">
-            <span onclick="closeModal('viewPhotoModal')" class="photo-close-btn">&times;</span>
             <img id="evidencePhotoViewer" src="" alt="Evidence photo viewer">
         </div>
     </div>
