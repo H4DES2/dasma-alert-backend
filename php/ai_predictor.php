@@ -11,11 +11,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 require_once __DIR__ . '/config.php';
 
-// Target month to predict (defaults to current month if not specified)
+// Target month to predict (defaults to current month)
 $target_month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
 $target_brgy  = isset($_GET['barangay']) ? trim($_GET['barangay']) : '';
 
-// 1. Fetch top aggregated incident trends from the database
+// 1. Fetch aggregated incident clusters
 $whereClauses = [
     "barangay IS NOT NULL",
     "barangay != ''",
@@ -78,23 +78,45 @@ $stmt->close();
 if (empty($dataset)) {
     echo json_encode([
         'success' => false,
-        'message' => 'No historical records found for the selected month/filter.'
+        'message' => 'No historical records found for the selected month.'
     ]);
     exit();
 }
 
-// 2. Prepare Gemini Prompt
+// 2. Resolve GEMINI_API_KEY from Environment or .env fallback
 $geminiApiKey = getenv('GEMINI_API_KEY') ?: ($_ENV['GEMINI_API_KEY'] ?? '');
+
+if (empty($geminiApiKey)) {
+    $envPath = __DIR__ . '/.env';
+    if (file_exists($envPath)) {
+        $lines = file($envPath, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+        foreach ($lines as $line) {
+            $line = trim($line);
+            if (empty($line) || str_starts_with($line, '#')) continue;
+            if (str_contains($line, '=')) {
+                [$k, $v] = explode('=', $line, 2);
+                if (trim($k) === 'GEMINI_API_KEY') {
+                    $geminiApiKey = trim($v, " \t\n\r\0\x0B\"'");
+                    break;
+                }
+            }
+        }
+    }
+}
 
 if (empty($geminiApiKey)) {
     echo json_encode([
         'success' => false,
-        'message' => 'GEMINI_API_KEY environment variable is not configured on the server.'
+        'message' => 'GEMINI_API_KEY is not configured in server environment or .env'
     ]);
     exit();
 }
 
-$monthNames = [1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April', 5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August', 9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'];
+$monthNames = [
+    1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+    5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+    9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+];
 $monthLabel = $monthNames[$target_month] ?? "Month {$target_month}";
 
 $systemInstruction = "You are DasmaAlert's Senior Disaster Risk Reduction & Predictive AI for Dasmariñas City, Cavite. "
@@ -137,8 +159,8 @@ $promptPayload = [
     ]
 ];
 
-// Call Google Gemini API
-$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=" . $geminiApiKey;
+// Official Gemini API endpoint
+$apiUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . urlencode($geminiApiKey);
 
 $ch = curl_init($apiUrl);
 curl_setopt($ch, CURLOPT_POST, true);
@@ -156,7 +178,7 @@ if ($httpStatus !== 200) {
         'success'   => false,
         'http_code' => $httpStatus,
         'error'     => 'Gemini API call failed',
-        'raw'       => $apiResponse
+        'details'   => json_decode($apiResponse, true) ?: $apiResponse
     ]);
     exit();
 }
@@ -169,4 +191,4 @@ echo json_encode([
     'success'    => true,
     'month'      => $monthLabel,
     'prediction' => $parsedPrediction
-], JSON_PRETTY_PRINT);
+]);

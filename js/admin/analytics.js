@@ -142,14 +142,22 @@ async function loadAiForecast() {
     `;
 
     try {
-        const response = await fetch(`../dasma_api/ai_predictor.php?month=${encodeURIComponent(monthVal)}`);
+        // Point directly to alert/php/ai_predictor.php
+        const response = await fetch(`../php/ai_predictor.php?month=${encodeURIComponent(monthVal)}`);
+        
+        if (!response.ok) {
+            const errText = await response.text();
+            console.error('AI Predictor Server Error:', response.status, errText);
+            throw new Error(`Server returned HTTP ${response.status}`);
+        }
+
         const result = await response.json();
 
         if (!result.success || !result.prediction || !result.prediction.forecasts) {
             tableBody.innerHTML = `
                 <tr>
                     <td colspan="5" style="text-align: center; color: #d32f2f; padding: 25px; font-weight: 700;">
-                        ${result.message || 'Unable to generate forecast for the chosen timeframe.'}
+                        ${result.message || result.error || 'Unable to generate forecast for the chosen timeframe.'}
                     </td>
                 </tr>
             `;
@@ -159,13 +167,11 @@ async function loadAiForecast() {
 
         const data = result.prediction;
 
-        // Populate summary
         if (summaryBanner && data.summary) {
             summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Month Overview:</strong> ${data.summary}`;
             summaryBanner.style.display = 'block';
         }
 
-        // Populate prediction rows
         if (data.forecasts.length === 0) {
             tableBody.innerHTML = `
                 <tr>
@@ -206,10 +212,11 @@ async function loadAiForecast() {
         }).join('');
 
     } catch (err) {
+        console.error('Forecast error:', err);
         tableBody.innerHTML = `
             <tr>
                 <td colspan="5" style="text-align: center; color: #d32f2f; padding: 25px; font-weight: 700;">
-                    Connection to AI Predictor failed. Verify server environment and API keys.
+                    Connection to AI Predictor failed: ${err.message}. Open Browser DevTools (F12 > Console) for details.
                 </td>
             </tr>
         `;
