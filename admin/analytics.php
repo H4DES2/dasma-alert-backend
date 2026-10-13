@@ -601,7 +601,61 @@ unset($inc_item);
                     </div>
                 </div>
             </div>
+            <!-- AI PREDICTIVE EARLY WARNING & HAZARD FORECAST -->
+                <div class="sitting-panel" style="flex: none;">
+                    <div class="panel-header" style="flex-wrap: wrap; gap: 10px;">
+                        <div>
+                            <h2><i class='bx bx-brain' style="color:#d32f2f;"></i> AI Predictive Risk & Early Warning</h2>
+                            <p style="font-size: 0.82rem; color: #777; margin: 4px 0 0; font-weight: 600;">
+                                Proactive hazard forecasting powered by Gemini analyzing historical vault & hotspot recurrences
+                            </p>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <select id="aiForecastMonth" class="filter-select">
+                                <option value="1">January</option>
+                                <option value="2">February</option>
+                                <option value="3">March</option>
+                                <option value="4">April</option>
+                                <option value="5">May</option>
+                                <option value="6">June</option>
+                                <option value="7">July</option>
+                                <option value="8">August</option>
+                                <option value="9">September</option>
+                                <option value="10" selected>October</option>
+                                <option value="11">November</option>
+                                <option value="12">December</option>
+                            </select>
+                            <button type="button" id="btnRunAiForecast" class="btn-action" style="background: #1976d2; padding: 7px 14px; font-size: 0.85rem;" onclick="loadAiForecast()">
+                                <i class='bx bx-refresh'></i> Generate Forecast
+                            </button>
+                        </div>
+                    </div>
 
+                    <!-- Executive Summary Banner -->
+                    <div id="aiSummaryBanner" style="display: none; background: #f0f7ff; border-left: 4px solid #1976d2; padding: 12px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.88rem; color: #0d47a1; font-weight: 600;">
+                    </div>
+
+                    <div class="table-scroll-wrapper">
+                        <table class="data-table" id="aiForecastTable">
+                            <thead>
+                                <tr>
+                                    <th style="width: 20%;">Barangay</th>
+                                    <th style="width: 25%;">Anticipated Hazard</th>
+                                    <th style="width: 12%;">Risk Level</th>
+                                    <th style="width: 18%;">Confidence / Pattern</th>
+                                    <th style="width: 25%;">DRRM Recommended Protocol</th>
+                                </tr>
+                            </thead>
+                            <tbody id="aiForecastTableBody">
+                                <tr>
+                                    <td colspan="5" style="text-align: center; color: #888; padding: 30px; font-weight: 600;">
+                                        Select a month and click "Generate Forecast" to analyze incident trends.
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             <div class="side-col">
                 <div class="sitting-panel" style="padding: 20px;">
                     <div class="panel-header" style="margin-bottom: 15px;">

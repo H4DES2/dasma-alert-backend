@@ -117,6 +117,110 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     }
+    // -----------------------------------------------------
+// 5. AI PREDICTIVE RISK ADVISORY
+// -----------------------------------------------------
+async function loadAiForecast() {
+    const monthSelect = document.getElementById('aiForecastMonth');
+    const tableBody = document.getElementById('aiForecastTableBody');
+    const summaryBanner = document.getElementById('aiSummaryBanner');
+    const btn = document.getElementById('btnRunAiForecast');
+
+    if (!monthSelect || !tableBody) return;
+
+    const monthVal = monthSelect.value;
+    btn.disabled = true;
+    btn.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Analyzing...`;
+
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="5" style="text-align: center; color: #1976d2; padding: 35px; font-weight: 700;">
+                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.5rem; display: block; margin-bottom: 8px;"></i>
+                Synthesizing historical patterns & spatial clusters with Gemini AI...
+            </td>
+        </tr>
+    `;
+
+    try {
+        const response = await fetch(`../dasma_api/ai_predictor.php?month=${encodeURIComponent(monthVal)}`);
+        const result = await response.json();
+
+        if (!result.success || !result.prediction || !result.prediction.forecasts) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; color: #d32f2f; padding: 25px; font-weight: 700;">
+                        ${result.message || 'Unable to generate forecast for the chosen timeframe.'}
+                    </td>
+                </tr>
+            `;
+            if (summaryBanner) summaryBanner.style.display = 'none';
+            return;
+        }
+
+        const data = result.prediction;
+
+        // Populate summary
+        if (summaryBanner && data.summary) {
+            summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Month Overview:</strong> ${data.summary}`;
+            summaryBanner.style.display = 'block';
+        }
+
+        // Populate prediction rows
+        if (data.forecasts.length === 0) {
+            tableBody.innerHTML = `
+                <tr>
+                    <td colspan="5" style="text-align: center; color: #777; padding: 25px;">
+                        No elevated risk patterns detected for this month.
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+
+        tableBody.innerHTML = data.forecasts.map(item => {
+            const risk = (item.risk_level || 'MODERATE').toUpperCase();
+            const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
+
+            return `
+                <tr>
+                    <td>
+                        <strong style="color: #222; font-size: 0.95rem;">${item.barangay}</strong>
+                    </td>
+                    <td>
+                        <div style="font-weight: 800; color: #1976d2; font-size: 0.95rem;">${item.hazard_type}</div>
+                        <small style="color: #666; display: block; margin-top: 3px;">${item.historical_basis || ''}</small>
+                    </td>
+                    <td>
+                        <span class="badge ${badgeClass}">${risk}</span>
+                    </td>
+                    <td>
+                        <span style="font-size: 0.85rem; font-weight: 700; color: #444;">${item.pattern_confidence}</span>
+                    </td>
+                    <td>
+                        <div style="font-size: 0.85rem; color: #2e7d32; font-weight: 700; line-height: 1.4;">
+                            <i class='bx bx-shield-quarter mr-1'></i> ${item.recommended_action}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+
+    } catch (err) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" style="text-align: center; color: #d32f2f; padding: 25px; font-weight: 700;">
+                    Connection to AI Predictor failed. Verify server environment and API keys.
+                </td>
+            </tr>
+        `;
+        if (summaryBanner) summaryBanner.style.display = 'none';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = `<i class='bx bx-refresh'></i> Generate Forecast`;
+    }
+}
+
+window.loadAiForecast = loadAiForecast;
 
     // 5. Leaflet Spatial Hotspots Heatmap
     const heatmapEl = document.getElementById('heatmap');
