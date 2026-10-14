@@ -145,6 +145,12 @@ if ($check_col && $check_col->num_rows === 0) {
     $conn->query("ALTER TABLE incidents ADD COLUMN severity VARCHAR(50) DEFAULT 'Pending'");
     $conn->query("ALTER TABLE incidents ADD COLUMN admin_remarks TEXT DEFAULT NULL");
 }
+$check_backup_cols = $conn->query("SHOW COLUMNS FROM incidents LIKE 'backup_target'");
+if ($check_backup_cols && $check_backup_cols->num_rows === 0) {
+    $conn->query("ALTER TABLE incidents ADD COLUMN backup_target VARCHAR(50) DEFAULT 'none'");
+    $conn->query("ALTER TABLE incidents ADD COLUMN backup_status VARCHAR(50) DEFAULT 'none'");
+}
+
 $check_boundary = $conn->query("SHOW COLUMNS FROM barangays LIKE 'boundary'");
 if ($check_boundary && $check_boundary->num_rows === 0) {
     $conn->query("ALTER TABLE barangays ADD COLUMN boundary MULTIPOLYGON NULL SRID 4326");
@@ -727,7 +733,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     // =========================================================================================
     // MASTER SYNC COMPILER & SSE STREAM
     // =========================================================================================
-    function compileMasterSync(mysqli $conn, string $role, string $admin_brgy, string $target_brgy, string $type): array {
+    function compileMasterSync(mysqli $conn, string $role, string $admin_brgy, string $target_brgy, string $type, string $escalation = 'escalated'): array {
         if (!function_exists('getStrictBarangay')) {
             function getStrictBarangay($lat, $lng, $fallbackText = '') {
                 global $conn;
@@ -751,6 +757,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $brgy_filter = "";
         $evac_brgy_filter = ""; 
         $type_clause = "";
+        // Filter out barangay-handled incidents for superadmin by default
+        $escalation_clause = "";
+        if ($role === 'superadmin' && $escalation === 'escalated') {
+            $escalation_clause = " AND (
+                (i.backup_requested = 1 AND (i.backup_target = 'superadmin' OR i.backup_target IS NULL OR i.backup_target = ''))
+                OR i.backup_status = 'escalated_superadmin'
+                OR (i.assigned_to LIKE '%[City Backup:%')
+            ) ";
+        }
 
         if ($type !== 'all' && !empty($type)) {
             $type_clause = " AND i.incident_type LIKE ? ";
@@ -779,7 +794,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $types .= "ss"; $params[] = $target; $params[] = $target;
             $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = $target;
         }
-        
+
         if (!function_exists('executeSyncQuery')) {
             function executeSyncQuery($conn, $sql, $types, $params) {
                 $stmt = $conn->prepare($sql);
@@ -792,21 +807,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         }
 
         // KPIs
-        $res1 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
+        $res1 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause $escalation_clause", $types, $params);
         $response['kpi']['active'] = $res1 ? (int)$res1->fetch_assoc()['c'] : 0;
 
-        $res2 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
+        $res2 = executeSyncQuery($conn, "SELECT COUNT(*) as c FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause $escalation_clause", $types, $params);
         $response['kpi']['deployed'] = $res2 ? (int)$res2->fetch_assoc()['c'] : 0;
 
         $res3 = executeSyncQuery($conn, "SELECT SUM(current_occupants) as total FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
         $response['kpi']['evacuees'] = $res3 ? (int)($res3->fetch_assoc()['total'] ?? 0) : 0;
 
         $act_details = [];
-        $r1 = executeSyncQuery($conn, "SELECT incident_type, barangay FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 10", $types, $params);
+        $r1 = executeSyncQuery($conn, "SELECT incident_type, barangay FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause $escalation_clause ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 10", $types, $params);
         if ($r1) { while($row = $r1->fetch_assoc()) { $act_details[] = "<b>{$row['incident_type']}</b> • {$row['barangay']}"; } }
 
         $dep_details = [];
-        $r2 = executeSyncQuery($conn, "SELECT rt.team_name, i.barangay FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause", $types, $params);
+        $r2 = executeSyncQuery($conn, "SELECT rt.team_name, i.barangay FROM response_teams rt JOIN incidents i ON rt.current_incident_id = i.id WHERE rt.current_incident_id IS NOT NULL AND rt.current_incident_id > 0 $brgy_filter $type_clause $escalation_clause", $types, $params);
         if ($r2) { while($row = $r2->fetch_assoc()) { $dep_details[] = "<b>{$row['team_name']}</b> • {$row['barangay']}"; } }
 
         $evac_details = [];
@@ -815,21 +830,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $response['kpi_details'] = ['active' => $act_details, 'deployed' => $dep_details, 'evacuees' => $evac_details];
 
-        $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, accuracy_meters, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause", $types, $params);
+        $resMap = executeSyncQuery($conn, "SELECT id, incident_type, barangay, latitude, longitude, accuracy_meters, status, severity, backup_requested FROM incidents i WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause $escalation_clause", $types, $params);
         if ($resMap) { while ($row = $resMap->fetch_assoc()) { $response['map'][] = $row; } }
 
         $resEvac = executeSyncQuery($conn, "SELECT id, name, barangay, latitude, longitude, capacity, current_occupants, status FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
         if ($resEvac) { while ($row = $resEvac->fetch_assoc()) { $response['evac_centers'][] = $row; } }
 
-        // Triage Table Data
+
         $query = "SELECT i.*, i.backup_requested, i.is_verified, i.verified_by, u.username, u.first_name, u.last_name, u.barangay as reporter_home,
                          (SELECT position FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_pos, 
                          (SELECT phone_number FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_phone,
                          (SELECT log_message FROM incident_logs WHERE incident_id = i.id ORDER BY created_at ASC LIMIT 1) as user_logs
                   FROM incidents i 
                   LEFT JOIN users u ON i.reported_by = u.id 
-                  WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause
-                  ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 50"; 
+                  WHERE i.status NOT IN ('archived', 'rejected') $brgy_filter $type_clause $escalation_clause
+                  ORDER BY CASE i.severity WHEN 'Critical' THEN 1 WHEN 'Major' THEN 2 WHEN 'Minor' THEN 3 WHEN 'Info' THEN 4 ELSE 5 END ASC, i.created_at DESC LIMIT 50";
 
         $resTab = executeSyncQuery($conn, $query, $types, $params);
         $html = "";
@@ -1096,7 +1111,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $target_brgy = $_GET['brgy'] ?? '';
         $type        = $_GET['type'] ?? 'all';
-        echo json_encode(compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type));
+        $escalation  = $_GET['escalation'] ?? 'escalated';
+        echo json_encode(compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type, $escalation));
         exit();
     }
 
@@ -1115,9 +1131,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $target_brgy = $_GET['brgy'] ?? '';
         $type        = $_GET['type'] ?? 'all';
+        $escalation  = $_GET['escalation'] ?? 'escalated';
 
         while (!connection_aborted()) {
-            $payload = compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type);
+            $payload = compileMasterSync($conn, $role, $admin_brgy, $target_brgy, $type, $escalation);
             echo "data: " . json_encode($payload) . "\n\n";
 
             while (ob_get_level() > 0) {
