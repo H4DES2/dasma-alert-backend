@@ -759,17 +759,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
         $type_clause .= " AND (i.latitude BETWEEN 12.0000 AND 21.2000 AND i.longitude BETWEEN 119.5000 AND 124.5000) ";
 
-        $target = !empty($target_brgy) ? trim($target_brgy) : trim($admin_brgy);
+        $target = '';
+        if ($role === 'superadmin') {
+            // Superadmin views city-wide unless a specific barangay is selected
+            if (!empty($target_brgy) && strtolower(trim($target_brgy)) !== 'all' && strtolower(trim($target_brgy)) !== 'all barangays') {
+                $target = trim($target_brgy);
+            }
+        } else {
+            // Barangay admin is strictly locked to their local jurisdiction
+            $target = !empty($admin_brgy) ? trim($admin_brgy) : trim($target_brgy);
+        }
+
         if (strcasecmp($target, 'Burol Main') === 0) {
             $target = 'Burol';
         }
-        if (!empty($target) && strtolower($target) !== 'all barangays' && strtolower($target) !== 'all') {
+        if (!empty($target)) {
             $brgy_filter = " AND (i.barangay = ? OR LOWER(TRIM(i.barangay)) = LOWER(?)) ";
             $evac_brgy_filter = " AND (barangay = ? OR LOWER(TRIM(barangay)) = LOWER(?)) ";
             $types .= "ss"; $params[] = $target; $params[] = $target;
             $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = $target;
         }
-
+        
         if (!function_exists('executeSyncQuery')) {
             function executeSyncQuery($conn, $sql, $types, $params) {
                 $stmt = $conn->prepare($sql);
