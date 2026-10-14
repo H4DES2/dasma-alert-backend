@@ -343,10 +343,19 @@ $show_banner = ($active_broadcast && (int)$active_broadcast['id'] !== $dismissed
         </div>
 
         <div id="mobileIncidentModal" class="modal">
-            <div class="modal-content" style="max-width: 90%; padding: 40px 24px 24px;">
-                <div class="close-modal" onclick="closeModal('mobileIncidentModal')"><i class='bx bx-x'></i></div>
-                <h3 id="m-incident-title" style="margin-bottom: 16px; font-weight: 900; font-size: 1.3rem; padding-right: 30px; color: var(--text-primary);">Incident Details</h3>
-                <div id="m-incident-body" style="display: flex; flex-direction: column;"></div>
+            <div class="modal-content modal-mobile-incident-card">
+                <div class="modal-mobile-header">
+                    <h3 id="m-incident-title"><i class='bx bx-detail' style="color:#d32f2f;"></i> Incident Details</h3>
+                    <button type="button" class="close-modal-inline" onclick="closeModal('mobileIncidentModal')" aria-label="Close modal">
+                        <i class='bx bx-x'></i>
+                    </button>
+                </div>
+                <div id="m-incident-body" class="modal-mobile-scroll"></div>
+                <div class="modal-mobile-footer">
+                    <button type="button" class="btn-close-modal" onclick="closeModal('mobileIncidentModal')">
+                        <i class='bx bx-x'></i> Close
+                    </button>
+                </div>
             </div>
         </div>
         <!-- ESCALATE TO CDRRMO MODAL -->
