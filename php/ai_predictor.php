@@ -43,24 +43,52 @@ if (empty($geminiApiKey)) {
 }
 
 // ---------------------------------------------------------
-// 2. FETCH AGGREGATED INCIDENT DATA FROM MYSQL
+// 2. AUTHORITATIVE MONTH RESOLUTION (IMMUNE TO OS CLOCK TAMPERING)
 // ---------------------------------------------------------
-$target_month = isset($_GET['month']) ? (int)$_GET['month'] : (int)date('n');
+function getAuthoritativeMonth(mysqli $conn): int {
+    // 1. Check trusted public network date (immune to local Windows clock changes)
+    $ch = curl_init('https://www.google.com');
+    curl_setopt_array($ch, [
+        CURLOPT_NOBODY         => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_TIMEOUT        => 2,
+        CURLOPT_SSL_VERIFYPEER => false
+    ]);
+    $header = curl_exec($ch);
+    curl_close($ch);
+
+    if ($header && preg_match('/^Date:\s*(.*)$/mi', $header, $matches)) {
+        $networkTime = strtotime(trim($matches[1]));
+        if ($networkTime) {
+            return (int)date('n', $networkTime);
+        }
+    }
+
+    // 2. Fallback: Anchor to the latest actual incident logged in the database
+    $dbMax = $conn->query("SELECT MONTH(MAX(created_at)) AS m FROM incidents");
+    if ($dbMax && $row = $dbMax->fetch_assoc()) {
+        if (!empty($row['m'])) {
+            return (int)$row['m'];
+        }
+    }
+
+    // 3. Server fallback
+    return (int)date('n');
+}
+
+// Strictly force the authoritative month — do not accept client $_GET['month']
+$target_month = getAuthoritativeMonth($conn);
 $target_brgy  = isset($_GET['barangay']) ? trim($_GET['barangay']) : '';
 
 $whereClauses = [
     "barangay IS NOT NULL",
     "barangay != ''",
-    "incident_type IS NOT NULL"
+    "incident_type IS NOT NULL",
+    "MONTH(created_at) = ?"
 ];
-$params = [];
-$types  = "";
-
-if ($target_month > 0 && $target_month <= 12) {
-    $whereClauses[] = "MONTH(created_at) = ?";
-    $params[] = $target_month;
-    $types   .= "i";
-}
+$params = [$target_month];
+$types  = "i";
 
 if (!empty($target_brgy)) {
     $whereClauses[] = "LOWER(TRIM(barangay)) = LOWER(?)";
@@ -69,7 +97,47 @@ if (!empty($target_brgy)) {
 }
 
 $whereSql = implode(" AND ", $whereClauses);
+// ---------------------------------------------------------
+// 3. AUTO-DETECT ACTIVE GEMINI MODEL FOR YOUR API KEY
+// ---------------------------------------------------------
+$targetModel = getenv('GEMINI_MODEL') ?: ($_ENV['GEMINI_MODEL'] ?? '');
 
+if (empty($targetModel)) {
+    $modelsListUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=" . urlencode($geminiApiKey);
+    $chModels = curl_init($modelsListUrl);
+    curl_setopt($chModels, CURLOPT_RETURNTRANSFER, true);
+    curl_setopt($chModels, CURLOPT_SSL_VERIFYPEER, false);
+    $modelsRes = curl_exec($chModels);
+    curl_close($chModels);
+
+    $modelsData = json_decode($modelsRes, true);
+    if (!empty($modelsData['models'])) {
+        // Find first Flash or available model supporting generateContent
+        foreach ($modelsData['models'] as $m) {
+            $name = str_replace('models/', '', $m['name']);
+            $methods = $m['supportedGenerationMethods'] ?? [];
+            if (in_array('generateContent', $methods, true) && stripos($name, 'flash') !== false) {
+                $targetModel = $name;
+                break;
+            }
+        }
+        // Fallback to any model that supports generateContent
+        if (empty($targetModel)) {
+            foreach ($modelsData['models'] as $m) {
+                $name = str_replace('models/', '', $m['name']);
+                $methods = $m['supportedGenerationMethods'] ?? [];
+                if (in_array('generateContent', $methods, true)) {
+                    $targetModel = $name;
+                    break;
+                }
+            }
+        }
+    }
+}
+
+if (empty($targetModel)) {
+    $targetModel = 'gemini-2.0-flash';
+}
 $query = "
     SELECT 
         TRIM(barangay) AS barangay,
@@ -114,49 +182,6 @@ if (empty($dataset)) {
     ]);
     exit();
 }
-
-// ---------------------------------------------------------
-// 3. AUTO-DETECT ACTIVE GEMINI MODEL FOR YOUR API KEY
-// ---------------------------------------------------------
-$targetModel = getenv('GEMINI_MODEL') ?: ($_ENV['GEMINI_MODEL'] ?? '');
-
-if (empty($targetModel)) {
-    $modelsListUrl = "https://generativelanguage.googleapis.com/v1beta/models?key=" . urlencode($geminiApiKey);
-    $chModels = curl_init($modelsListUrl);
-    curl_setopt($chModels, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($chModels, CURLOPT_SSL_VERIFYPEER, false);
-    $modelsRes = curl_exec($chModels);
-    curl_close($chModels);
-
-    $modelsData = json_decode($modelsRes, true);
-    if (!empty($modelsData['models'])) {
-        // Find first Flash or available model supporting generateContent
-        foreach ($modelsData['models'] as $m) {
-            $name = str_replace('models/', '', $m['name']);
-            $methods = $m['supportedGenerationMethods'] ?? [];
-            if (in_array('generateContent', $methods, true) && stripos($name, 'flash') !== false) {
-                $targetModel = $name;
-                break;
-            }
-        }
-        // Fallback to any model that supports generateContent
-        if (empty($targetModel)) {
-            foreach ($modelsData['models'] as $m) {
-                $name = str_replace('models/', '', $m['name']);
-                $methods = $m['supportedGenerationMethods'] ?? [];
-                if (in_array('generateContent', $methods, true)) {
-                    $targetModel = $name;
-                    break;
-                }
-            }
-        }
-    }
-}
-
-if (empty($targetModel)) {
-    $targetModel = 'gemini-2.0-flash';
-}
-
 // ---------------------------------------------------------
 // 4. BUILD PROMPT AND INVOKE API
 // ---------------------------------------------------------
@@ -199,7 +224,8 @@ $promptPayload = [
         ]
     ],
     "generationConfig" => [
-        "temperature" => 0.2
+        "temperature"      => 0.2,
+        "responseMimeType" => "application/json"
     ]
 ];
 

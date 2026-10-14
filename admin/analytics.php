@@ -37,7 +37,44 @@ class AnalyticsQueryBuilder {
         }
     }
 }
+function getAuthoritativeMonthName(mysqli $conn): string {
+    $monthNames = [
+        1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
+        5 => 'May', 6 => 'June', 7 => 'July', 8 => 'August',
+        9 => 'September', 10 => 'October', 11 => 'November', 12 => 'December'
+    ];
 
+    $ch = curl_init('https://www.google.com');
+    curl_setopt_array($ch, [
+        CURLOPT_NOBODY         => true,
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER         => true,
+        CURLOPT_TIMEOUT        => 2,
+        CURLOPT_SSL_VERIFYPEER => false
+    ]);
+    $header = curl_exec($ch);
+    curl_close($ch);
+
+    if ($header && preg_match('/^Date:\s*(.*)$/mi', $header, $matches)) {
+        $networkTime = strtotime(trim($matches[1]));
+        if ($networkTime) {
+            $m = (int)date('n', $networkTime);
+            return $monthNames[$m] ?? 'October';
+        }
+    }
+
+    $dbMax = $conn->query("SELECT MONTH(MAX(created_at)) AS m FROM incidents");
+    if ($dbMax && $row = $dbMax->fetch_assoc()) {
+        if (!empty($row['m'])) {
+            $m = (int)$row['m'];
+            return $monthNames[$m] ?? 'October';
+        }
+    }
+
+    return $monthNames[(int)date('n')] ?? 'October';
+}
+
+$current_active_month = getAuthoritativeMonthName($conn);
 function getCloudinaryUrl(?string $path): string {
     if (empty($path) || $path === 'NULL' || $path === 'null') return '';
     $clean = trim($path);
@@ -361,26 +398,13 @@ foreach ($archived_incidents as $inc) {
                     </div>
                 </div>
                 <div class="panel-controls">
-                    <div class="control-cluster">
-                        <label for="aiForecastMonth" class="control-label">Forecast Month</label>
-                        <select id="aiForecastMonth" class="filter-select select-month">
-                            <option value="1">January</option>
-                            <option value="2">February</option>
-                            <option value="3">March</option>
-                            <option value="4">April</option>
-                            <option value="5">May</option>
-                            <option value="6">June</option>
-                            <option value="7">July</option>
-                            <option value="8">August</option>
-                            <option value="9">September</option>
-                            <option value="10" selected>October</option>
-                            <option value="11">November</option>
-                            <option value="12">December</option>
-                        </select>
+                    <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); padding: 8px 16px; border-radius: 10px;">
+                        <i class='bx bxs-shield-check' style="color: #10b981; font-size: 1.2rem;"></i>
+                        <span style="font-size: 0.85rem; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.04em;">
+                            Active Cycle: <span style="color: var(--text-primary, #0f172a);"><?= htmlspecialchars($current_active_month) ?></span>
+                        </span>
+                        <span style="background: #10b981; color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 6px;">AUTO</span>
                     </div>
-                    <button type="button" id="btnRunAiForecast" class="btn-action btn-primary-action" onclick="loadAiForecast()">
-                        <i class='bx bx-refresh'></i> Generate Forecast
-                    </button>
                 </div>
             </div>
 
@@ -400,9 +424,9 @@ foreach ($archived_incidents as $inc) {
                     </thead>
                     <tbody id="aiForecastTableBody">
                         <tr>
-                            <td colspan="5" class="table-empty-row">
-                                <i class='bx bx-brain'></i>
-                                <span>Select a target month and click <strong>"Generate Forecast"</strong> to run predictive cluster modeling.</span>
+                            <td colspan="5" class="table-empty-row text-primary font-weight-bold">
+                                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
+                                Synthesizing historical patterns & spatial clusters with Gemini AI...
                             </td>
                         </tr>
                     </tbody>

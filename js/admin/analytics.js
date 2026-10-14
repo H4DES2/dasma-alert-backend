@@ -155,34 +155,21 @@ document.addEventListener("DOMContentLoaded", function() {
             L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 15 }).addTo(map);
         }
     }
+
+    // Automatically generate AI risk forecast for the current cycle
+    loadAiForecast();
 });
 
 // -----------------------------------------------------
-// 2. AI PREDICTIVE RISK ADVISORY FETCH LOGIC
+// 2. AI PREDICTIVE RISK ADVISORY FETCH LOGIC (AUTO-GENERATED)
 // -----------------------------------------------------
 async function loadAiForecast() {
-    const monthSelect = document.getElementById('aiForecastMonth');
     const tableBody = document.getElementById('aiForecastTableBody');
     const summaryBanner = document.getElementById('aiSummaryBanner');
-    const btn = document.getElementById('btnRunAiForecast');
-
-    if (!monthSelect || !tableBody) return;
-
-    const monthVal = monthSelect.value;
-    btn.disabled = true;
-    btn.innerHTML = `<i class='bx bx-loader-alt bx-spin'></i> Analyzing...`;
-
-    tableBody.innerHTML = `
-        <tr>
-            <td colspan="5" class="table-empty-row text-primary font-weight-bold">
-                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
-                Synthesizing historical patterns & spatial clusters with Gemini AI...
-            </td>
-        </tr>
-    `;
+    if (!tableBody) return;
 
     try {
-        const response = await fetch(`../php/ai_predictor.php?month=${encodeURIComponent(monthVal)}`);
+        const response = await fetch(`../php/ai_predictor.php`);
         
         if (!response.ok) {
             const errText = await response.text();
@@ -196,7 +183,7 @@ async function loadAiForecast() {
             tableBody.innerHTML = `
                 <tr>
                     <td colspan="5" class="table-empty-row text-danger font-weight-bold">
-                        ${result.message || result.error || 'Unable to generate forecast for the selected month.'}
+                        ${result.message || result.error || 'Unable to generate forecast for the current cycle.'}
                     </td>
                 </tr>
             `;
@@ -207,7 +194,7 @@ async function loadAiForecast() {
         const data = result.prediction;
 
         if (summaryBanner && data.summary) {
-            summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Executive DRRM Advisory:</strong> ${data.summary}`;
+            summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Executive DRRM Advisory (${result.month}):</strong> ${data.summary}`;
             summaryBanner.style.display = 'block';
         }
 
@@ -215,7 +202,7 @@ async function loadAiForecast() {
             tableBody.innerHTML = `
                 <tr>
                     <td colspan="5" class="table-empty-row text-muted">
-                        No elevated risk patterns identified for this timeframe.
+                        No elevated risk patterns identified for this cycle.
                     </td>
                 </tr>
             `;
@@ -256,14 +243,11 @@ async function loadAiForecast() {
         tableBody.innerHTML = `
             <tr>
                 <td colspan="5" class="table-empty-row text-danger font-weight-bold">
-                    Connection to AI Predictor failed: ${err.message}. Open Browser DevTools for details.
+                    Connection to AI Predictor failed: ${err.message}. Check network connection.
                 </td>
             </tr>
         `;
         if (summaryBanner) summaryBanner.style.display = 'none';
-    } finally {
-        btn.disabled = false;
-        btn.innerHTML = `<i class='bx bx-refresh'></i> Generate Forecast`;
     }
 }
 
