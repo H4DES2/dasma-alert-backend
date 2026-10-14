@@ -160,9 +160,6 @@ document.addEventListener("DOMContentLoaded", function() {
     loadAiForecast();
 });
 
-// -----------------------------------------------------
-// 2. AI PREDICTIVE RISK ADVISORY FETCH LOGIC (AUTO-GENERATED)
-// -----------------------------------------------------
 async function loadAiForecast() {
     const tableBody = document.getElementById('aiForecastTableBody');
     const summaryBanner = document.getElementById('aiSummaryBanner');
@@ -192,6 +189,7 @@ async function loadAiForecast() {
         }
 
         const data = result.prediction;
+        window.currentAiForecasts = data.forecasts || [];
 
         if (summaryBanner && data.summary) {
             summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Executive DRRM Advisory (${result.month}):</strong> ${data.summary}`;
@@ -209,29 +207,29 @@ async function loadAiForecast() {
             return;
         }
 
-        tableBody.innerHTML = data.forecasts.map(item => {
+        tableBody.innerHTML = data.forecasts.map((item, index) => {
             const risk = (item.risk_level || 'MODERATE').toUpperCase();
             const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
 
             return `
-                <tr>
-                    <td>
+                <tr class="clickable-ai-row" onclick="openAiDetailModal(${index})" title="Click to view full predictive details">
+                    <td class="col-brgy">
                         <strong class="text-dark font-weight-bold">${item.barangay}</strong>
                     </td>
-                    <td>
+                    <td class="col-hazard">
                         <div class="hazard-type-title">${item.hazard_type}</div>
-                        <small class="hazard-type-basis">${item.historical_basis || ''}</small>
+                        <small class="hazard-type-basis desktop-only">${item.historical_basis || ''}</small>
                     </td>
-                    <td>
+                    <td class="col-risk" style="text-align: center;">
                         <span class="badge ${badgeClass}">${risk}</span>
                     </td>
-                    <td>
-                        <span class="confidence-tag">${item.pattern_confidence}</span>
+                    <td class="col-confidence desktop-only">
+                        <span class="confidence-tag">${item.pattern_confidence || 'N/A'}</span>
                     </td>
-                    <td>
+                    <td class="col-protocol desktop-only">
                         <div class="recommended-protocol-box">
                             <i class='bx bx-shield-quarter'></i>
-                            <span>${item.recommended_action}</span>
+                            <span>${item.recommended_action || ''}</span>
                         </div>
                     </td>
                 </tr>
@@ -249,6 +247,74 @@ async function loadAiForecast() {
         `;
         if (summaryBanner) summaryBanner.style.display = 'none';
     }
+}
+function openAiDetailModal(index) {
+    const forecasts = window.currentAiForecasts || [];
+    const item = forecasts[index];
+    if (!item) return;
+
+    const modal = document.getElementById('aiDetailModal');
+    const titleText = document.getElementById('aiModalBarangay');
+    const body = document.getElementById('aiModalBody');
+    if (!modal || !body) return;
+
+    if (titleText) {
+        titleText.textContent = `${item.barangay} — Hazard Forecast`;
+    }
+
+    const risk = (item.risk_level || 'MODERATE').toUpperCase();
+    const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
+
+    let coordsHtml = '';
+    if (item.lat && item.lng) {
+        coordsHtml = `
+            <div style="font-size: 0.76rem; color: #64748b; margin-top: 6px;">
+                <i class='bx bx-map-pin' style="color: #dc2626;"></i> Primary Cluster Anchor: <strong>${item.lat}, ${item.lng}</strong>
+            </div>
+        `;
+    }
+
+    body.innerHTML = `
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+            <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 14px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap;">
+                    <div>
+                        <span style="font-size: 0.68rem; font-weight: 700; color: #64748b; text-transform: uppercase;">Anticipated Hazard</span>
+                        <h4 style="font-size: 1.15rem; font-weight: 800; color: #0284c7; margin: 2px 0 0;">${item.hazard_type}</h4>
+                    </div>
+                    <div style="display: flex; gap: 6px; align-items: center;">
+                        <span class="badge ${badgeClass}" style="font-size: 0.72rem; padding: 4px 10px;">${risk} RISK</span>
+                        <span class="badge badge-tag" style="font-size: 0.72rem; padding: 4px 8px;">${item.pattern_confidence || 'Recurrent'}</span>
+                    </div>
+                </div>
+                ${coordsHtml}
+            </div>
+
+            <div style="background: #fff; border: 1px solid #e2e8f0; border-left: 4px solid #d97706; border-radius: 8px; padding: 14px;">
+                <div style="font-size: 0.75rem; font-weight: 800; color: #d97706; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                    <i class='bx bx-history' style="font-size: 1rem;"></i> Historical Basis & Cluster Analysis
+                </div>
+                <div style="font-size: 0.88rem; color: #334155; line-height: 1.5; font-style: italic;">
+                    "${item.historical_basis || 'Identified based on seasonal recurrence patterns.'}"
+                </div>
+            </div>
+
+            <div style="background: #f0fdf4; border: 1px solid #bbf7d0; border-left: 4px solid #16a34a; border-radius: 8px; padding: 14px;">
+                <div style="font-size: 0.75rem; font-weight: 800; color: #166534; text-transform: uppercase; margin-bottom: 4px; display: flex; align-items: center; gap: 4px;">
+                    <i class='bx bx-shield-quarter' style="font-size: 1.1rem;"></i> DRRM Recommended Protocols
+                </div>
+                <div style="font-size: 0.88rem; color: #14532d; line-height: 1.5; font-weight: 600;">
+                    ${item.recommended_action || 'Ensure equipment pre-staging and regular field monitoring.'}
+                </div>
+            </div>
+
+            <button type="button" class="btn-action btn-secondary-action" style="width: 100%; padding: 12px; margin-top: 4px;" onclick="closeModal('aiDetailModal')">
+                Close
+            </button>
+        </div>
+    `;
+
+    modal.style.display = 'flex';
 }
 
 // -----------------------------------------------------
@@ -884,6 +950,7 @@ function openMobileModal(row, type) {
 }
 
 // Window bindings
+window.openAiDetailModal = openAiDetailModal;
 window.openReportModal = openReportModal;
 window.handlePeriodChange = handlePeriodChange;
 window.validateWeekRange = validateWeekRange;

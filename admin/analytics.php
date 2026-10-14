@@ -415,11 +415,11 @@ foreach ($archived_incidents as $inc) {
                 <table class="data-table ai-table" id="aiForecastTable">
                     <thead>
                         <tr>
-                            <th style="width: 18%;">Barangay Jurisdiction</th>
-                            <th style="width: 25%;">Anticipated Hazard</th>
-                            <th style="width: 12%;">Risk Assessment</th>
-                            <th style="width: 17%;">Historical Confidence</th>
-                            <th style="width: 28%;">DRRM Recommended Protocols</th>
+                            <th class="col-brgy">Barangay Jurisdiction</th>
+                            <th class="col-hazard">Anticipated Hazard</th>
+                            <th class="col-risk" style="text-align: center;">Risk Assessment</th>
+                            <th class="col-confidence desktop-only">Historical Confidence</th>
+                            <th class="col-protocol desktop-only">DRRM Recommended Protocols</th>
                         </tr>
                     </thead>
                     <tbody id="aiForecastTableBody">
@@ -905,6 +905,23 @@ foreach ($archived_incidents as $inc) {
                 </div>
             </div>
         </div>
+        <!-- AI PREDICTIVE RISK DETAIL MODAL -->
+    <div id="aiDetailModal" class="modal" style="z-index: 10008;">
+        <div class="modal-content modal-ai-detail">
+            <div class="modal-inline-header">
+                <div>
+                    <h3 id="aiModalTitle" style="color: #0284c7; font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                        <i class='bx bx-brain'></i> <span id="aiModalBarangay">Forecast Details</span>
+                    </h3>
+                    <p id="aiModalSubtitle" style="font-size: 0.8rem; color: #64748b; margin-top: 3px;">Predictive Hazard Risk Modeling & Recommended Protocols</p>
+                </div>
+                <button type="button" class="modal-close-btn" onclick="closeModal('aiDetailModal')" aria-label="Close details">
+                    <i class='bx bx-x'></i>
+                </button>
+            </div>
+            <div class="ai-modal-body" id="aiModalBody"></div>
+        </div>
+    </div>
     </main>
 
     <!-- FIXED: TIMELINE LOG MODAL -->

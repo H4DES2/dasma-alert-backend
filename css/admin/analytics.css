@@ -175,13 +175,26 @@ html, body {
 
 .ai-table-scroll {
     max-height: 480px;
+    overflow-y: auto;
     overflow-x: auto;
+    width: 100%;
 }
 
 .ai-table {
-    min-width: 900px;
+    width: 100%;
+    min-width: 780px;
 }
-
+.clickable-ai-row {
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.clickable-ai-row:hover {
+    background-color: #f1f5f9 !important;
+}
+.modal-ai-detail {
+    max-width: 540px;
+    padding: 24px;
+}
 .hazard-type-title {
     font-weight: 700;
     color: #0284c7;
@@ -286,23 +299,23 @@ html, body {
     width: 100%;
 }
 
-/* ========================================================
-   TABLES & VAULT
-======================================================== */
 .table-scroll-wrapper { 
     width: 100%;
     overflow-y: auto; 
+    overflow-x: auto; 
     max-height: 400px; 
     border: 1px solid #e2e8f0; 
     border-radius: 8px; 
+    -webkit-overflow-scrolling: touch;
+}
+#archiveTable, #binTable {
+    min-width: 600px;
 }
 
 .data-table { 
     width: 100%; 
     border-collapse: collapse; 
-    table-layout: fixed;
 }
-
 .data-table th { 
     position: sticky; 
     top: 0; 
@@ -358,7 +371,6 @@ html, body {
     margin-bottom: 6px;
 }
 
-/* Badges */
 .badge { 
     padding: 4px 8px; 
     border-radius: 4px; 
@@ -369,6 +381,15 @@ html, body {
     display: inline-flex; 
     align-items: center; 
     justify-content: center; 
+    white-space: nowrap !important;
+    word-break: keep-all !important;
+}
+.rejection-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
 }
 .badge.critical { background: #dc2626; } 
 .badge.major { background: #d97706; } 
@@ -378,9 +399,29 @@ html, body {
 .badge-tag { background: #e2e8f0; color: #334155 !important; }
 
 /* Timeline rows */
-.timeline-text { font-size: 0.78rem; color: #475569; }
-.timeline-row { display: flex; justify-content: space-between; margin-bottom: 3px; gap: 8px; }
-.timeline-row strong { color: #64748b; width: 70px; flex-shrink: 0; }
+.timeline-text { 
+    font-size: 0.78rem; 
+    color: #475569; 
+    min-width: 150px;
+}
+.timeline-row { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center;
+    margin-bottom: 3px; 
+    gap: 8px; 
+    white-space: nowrap; 
+}
+.timeline-row strong { 
+    color: #64748b; 
+    font-weight: 600;
+    flex-shrink: 0; 
+}
+.timeline-row span {
+    white-space: nowrap;
+    font-weight: 600;
+    color: #1e293b;
+}
 .text-arrival { color: #16a34a !important; }
 .text-resolution { color: #0284c7 !important; }
 .duration-text {
@@ -391,8 +432,13 @@ html, body {
     color: #dc2626;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
 }
-
+.duration-text span {
+    white-space: nowrap;
+}
 .user-log-box { 
     background: #f8fafc; 
     padding: 8px 10px; 
@@ -800,13 +846,40 @@ html.global-dark-mode .modal-close-btn:hover { background: #1f2937; color: #f8fa
 }
 
 @media (max-width: 768px) {
-    .main-content { padding: 12px 12px 36px !important; }
-    .analytics-header { flex-direction: column; align-items: stretch; }
-    .header-actions { width: 100%; }
-    .header-actions .btn-action { flex: 1; }
-    .panel-header { flex-direction: column; align-items: stretch; }
-    .panel-controls { width: 100%; }
-    .panel-controls select, .panel-controls button { width: 100%; }
-    .control-cluster { width: 100%; }
-    .ai-table-scroll { overflow-x: auto !important; }
+    /* Remove horizontal scroll on AI deck on mobile */
+    .ai-table-scroll { 
+        overflow-x: hidden !important; 
+        max-height: 520px;
+    }
+
+    .ai-table { 
+        min-width: 0 !important; 
+        width: 100% !important; 
+        table-layout: auto !important;
+    }
+
+    /* Show strictly the first 3 columns on phone view */
+    .ai-table th:nth-child(n+4),
+    .ai-table td:nth-child(n+4),
+    .desktop-only { 
+        display: none !important; 
+    }
+
+    .ai-table th:nth-child(1),
+    .ai-table td:nth-child(1) {
+        width: 32% !important;
+    }
+
+    .ai-table th:nth-child(2),
+    .ai-table td:nth-child(2) {
+        width: 44% !important;
+    }
+
+    .ai-table th:nth-child(3),
+    .ai-table td:nth-child(3) {
+        width: 24% !important;
+        text-align: center;
+    }
 }
+html.global-dark-mode .clickable-ai-row:hover { background-color: #1e293b !important; }
+html.global-dark-mode .timeline-row span { color: #f8fafc; }
