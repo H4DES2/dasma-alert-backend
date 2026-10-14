@@ -23,19 +23,27 @@ if (!$auth->is_logged_in()) {
 }
 
 $action     = $_GET['action'] ?? $_POST['action'] ?? '';
-$user_id    = $_SESSION['user_id'] ?? null;
+$user_id    = (int)($_SESSION['user_id'] ?? 0);
 $role       = $_SESSION['role'] ?? 'user';
-$admin_brgy = trim($_SESSION['barangay'] ?? '');
+$admin_brgy = '';
 
-if (empty($admin_brgy) && !empty($user_id)) {
-    $u_stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
+// Always resolve live barangay and role directly from the database for the active user
+if ($user_id > 0) {
+    $u_stmt = $conn->prepare("SELECT barangay, role FROM users WHERE id = ?");
     if ($u_stmt) {
         $u_stmt->bind_param("i", $user_id);
         $u_stmt->execute();
-        $u_row = $u_stmt->get_result()->fetch_assoc();
-        $admin_brgy = trim($u_row['barangay'] ?? '');
+        if ($u_row = $u_stmt->get_result()->fetch_assoc()) {
+            $admin_brgy = trim($u_row['barangay'] ?? '');
+            if (!empty($u_row['role'])) {
+                $role = trim($u_row['role']);
+                $_SESSION['role'] = $role;
+            }
+        }
         $u_stmt->close();
     }
+} else {
+    $admin_brgy = trim($_SESSION['barangay'] ?? '');
 }
 
 if (strcasecmp($admin_brgy, 'Burol Main') === 0) {
@@ -44,7 +52,6 @@ if (strcasecmp($admin_brgy, 'Burol Main') === 0) {
 $_SESSION['barangay'] = $admin_brgy;
 
 session_write_close();
-
 $ADMIN_TIER_ROLES = ['admin', 'barangay_admin', 'superadmin'];
 function requireRole(array $allowedRoles, $role) {
     if (!in_array($role, $allowedRoles, true)) {
@@ -774,14 +781,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $type_clause .= " AND (i.latitude BETWEEN 12.0000 AND 21.2000 AND i.longitude BETWEEN 119.5000 AND 124.5000) ";
 
         $target = '';
+        $escalation_clause = "";
+
         if ($role === 'superadmin') {
-            // Superadmin views city-wide unless a specific barangay is selected
+            // Superadmin views city-wide unless a specific barangay was selected in the dropdown
             if (!empty($target_brgy) && strtolower(trim($target_brgy)) !== 'all' && strtolower(trim($target_brgy)) !== 'all barangays') {
                 $target = trim($target_brgy);
             }
+
+            // Superadmin ONLY sees escalated city backup incidents to prevent report overflow
+            $escalation_clause = " AND (
+                (i.backup_requested = 1 AND (i.backup_target = 'superadmin' OR i.backup_target IS NULL OR i.backup_target = ''))
+                OR i.backup_status = 'escalated_superadmin'
+                OR (i.assigned_to LIKE '%[City Backup:%')
+            ) ";
         } else {
-            // Barangay admin is strictly locked to their local jurisdiction
-            $target = !empty($admin_brgy) ? trim($admin_brgy) : trim($target_brgy);
+            // Barangay Admin: strictly locked to their assigned barangay
+            $target = !empty($admin_brgy) ? $admin_brgy : trim($target_brgy);
+            // Barangay Admin sees ALL active local incidents (no escalation restriction)
+            $escalation_clause = "";
         }
 
         if (strcasecmp($target, 'Burol Main') === 0) {
@@ -793,6 +811,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
             $types .= "ss"; $params[] = $target; $params[] = $target;
             $evac_types .= "ss"; $evac_params[] = $target; $evac_params[] = $target;
         }
+
+        if ($type !== 'all' && !empty($type)) {
+            $type_clause = " AND i.incident_type LIKE ? ";
+            $types .= "s"; $params[] = "%" . $type . "%";
+        }
+
+        $type_clause .= " AND (i.latitude BETWEEN 12.0000 AND 21.2000 AND i.longitude BETWEEN 119.5000 AND 124.5000) ";
 
         if (!function_exists('executeSyncQuery')) {
             function executeSyncQuery($conn, $sql, $types, $params) {
@@ -835,7 +860,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $resEvac = executeSyncQuery($conn, "SELECT id, name, barangay, latitude, longitude, capacity, current_occupants, status FROM evacuation_centers WHERE 1=1 $evac_brgy_filter", $evac_types, $evac_params);
         if ($resEvac) { while ($row = $resEvac->fetch_assoc()) { $response['evac_centers'][] = $row; } }
 
-
+        // Triage Table Data
         $query = "SELECT i.*, i.backup_requested, i.is_verified, i.verified_by, u.username, u.first_name, u.last_name, u.barangay as reporter_home,
                          (SELECT position FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_pos, 
                          (SELECT phone_number FROM user_profiles WHERE user_id = u.id LIMIT 1) as reporter_phone,

@@ -85,13 +85,14 @@ if (isset($_GET['ajax_kpi'])) {
     exit();
 }
 
-$user_id = $_SESSION['user_id'];
+$user_id = (int)($_SESSION['user_id'] ?? 0);
 $stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
 $stmt->bind_param("i", $user_id);
 $stmt->execute();
 $u_data = $stmt->get_result()->fetch_assoc();
-$raw_assigned_brgy = trim($u_data['barangay'] ?? '');
+$stmt->close();
 
+$raw_assigned_brgy = trim($u_data['barangay'] ?? '');
 $locationAliases = [
     'BUROL MAIN' => 'Burol'
 ];
@@ -100,7 +101,8 @@ $assigned_brgy = $raw_assigned_brgy;
 if (array_key_exists(strtoupper($raw_assigned_brgy), $locationAliases)) {
     $assigned_brgy = $locationAliases[strtoupper($raw_assigned_brgy)];
 }
-
+$_SESSION['barangay'] = $assigned_brgy;
+session_write_close();
 // BROADCAST LOGIC
 $broadcast_result = $conn->query("SELECT * FROM broadcasts WHERE is_active = 1 ORDER BY id DESC LIMIT 1");
 $active_broadcast = ($broadcast_result && $broadcast_result->num_rows > 0) ? $broadcast_result->fetch_assoc() : null;
