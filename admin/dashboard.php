@@ -177,12 +177,8 @@ function getReadableLocation($lat, $lng, $fallbackText) {
                         </div>
 
                         <?php if ($role === 'superadmin'): ?>
-                            <select id="table-filter-escalation" class="filter-dropdown" onchange="syncDashboard(); initSSE();" style="font-weight: 800; border-color: #f57c00;">
-                                <option value="escalated" selected>Escalated to City Only</option>
-                                <option value="all">All Barangay Reports</option>
-                            </select>
                             <select id="table-filter-brgy" class="filter-dropdown" onchange="syncDashboard(); initSSE();">
-                                <option value="">All Barangays</option>
+                                <option value="">🌍 All Barangays</option>
                                 <?php foreach ($barangays as $brgy): ?><option value="<?php echo $brgy; ?>"><?php echo $brgy; ?></option><?php endforeach; ?>
                             </select>
                         <?php else: ?>

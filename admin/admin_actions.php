@@ -757,9 +757,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
         $brgy_filter = "";
         $evac_brgy_filter = ""; 
         $type_clause = "";
-        // Filter out barangay-handled incidents for superadmin by default
         $escalation_clause = "";
-        if ($role === 'superadmin' && $escalation === 'escalated') {
+        if ($role === 'superadmin') {
             $escalation_clause = " AND (
                 (i.backup_requested = 1 AND (i.backup_target = 'superadmin' OR i.backup_target IS NULL OR i.backup_target = ''))
                 OR i.backup_status = 'escalated_superadmin'

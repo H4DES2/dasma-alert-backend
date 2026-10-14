@@ -276,12 +276,10 @@ function initSSE() {
 
     const brgyNode = document.getElementById('table-filter-brgy');
     const typeNode = document.getElementById('map-filter-incident');
-    const escNode  = document.getElementById('table-filter-escalation');
     const brgyFilter = brgyNode ? brgyNode.value : ''; 
     const typeFilter = typeNode ? typeNode.value : 'all'; 
-    const escFilter  = escNode  ? escNode.value  : 'escalated';
 
-    const url = `${API_PATH}?action=sse_stream&brgy=${encodeURIComponent(brgyFilter)}&type=${encodeURIComponent(typeFilter)}&escalation=${encodeURIComponent(escFilter)}`;
+    const url = `${API_PATH}?action=sse_stream&brgy=${encodeURIComponent(brgyFilter)}&type=${encodeURIComponent(typeFilter)}`;
     eventSource = new EventSource(url);
 
     eventSource.onmessage = function(e) {
@@ -303,12 +301,10 @@ function initSSE() {
 function syncDashboard() { 
     const brgyNode = document.getElementById('table-filter-brgy');
     const typeNode = document.getElementById('map-filter-incident');
-    const escNode  = document.getElementById('table-filter-escalation');
     const brgyFilter = brgyNode ? brgyNode.value : ''; 
     const typeFilter = typeNode ? typeNode.value : 'all'; 
-    const escFilter  = escNode  ? escNode.value  : 'escalated';
 
-    fetch(`${API_PATH}?action=master_sync&brgy=${encodeURIComponent(brgyFilter)}&type=${encodeURIComponent(typeFilter)}&escalation=${encodeURIComponent(escFilter)}`)
+    fetch(`${API_PATH}?action=master_sync&brgy=${encodeURIComponent(brgyFilter)}&type=${typeFilter}`)
     .then(async res => {
         if (res.status === 401 || res.status === 403) {
             if (eventSource) eventSource.close();
@@ -373,7 +369,6 @@ document.addEventListener('DOMContentLoaded', function() {
 
     document.getElementById('table-filter-brgy')?.addEventListener('change', initSSE);
     document.getElementById('map-filter-incident')?.addEventListener('change', initSSE);
-    document.getElementById('table-filter-escalation')?.addEventListener('change', initSSE);
 });
 
 function toggleVerifyDropdown(btn) {
