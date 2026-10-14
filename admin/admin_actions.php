@@ -25,9 +25,26 @@ if (!$auth->is_logged_in()) {
 $action     = $_GET['action'] ?? $_POST['action'] ?? '';
 $user_id    = $_SESSION['user_id'] ?? null;
 $role       = $_SESSION['role'] ?? 'user';
-$admin_brgy = $_SESSION['barangay'] ?? '';
+$admin_brgy = trim($_SESSION['barangay'] ?? '');
+
+if (empty($admin_brgy) && !empty($user_id)) {
+    $u_stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
+    if ($u_stmt) {
+        $u_stmt->bind_param("i", $user_id);
+        $u_stmt->execute();
+        $u_row = $u_stmt->get_result()->fetch_assoc();
+        $admin_brgy = trim($u_row['barangay'] ?? '');
+        $u_stmt->close();
+    }
+}
+
+if (strcasecmp($admin_brgy, 'Burol Main') === 0) {
+    $admin_brgy = 'Burol';
+}
+$_SESSION['barangay'] = $admin_brgy;
 
 session_write_close();
+
 $ADMIN_TIER_ROLES = ['admin', 'barangay_admin', 'superadmin'];
 function requireRole(array $allowedRoles, $role) {
     if (!in_array($role, $allowedRoles, true)) {
