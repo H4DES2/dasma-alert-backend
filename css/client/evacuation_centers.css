@@ -296,6 +296,120 @@ body {
     cursor: pointer;
 }
 
+/* 🚀 NEW FACILITY MODAL (MATCHING SUPERADMIN DESIGN) */
+.facility-modal-content {
+    background: var(--surface-card);
+    border-radius: var(--radius-xl);
+    width: 100%;
+    max-width: 520px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 24px 28px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    position: relative;
+}
+
+.facility-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border-color);
+    margin-bottom: 18px;
+}
+
+.facility-modal-header h3 {
+    margin: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.facility-label {
+    display: block;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 6px;
+}
+
+.facility-input, .facility-select {
+    width: 100%;
+    background: var(--surface-subtle);
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    font-weight: 600;
+    outline: none;
+    box-sizing: border-box;
+    transition: border 0.15s;
+}
+
+.facility-input:focus, .facility-select:focus {
+    border-color: #2563eb;
+    background: var(--surface-card);
+}
+
+.facility-input:disabled, .facility-select:disabled {
+    background: #e2e8f0;
+    color: var(--text-secondary);
+    cursor: not-allowed;
+    opacity: 0.85;
+}
+
+.facility-map-box {
+    width: 100%;
+    height: 220px;
+    border-radius: 14px;
+    border: 1px solid #cbd5e1;
+    margin-bottom: 14px;
+    overflow: hidden;
+    z-index: 1;
+}
+
+.btn-create-facility {
+    background: var(--color-success);
+    color: #ffffff !important;
+    font-weight: 800;
+    border: none;
+    border-radius: var(--radius-md);
+    padding: 14px;
+    font-size: 0.95rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    transition: background 0.15s, opacity 0.15s;
+}
+
+.btn-create-facility:hover { 
+    background: #1b5e20; 
+}
+
+.btn-cancel-facility {
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    font-weight: 700;
+    border: 1px solid #cbd5e1;
+    border-radius: var(--radius-md);
+    padding: 14px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.btn-cancel-facility:hover { 
+    background: #e2e8f0; 
+}
+
 /* 🌙 DARK MODE OVERRIDES */
 html.global-dark-mode {
     --bg-main: #09090b;
@@ -315,9 +429,14 @@ html.global-dark-mode .main-content {
 }
 
 html.global-dark-mode .table-container,
-html.global-dark-mode .modal-content {
+html.global-dark-mode .modal-content,
+html.global-dark-mode .facility-modal-content {
     background: var(--surface-card) !important;
     border-color: var(--border-color) !important;
+}
+
+html.global-dark-mode .facility-modal-header {
+    border-bottom-color: var(--border-color) !important;
 }
 
 html.global-dark-mode .table-wrapper {
@@ -353,6 +472,35 @@ html.global-dark-mode .close-modal {
     border-color: var(--border-color) !important;
 }
 
+html.global-dark-mode .facility-input,
+html.global-dark-mode .facility-select {
+    background: #27272a !important;
+    border-color: #3f3f46 !important;
+    color: #f4f4f5 !important;
+}
+
+html.global-dark-mode .facility-input:disabled,
+html.global-dark-mode .facility-select:disabled {
+    background: #18181b !important;
+    color: #71717a !important;
+    border-color: #27272a !important;
+}
+
+html.global-dark-mode .facility-map-box {
+    border-color: #3f3f46 !important;
+}
+
+html.global-dark-mode .btn-cancel-facility {
+    background: #27272a !important;
+    border-color: #3f3f46 !important;
+    color: #a1a1aa !important;
+}
+
+html.global-dark-mode .btn-cancel-facility:hover {
+    background: #3f3f46 !important;
+    color: #f4f4f5 !important;
+}
+
 /* 📱 MOBILE RESPONSIVE */
 @media (max-width: 768px) {
     .main-content {
@@ -367,5 +515,8 @@ html.global-dark-mode .close-modal {
     }
     .mobile-expand-icon {
         display: inline-block;
+    }
+    .facility-modal-content {
+        padding: 18px 16px;
     }
 }

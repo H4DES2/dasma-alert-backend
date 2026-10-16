@@ -1986,7 +1986,73 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         exit();
     }
-    
+    if ($action === 'brgy_add_temporary_center') {
+        requireRole($ADMIN_TIER_ROLES, $role);
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
+
+        $name     = trim($_POST['name'] ?? '');
+        $capacity = (int)($_POST['capacity'] ?? 0);
+        $lat      = (float)($_POST['latitude'] ?? 0.0);
+        $lng      = (float)($_POST['longitude'] ?? 0.0);
+
+        // 1. Authoritative Barangay: Force the Barangay Admin's jurisdiction (cannot be spoofed)
+        $target_brgy = trim($admin_brgy);
+        if (empty($target_brgy) && !empty($user_id)) {
+            $u_stmt = $conn->prepare("SELECT barangay FROM users WHERE id = ?");
+            if ($u_stmt) {
+                $u_stmt->bind_param("i", $user_id);
+                $u_stmt->execute();
+                if ($u_row = $u_stmt->get_result()->fetch_assoc()) {
+                    $target_brgy = trim($u_row['barangay'] ?? '');
+                }
+                $u_stmt->close();
+            }
+        }
+
+        if (strcasecmp($target_brgy, 'Burol Main') === 0) {
+            $target_brgy = 'Burol';
+        }
+
+        if (empty($name) || empty($target_brgy) || $capacity <= 0 || $lat == 0.0 || $lng == 0.0) {
+            echo json_encode(['success' => false, 'message' => 'Please fill in all facility fields and pin the location on the map.']);
+            exit();
+        }
+
+        // 2. Hardcode strictly as temporary
+        $facility_type = 'temporary';
+        $occupants     = 0;
+        $status        = 'closed';
+        $point_wkt     = "POINT($lng $lat)";
+
+        // Check if managed_by column exists in evacuation_centers
+        $chk_m = $conn->query("SHOW COLUMNS FROM evacuation_centers LIKE 'managed_by'");
+        if ($chk_m && $chk_m->num_rows > 0) {
+            $stmt = $conn->prepare("
+                INSERT INTO evacuation_centers 
+                    (managed_by, name, barangay, latitude, longitude, capacity, current_occupants, status, facility_type, geo_point) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ST_PointFromText(?))
+            ");
+            $stmt->bind_param("issddiisss", $user_id, $name, $target_brgy, $lat, $lng, $capacity, $occupants, $status, $facility_type, $point_wkt);
+        } else {
+            $stmt = $conn->prepare("
+                INSERT INTO evacuation_centers 
+                    (name, barangay, latitude, longitude, capacity, current_occupants, status, facility_type, geo_point) 
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ST_PointFromText(?))
+            ");
+            $stmt->bind_param("ssddiisss", $name, $target_brgy, $lat, $lng, $capacity, $occupants, $status, $facility_type, $point_wkt);
+        }
+
+        if ($stmt && $stmt->execute()) {
+            $stmt->close();
+            echo json_encode(['success' => true, 'message' => 'Temporary evacuation facility registered successfully.']);
+        } else {
+            $err = $stmt ? $stmt->error : $conn->error;
+            if ($stmt) $stmt->close();
+            echo json_encode(['success' => false, 'message' => 'Database Error: ' . $err]);
+        }
+        exit();
+    }
     if ($action === 'update_evac_center') {
         requireRole($ADMIN_TIER_ROLES, $role);
         $id            = isset($_POST['id']) ? (int)$_POST['id'] : 0;

@@ -33,6 +33,9 @@ $assigned_brgy = $raw_assigned_brgy;
 if (array_key_exists(strtoupper($raw_assigned_brgy), $locationAliases)) {
     $assigned_brgy = $locationAliases[strtoupper($raw_assigned_brgy)];
 }
+if (strcasecmp($assigned_brgy, 'Burol Main') === 0) {
+    $assigned_brgy = 'Burol';
+}
 
 // 🚀 ROLE-BASED QUERY FIX: Superadmins see all, Admins see their sector
 if ($role === 'superadmin') {
@@ -51,8 +54,10 @@ if ($role === 'superadmin') {
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Evacuation Centers | Barangay Command</title>
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <link rel="stylesheet" href="../css/client/navbar.css">
-    <link rel="stylesheet" href="../css/client/evacuation_centers.css">
+    <link rel="stylesheet" href="../css/client/evacuation_centers.css?v=<?= filemtime('../css/client/evacuation_centers.css') ?>">
 </head>
 <body>
 
@@ -60,11 +65,11 @@ if ($role === 'superadmin') {
 
     <main class="main-content">
         <header class="page-header">
-    <div>
-        <h1>Barangay Command</h1>
-        <p>Jurisdiction: <span style="color: var(--color-critical, #d32f2f); font-weight: 800;"><?php echo htmlspecialchars($assigned_brgy ?: 'Unassigned'); ?></span></p>
-    </div>
-</header>
+            <div>
+                <h1>Barangay Command</h1>
+                <p>Jurisdiction: <span style="color: var(--color-critical, #d32f2f); font-weight: 800;"><?php echo htmlspecialchars($assigned_brgy ?: 'Unassigned'); ?></span></p>
+            </div>
+        </header>
 
         <div class="table-container">
             <div class="header-section">
@@ -72,6 +77,9 @@ if ($role === 'superadmin') {
                     <h2>Evacuation Centers</h2>
                     <p>Manage local shelters and track live occupancy.</p>
                 </div>
+                <button type="button" class="btn-action" style="background: #2e7d32; color: #fff; font-weight: 800; padding: 10px 18px; border-radius: 10px; display: inline-flex; align-items: center; gap: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(46, 125, 50, 0.25);" onclick="openCreateFacilityModal()">
+                    <i class='bx bx-plus-circle' style="font-size: 1.2rem;"></i> New Facility
+                </button>
             </div>
 
             <div class="table-wrapper">
@@ -143,6 +151,64 @@ if ($role === 'superadmin') {
         </div>
     </main>
 
+    <!-- 🚀 CREATE TEMPORARY FACILITY MODAL -->
+    <div id="createFacilityModal" class="modal" style="z-index: 10008;">
+        <div class="facility-modal-content">
+            <div class="facility-modal-header">
+                <h3><i class='bx bx-buildings' style="color: #2e7d32;"></i> New Facility</h3>
+                <div class="close-modal" onclick="closeModal('createFacilityModal')"><i class='bx bx-x'></i></div>
+            </div>
+            
+            <form id="createFacilityForm" onsubmit="event.preventDefault(); submitCreateFacility();">
+                <div style="margin-bottom: 14px;">
+                    <label class="facility-label">Facility Name</label>
+                    <input type="text" id="facilityName" class="facility-input" placeholder="e.g. Brgy. Hall Covered Court" required>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px;">
+                    <div>
+                        <label class="facility-label">Barangay</label>
+                        <input type="text" class="facility-input" value="<?= htmlspecialchars($assigned_brgy ?: 'Burol') ?>" disabled>
+                        <input type="hidden" id="facilityBarangay" value="<?= htmlspecialchars($assigned_brgy ?: 'Burol') ?>">
+                    </div>
+                    <div>
+                        <label class="facility-label">Max Capacity (PAX)</label>
+                        <input type="number" id="facilityCapacity" class="facility-input" placeholder="e.g. 500" min="1" required>
+                    </div>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                    <label class="facility-label">Facility Classification</label>
+                    <select id="facilityClassification" class="facility-select" disabled>
+                        <option value="temporary" selected>Temporary (Court, School, Tent City)</option>
+                    </select>
+                </div>
+
+                <div style="margin-bottom: 14px;">
+                    <label class="facility-label">Pin Facility Location</label>
+                    <div id="facilityMap" class="facility-map-box"></div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                    <div>
+                        <label class="facility-label">Latitude</label>
+                        <input type="text" id="facilityLat" class="facility-input" placeholder="Auto-filled" readonly required style="background: #e2e8f0;">
+                    </div>
+                    <div>
+                        <label class="facility-label">Longitude</label>
+                        <input type="text" id="facilityLng" class="facility-input" placeholder="Auto-filled" readonly required style="background: #e2e8f0;">
+                    </div>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 2fr; gap: 12px;">
+                    <button type="button" class="btn-cancel-facility" onclick="closeModal('createFacilityModal')">Cancel</button>
+                    <button type="submit" id="btnSaveFacility" class="btn-create-facility">Save Facility</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- MANAGE EXISTING MODAL -->
     <div id="manageModal" class="modal">
         <div class="modal-content" style="position: relative;">
             <div class="close-modal" onclick="closeModal('manageModal')"><i class='bx bx-x'></i></div>
