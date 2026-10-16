@@ -1448,7 +1448,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         echo json_encode(['success' => true]);
         exit();
     }
+    if ($action === 'toggle_all_evac_centers') {
+        requireRole($ADMIN_TIER_ROLES, $role);
+        while (ob_get_level() > 0) { ob_end_clean(); }
+        header('Content-Type: application/json');
 
+        $status = strtolower(trim($_POST['status'] ?? ''));
+        if (!in_array($status, ['open', 'closed'], true)) {
+            echo json_encode(['success' => false, 'message' => 'Invalid status specified. Must be open or closed.']);
+            exit();
+        }
+
+        // Superadmin updates city-wide; Barangay Admin updates only within their jurisdiction
+        if ($role === 'superadmin') {
+            $stmt = $conn->prepare("UPDATE evacuation_centers SET status = ?, last_updated = CURRENT_TIMESTAMP");
+            $stmt->bind_param("s", $status);
+        } else {
+            $target_brgy = trim($admin_brgy);
+            if (empty($target_brgy)) {
+                $target_brgy = trim($_SESSION['barangay'] ?? '');
+            }
+            if (strcasecmp($target_brgy, 'Burol Main') === 0) {
+                $target_brgy = 'Burol';
+            }
+
+            if (empty($target_brgy)) {
+                echo json_encode(['success' => false, 'message' => 'No assigned barangay found for your administrator account.']);
+                exit();
+            }
+
+            $stmt = $conn->prepare("UPDATE evacuation_centers SET status = ?, last_updated = CURRENT_TIMESTAMP WHERE TRIM(barangay) = ? OR LOWER(TRIM(barangay)) = LOWER(?)");
+            $stmt->bind_param("sss", $status, $target_brgy, $target_brgy);
+        }
+
+        if ($stmt && $stmt->execute()) {
+            $affected = $stmt->affected_rows;
+            $stmt->close();
+            echo json_encode([
+                'success' => true, 
+                'message' => "Successfully marked all shelters as " . strtoupper($status) . " ($affected updated)."
+            ]);
+        } else {
+            $err = $stmt ? $stmt->error : $conn->error;
+            if ($stmt) $stmt->close();
+            echo json_encode(['success' => false, 'message' => 'Database Error: ' . $err]);
+        }
+        exit();
+    }
     if ($action === 'update_team_status') {
     requireRole($ADMIN_TIER_ROLES, $role);
     $id = (int)$_POST['id'];

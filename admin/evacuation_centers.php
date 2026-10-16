@@ -97,27 +97,35 @@ if ($result && $result->num_rows > 0) {
                     <?php echo ($role === 'superadmin') ? "City-Wide Facility Management" : "Sectoral Facility Tracker: " . htmlspecialchars($my_brgy); ?>
                 </p>
             </div>
-            <?php if ($role === 'superadmin'): ?>
-            <button class="btn-action btn-add" onclick="openAddModal()">
-                <i class='bx bx-plus-circle'></i> Register New Center
-            </button>
-            <?php endif; ?>
+            <div class="header-actions-group">
+                <button type="button" class="btn-action btn-bulk-open" onclick="bulkToggleEvac('open')">
+                    <i class='bx bx-door-open'></i> Open All
+                </button>
+                <button type="button" class="btn-action btn-bulk-close" onclick="bulkToggleEvac('closed')">
+                    <i class='bx bx-lock-alt'></i> Close All
+                </button>
+                <?php if ($role === 'superadmin'): ?>
+                <button class="btn-action btn-add" onclick="openAddModal()">
+                    <i class='bx bx-plus-circle'></i> Register New Center
+                </button>
+                <?php endif; ?>
+            </div>
         </header>
-        <!-- Replace the evac-map-container block -->
-<div class="evac-map-container" style="background:#ffffff; border-radius:24px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.06); margin: 0 auto 24px auto; width: 95%; max-width: 1450px;">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
-        <h3 style="font-weight:800; color:#222; font-size:1.15rem; display:flex; align-items:center; gap:8px;">
-            <i class='bx bxs-map-pin' style="color:#10b981;"></i> Evacuation Centers Live Map
-        </h3>
-        <div style="display:flex; gap:12px; font-size:0.8rem; font-weight:700;">
-            <span style="display:flex; align-items:center; gap:6px; color:#2e7d32;"><span style="width:10px; height:10px; border-radius:50%; background:#2e7d32; display:inline-block;"></span> Open</span>
-            <span style="display:flex; align-items:center; gap:6px; color:#d32f2f;"><span style="width:10px; height:10px; border-radius:50%; background:#d32f2f; display:inline-block;"></span> Full</span>
-            <span style="display:flex; align-items:center; gap:6px; color:#607d8b;"><span style="width:10px; height:10px; border-radius:50%; background:#607d8b; display:inline-block;"></span> Closed</span>
+
+        <div class="evac-map-container" style="background:#ffffff; border-radius:24px; padding:20px; box-shadow:0 10px 30px rgba(0,0,0,0.06); border:1px solid rgba(0,0,0,0.06); margin: 0 auto 24px auto; width: 95%; max-width: 1450px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:10px;">
+                <h3 style="font-weight:800; color:#222; font-size:1.15rem; display:flex; align-items:center; gap:8px;">
+                    <i class='bx bxs-map-pin' style="color:#10b981;"></i> Evacuation Centers Live Map
+                </h3>
+                <div style="display:flex; gap:12px; font-size:0.8rem; font-weight:700;">
+                    <span style="display:flex; align-items:center; gap:6px; color:#2e7d32;"><span style="width:10px; height:10px; border-radius:50%; background:#2e7d32; display:inline-block;"></span> Open</span>
+                    <span style="display:flex; align-items:center; gap:6px; color:#d32f2f;"><span style="width:10px; height:10px; border-radius:50%; background:#d32f2f; display:inline-block;"></span> Full</span>
+                    <span style="display:flex; align-items:center; gap:6px; color:#607d8b;"><span style="width:10px; height:10px; border-radius:50%; background:#607d8b; display:inline-block;"></span> Closed</span>
+                </div>
+            </div>
+            <div id="evac-overview-map" style="width:100%; height:450px; border-radius:16px; border:1px solid #edf2f7; z-index:1;"></div>
         </div>
-    </div>
-    <div id="evac-overview-map" style="width:100%; height:450px; border-radius:16px; border:1px solid #edf2f7; z-index:1;"></div>
-</div>
-        </div>
+
         <div class="table-container">
             <div class="table-wrapper">
                 <table class="data-table">

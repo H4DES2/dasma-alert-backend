@@ -222,7 +222,36 @@ function addCenter() {
             });
     });
 }
+function bulkToggleEvac(targetStatus) {
+    const isOpening = targetStatus === 'open';
+    const title = isOpening ? "Open All Shelters?" : "Close All Shelters?";
+    const msg = isOpening 
+        ? "Are you sure you want to mark all evacuation centers in your jurisdiction as OPEN (Accepting evacuees)?" 
+        : "Are you sure you want to mark all evacuation centers in your jurisdiction as CLOSED (Inactive)?";
+    const icon = isOpening ? "bx-door-open" : "bx-lock-alt";
+    const color = isOpening ? "#2e7d32" : "#607d8b";
 
+    customConfirm(title, msg, icon, color, function() {
+        const fd = new FormData();
+        fd.append('action', 'toggle_all_evac_centers');
+        fd.append('status', targetStatus);
+
+        fetch('admin_actions.php', { method: 'POST', body: fd })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    customAlert("Action Failed", data.message || "Failed to update facilities.", "bx-x-circle", "#d32f2f");
+                }
+            })
+            .catch(err => {
+                customAlert("Network Error", "Could not process request: " + err.message, "bx-error", "#d32f2f");
+            });
+    });
+}
+
+window.bulkToggleEvac = bulkToggleEvac;
 function checkCapacityStatus() {
     let occupants = parseInt(document.getElementById('manageOccupants').value, 10) || 0;
     let capacity = parseInt(document.getElementById('manageCapacity').value, 10) || 1;
