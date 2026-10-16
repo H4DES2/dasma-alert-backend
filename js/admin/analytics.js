@@ -159,11 +159,84 @@ document.addEventListener("DOMContentLoaded", function() {
     // Automatically generate AI risk forecast for the current cycle
     loadAiForecast();
 });
+// -----------------------------------------------------
+// 1. COLLAPSIBLE ACCORDION CONTROLS
+// -----------------------------------------------------
+function toggleTableCollapse(contentId, btnEl) {
+    const content = document.getElementById(contentId);
+    if (!content) return;
 
-async function loadAiForecast() {
+    const isCurrentlyHidden = window.getComputedStyle(content).display === 'none';
+    
+    if (isCurrentlyHidden) {
+        content.style.display = 'block';
+        content.classList.add('show');
+        if (btnEl) {
+            btnEl.classList.add('active');
+            const textSpan = btnEl.querySelector('.toggle-text');
+            const icon = btnEl.querySelector('i');
+            if (textSpan) textSpan.textContent = 'Click to hide data';
+            if (icon) icon.className = 'bx bx-chevron-up';
+        }
+    } else {
+        content.style.display = 'none';
+        content.classList.remove('show');
+        if (btnEl) {
+            btnEl.classList.remove('active');
+            const textSpan = btnEl.querySelector('.toggle-text');
+            const icon = btnEl.querySelector('i');
+            if (textSpan) textSpan.textContent = 'Click to show data';
+            if (icon) icon.className = 'bx bx-chevron-down';
+        }
+    }
+}
+
+function handleHeaderToggle(event, contentId, btnId) {
+    // Prevent collapsing when clicking interactive controls (selects, buttons, links)
+    if (event.target.closest('select, input, button, a')) {
+        return;
+    }
+    const btn = document.getElementById(btnId);
+    toggleTableCollapse(contentId, btn);
+}
+
+// -----------------------------------------------------
+// 2. AI PREDICTION WITH LOCALSTORAGE CACHING
+// -----------------------------------------------------
+const AI_CACHE_KEY = 'dasma_gemini_predictive_cache';
+const AI_CACHE_TTL = 6 * 60 * 60 * 1000; // 6-Hour Cache Lifespan
+
+async function loadAiForecast(forceRefresh = false) {
     const tableBody = document.getElementById('aiForecastTableBody');
     const summaryBanner = document.getElementById('aiSummaryBanner');
     if (!tableBody) return;
+
+    // 1. Check client-side cached forecast if not explicitly requested to refresh
+    if (!forceRefresh) {
+        try {
+            const rawCache = localStorage.getItem(AI_CACHE_KEY);
+            if (rawCache) {
+                const cached = JSON.parse(rawCache);
+                const isFresh = (Date.now() - cached.timestamp) < AI_CACHE_TTL;
+                if (isFresh && cached.data && cached.data.success && cached.data.prediction) {
+                    renderAiForecastUI(cached.data);
+                    return; // Instant render with zero network delay
+                }
+            }
+        } catch (e) {
+            console.warn('AI Cache read failed:', e);
+        }
+    }
+
+    // 2. Display loading state while fetching fresh Gemini synthesis
+    tableBody.innerHTML = `
+        <tr>
+            <td colspan="5" class="table-empty-row text-primary font-weight-bold">
+                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
+                Synthesizing historical patterns & spatial clusters with Gemini AI...
+            </td>
+        </tr>
+    `;
 
     try {
         const response = await fetch(`../php/ai_predictor.php`);
@@ -188,53 +261,18 @@ async function loadAiForecast() {
             return;
         }
 
-        const data = result.prediction;
-        window.currentAiForecasts = data.forecasts || [];
-
-        if (summaryBanner && data.summary) {
-            summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Executive DRRM Advisory (${result.month}):</strong> ${data.summary}`;
-            summaryBanner.style.display = 'block';
+        // 3. Store valid prediction in localStorage cache
+        try {
+            localStorage.setItem(AI_CACHE_KEY, JSON.stringify({
+                timestamp: Date.now(),
+                data: result
+            }));
+        } catch (e) {
+            console.warn('AI Cache write failed:', e);
         }
 
-        if (data.forecasts.length === 0) {
-            tableBody.innerHTML = `
-                <tr>
-                    <td colspan="5" class="table-empty-row text-muted">
-                        No elevated risk patterns identified for this cycle.
-                    </td>
-                </tr>
-            `;
-            return;
-        }
-
-        tableBody.innerHTML = data.forecasts.map((item, index) => {
-            const risk = (item.risk_level || 'MODERATE').toUpperCase();
-            const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
-
-            return `
-                <tr class="clickable-ai-row" onclick="openAiDetailModal(${index})" title="Click to view full predictive details">
-                    <td class="col-brgy">
-                        <strong class="text-dark font-weight-bold">${item.barangay}</strong>
-                    </td>
-                    <td class="col-hazard">
-                        <div class="hazard-type-title">${item.hazard_type}</div>
-                        <small class="hazard-type-basis desktop-only">${item.historical_basis || ''}</small>
-                    </td>
-                    <td class="col-risk" style="text-align: center;">
-                        <span class="badge ${badgeClass}">${risk}</span>
-                    </td>
-                    <td class="col-confidence desktop-only">
-                        <span class="confidence-tag">${item.pattern_confidence || 'N/A'}</span>
-                    </td>
-                    <td class="col-protocol desktop-only">
-                        <div class="recommended-protocol-box">
-                            <i class='bx bx-shield-quarter'></i>
-                            <span>${item.recommended_action || ''}</span>
-                        </div>
-                    </td>
-                </tr>
-            `;
-        }).join('');
+        // 4. Render UI
+        renderAiForecastUI(result);
 
     } catch (err) {
         console.error('Forecast error:', err);
@@ -248,6 +286,65 @@ async function loadAiForecast() {
         if (summaryBanner) summaryBanner.style.display = 'none';
     }
 }
+function renderAiForecastUI(result) {
+    const tableBody = document.getElementById('aiForecastTableBody');
+    const summaryBanner = document.getElementById('aiSummaryBanner');
+    if (!tableBody) return;
+
+    const data = result.prediction;
+    window.currentAiForecasts = data.forecasts || [];
+
+    if (summaryBanner && data.summary) {
+        summaryBanner.innerHTML = `<strong><i class='bx bx-info-circle'></i> Executive DRRM Advisory (${result.month}):</strong> ${data.summary}`;
+        summaryBanner.style.display = 'block';
+    }
+
+    if (data.forecasts.length === 0) {
+        tableBody.innerHTML = `
+            <tr>
+                <td colspan="5" class="table-empty-row text-muted">
+                    No elevated risk patterns identified for this cycle.
+                </td>
+            </tr>
+        `;
+        return;
+    }
+
+    tableBody.innerHTML = data.forecasts.map((item, index) => {
+        const risk = (item.risk_level || 'MODERATE').toUpperCase();
+        const badgeClass = risk === 'CRITICAL' ? 'critical' : (risk === 'HIGH' ? 'major' : 'info');
+
+        return `
+            <tr class="clickable-ai-row" onclick="openAiDetailModal(${index})" title="Click to view full predictive details">
+                <td class="col-brgy">
+                    <strong class="text-dark font-weight-bold">${item.barangay}</strong>
+                </td>
+                <td class="col-hazard">
+                    <div class="hazard-type-title">${item.hazard_type}</div>
+                    <small class="hazard-type-basis desktop-only">${item.historical_basis || ''}</small>
+                </td>
+                <td class="col-risk" style="text-align: center;">
+                    <span class="badge ${badgeClass}">${risk}</span>
+                </td>
+                <td class="col-confidence desktop-only">
+                    <span class="confidence-tag">${item.pattern_confidence || 'N/A'}</span>
+                </td>
+                <td class="col-protocol desktop-only">
+                    <div class="recommended-protocol-box">
+                        <i class='bx bx-shield-quarter'></i>
+                        <span>${item.recommended_action || ''}</span>
+                    </div>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+
+// Window bindings
+window.toggleTableCollapse = toggleTableCollapse;
+window.handleHeaderToggle = handleHeaderToggle;
+window.loadAiForecast = loadAiForecast;
+
 function openAiDetailModal(index) {
     const forecasts = window.currentAiForecasts || [];
     const item = forecasts[index];
@@ -948,6 +1045,7 @@ function openMobileModal(row, type) {
 
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
+
 
 // Window bindings
 window.openAiDetailModal = openAiDetailModal;

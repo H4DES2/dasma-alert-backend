@@ -883,3 +883,75 @@ html.global-dark-mode .modal-close-btn:hover { background: #1f2937; color: #f8fa
 }
 html.global-dark-mode .clickable-ai-row:hover { background-color: #1e293b !important; }
 html.global-dark-mode .timeline-row span { color: #f8fafc; }
+
+/* ========================================================
+   COLLAPSIBLE ACCORDION PANELS
+======================================================== */
+.clickable-header {
+    cursor: pointer;
+    user-select: none;
+    transition: opacity 0.15s ease;
+}
+.clickable-header:hover {
+    opacity: 0.92;
+}
+
+.collapse-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #f1f5f9;
+    color: #0284c7;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 7px 14px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+.collapse-toggle-btn:hover {
+    background: #e0f2fe;
+    border-color: #0284c7;
+}
+.collapse-toggle-btn.active {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+}
+
+.collapsible-body {
+    display: none;
+    margin-top: 14px;
+    animation: fadeInCollapse 0.22s ease-in-out;
+}
+.collapsible-body.show {
+    display: block;
+}
+
+@keyframes fadeInCollapse {
+    from { 
+        opacity: 0; 
+        transform: translateY(-4px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: translateY(0); 
+    }
+}
+
+/* Dark mode overrides */
+html.global-dark-mode .collapse-toggle-btn {
+    background: #1e293b;
+    border-color: #334155;
+    color: #38bdf8;
+}
+html.global-dark-mode .collapse-toggle-btn:hover {
+    background: #334155;
+    border-color: #38bdf8;
+}
+html.global-dark-mode .collapse-toggle-btn.active {
+    background: #0284c7;
+    color: #ffffff;
+}

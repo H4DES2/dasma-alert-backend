@@ -387,7 +387,7 @@ foreach ($archived_incidents as $inc) {
 
         <!-- 1. AI PREDICTIVE RISK & EARLY WARNING -->
         <section class="command-panel ai-predictive-deck">
-            <div class="panel-header">
+            <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'aiDeckBody', 'btnToggleAi')">
                 <div class="panel-title-group">
                     <div class="panel-icon-badge ai-icon-badge">
                         <i class='bx bx-brain'></i>
@@ -397,40 +397,49 @@ foreach ($archived_incidents as $inc) {
                         <p class="panel-subtitle">Proactive monthly incident forecasting powered by Gemini analyzing historical clusters & seasonal recurrences</p>
                     </div>
                 </div>
-                <div class="panel-controls">
-                    <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); padding: 8px 16px; border-radius: 10px;">
-                        <i class='bx bxs-shield-check' style="color: #10b981; font-size: 1.2rem;"></i>
-                        <span style="font-size: 0.85rem; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.04em;">
-                            Active Cycle: <span style="color: var(--text-primary, #0f172a);"><?= htmlspecialchars($current_active_month) ?></span>
+                <div class="panel-controls" onclick="event.stopPropagation()">
+                    <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); padding: 6px 12px; border-radius: 8px;">
+                        <i class='bx bxs-shield-check' style="color: #10b981; font-size: 1.1rem;"></i>
+                        <span style="font-size: 0.8rem; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.04em;">
+                            Cycle: <span style="color: var(--text-primary, #0f172a);"><?= htmlspecialchars($current_active_month) ?></span>
                         </span>
-                        <span style="background: #10b981; color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 7px; border-radius: 6px;">AUTO</span>
+                        <span style="background: #10b981; color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 6px; border-radius: 4px;">AUTO</span>
                     </div>
+                    <button type="button" class="btn-action btn-secondary-action" style="padding: 6px 10px; font-size: 0.75rem;" onclick="loadAiForecast(true)" title="Force regenerate AI prediction">
+                        <i class='bx bx-refresh'></i> Re-Analyze
+                    </button>
+                    <button type="button" id="btnToggleAi" class="collapse-toggle-btn" onclick="toggleTableCollapse('aiDeckBody', this)">
+                        <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                    </button>
                 </div>
             </div>
 
-            <!-- Executive Summary Alert Banner -->
-            <div id="aiSummaryBanner" class="ai-summary-card" style="display: none;"></div>
+            <!-- COLLAPSIBLE CONTENT -->
+            <div id="aiDeckBody" class="collapsible-body">
+                <!-- Executive Summary Alert Banner -->
+                <div id="aiSummaryBanner" class="ai-summary-card" style="display: none;"></div>
 
-            <div class="table-scroll-wrapper ai-table-scroll">
-                <table class="data-table ai-table" id="aiForecastTable">
-                    <thead>
-                        <tr>
-                            <th class="col-brgy">Barangay Jurisdiction</th>
-                            <th class="col-hazard">Anticipated Hazard</th>
-                            <th class="col-risk" style="text-align: center;">Risk Assessment</th>
-                            <th class="col-confidence desktop-only">Historical Confidence</th>
-                            <th class="col-protocol desktop-only">DRRM Recommended Protocols</th>
-                        </tr>
-                    </thead>
-                    <tbody id="aiForecastTableBody">
-                        <tr>
-                            <td colspan="5" class="table-empty-row text-primary font-weight-bold">
-                                <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
-                                Synthesizing historical patterns & spatial clusters with Gemini AI...
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div class="table-scroll-wrapper ai-table-scroll">
+                    <table class="data-table ai-table" id="aiForecastTable">
+                        <thead>
+                            <tr>
+                                <th class="col-brgy">Barangay Jurisdiction</th>
+                                <th class="col-hazard">Anticipated Hazard</th>
+                                <th class="col-risk" style="text-align: center;">Risk Assessment</th>
+                                <th class="col-confidence desktop-only">Historical Confidence</th>
+                                <th class="col-protocol desktop-only">DRRM Recommended Protocols</th>
+                            </tr>
+                        </thead>
+                        <tbody id="aiForecastTableBody">
+                            <tr>
+                                <td colspan="5" class="table-empty-row text-primary font-weight-bold">
+                                    <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
+                                    Synthesizing historical patterns & spatial clusters with Gemini AI...
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </section>
 
@@ -440,7 +449,7 @@ foreach ($archived_incidents as $inc) {
             <div class="main-col">
                 <!-- INCIDENT ARCHIVE VAULT -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'archiveVaultBody', 'btnToggleArchive')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge">
                                 <i class='bx bxs-archive'></i>
@@ -450,7 +459,7 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Audited record of resolved city emergencies and response timelines</p>
                             </div>
                         </div>
-                        <div class="panel-controls">
+                        <div class="panel-controls" onclick="event.stopPropagation()">
                             <select id="vaultTimeFilter" class="filter-select" onchange="applyFilters()">
                                 <option value="all" <?= ($vault_time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
                                 <option value="today" <?= ($vault_time_filter === 'today') ? 'selected' : '' ?>>Today</option>
@@ -464,84 +473,90 @@ foreach ($archived_incidents as $inc) {
                                     <option value="<?= htmlspecialchars($type) ?>" <?= ($type_filter === $type) ? 'selected' : '' ?>><?= htmlspecialchars($type) ?></option>
                                 <?php endforeach; ?>
                             </select>
+                            <button type="button" id="btnToggleArchive" class="collapse-toggle-btn" onclick="toggleTableCollapse('archiveVaultBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
                         </div>
                     </div>
-                    <div class="table-scroll-wrapper">
-                        <table class="data-table" id="archiveTable">
-                            <thead>
-                                <tr>
-                                    <th style="width: 35%;">Incident & Logs</th>
-                                    <th style="width: 25%;">Location & Severity</th>
-                                    <th style="width: 25%;">Response Timeline</th>
-                                    <th style="width: 15%; text-align: center;" class="exclude-export">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($archived_incidents)): ?>
-                                    <tr><td colspan="4" class="table-empty-row">No records found in the archive vault.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($archived_incidents as $inc): 
-                                        $badge_class = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'info' : 'major');
-                                        $logs_js = htmlspecialchars($inc['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
-                                        $created = strtotime($inc['created_at']);
-                                        $arrived = $inc['arrived_at'] ? strtotime($inc['arrived_at']) : null;
-                                        $resolved = $inc['resolved_at'] ? strtotime($inc['resolved_at']) : null;
 
-                                        // Convert minutes to hours and minutes if total >= 60 mins
-                                        if ($resolved && $created && $resolved >= $created) {
-                                            $total_mins = (int)floor(($resolved - $created) / 60);
-                                            if ($total_mins >= 60) {
-                                                $hrs = (int)floor($total_mins / 60);
-                                                $mins_rem = $total_mins % 60;
-                                                $duration_str = $mins_rem > 0 ? "{$hrs}h {$mins_rem}m" : "{$hrs}h";
-                                            } else {
-                                                $duration_str = "{$total_mins}m";
-                                            }
-                                        } else {
-                                            $duration_str = "N/A";
-                                        }
-
-                                        $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
-                                    ?>
-                                    <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
-                                        <td>
-                                            <div class="table-entity-title"><?= htmlspecialchars($inc['incident_type']) ?></div>
-                                            <div class="table-entity-time"><i class='bx bx-time-five'></i> <?= $inc['date_str'] ?></div>
-                                            <div class="user-log-box">"<?= htmlspecialchars($inc['initial_log'] ?? 'No user details provided.') ?>"</div>
-                                        </td>
-                                        <td>
-                                            <span class="location-label"><?= htmlspecialchars($inc['barangay']) ?></span>
-                                            <span class="badge <?= $badge_class ?>"><?= strtoupper($inc['severity']) ?></span>
-                                        </td>
-                                        <td>
-                                            <div class="timeline-text">
-                                                <div class="timeline-row"><strong>Reported:</strong> <span><?= date('h:i A', $created) ?></span></div>
-                                                <div class="timeline-row"><strong class="text-arrival">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Pending' ?></span></div>
-                                                <div class="timeline-row"><strong class="text-resolution">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Pending' ?></span></div>
-                                                <div class="duration-text">
-                                                    <span>Response Duration:</span> <span><?= $duration_str ?></span>
-                                                </div>
-                                            </div>
-                                        </td>
-                                        <td style="text-align: center; vertical-align: middle;" class="exclude-export">
-                                            <div class="btn-action-group">
-                                                <?php if (!empty($vaultImg)): ?>
-                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
-                                                <?php endif; ?>
-                                                <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Timeline"><i class='bx bx-list-ul'></i></button>
-                                            </div>
-                                        </td>
+                    <!-- COLLAPSIBLE CONTENT -->
+                    <div id="archiveVaultBody" class="collapsible-body">
+                        <div class="table-scroll-wrapper">
+                            <table class="data-table" id="archiveTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 35%;">Incident & Logs</th>
+                                        <th style="width: 25%;">Location & Severity</th>
+                                        <th style="width: 25%;">Response Timeline</th>
+                                        <th style="width: 15%; text-align: center;" class="exclude-export">Actions</th>
                                     </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($archived_incidents)): ?>
+                                        <tr><td colspan="4" class="table-empty-row">No records found in the archive vault.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($archived_incidents as $inc): 
+                                            $badge_class = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'info' : 'major');
+                                            $logs_js = htmlspecialchars($inc['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
+                                            $created = strtotime($inc['created_at']);
+                                            $arrived = $inc['arrived_at'] ? strtotime($inc['arrived_at']) : null;
+                                            $resolved = $inc['resolved_at'] ? strtotime($inc['resolved_at']) : null;
+
+                                            if ($resolved && $created && $resolved >= $created) {
+                                                $total_mins = (int)floor(($resolved - $created) / 60);
+                                                if ($total_mins >= 60) {
+                                                    $hrs = (int)floor($total_mins / 60);
+                                                    $mins_rem = $total_mins % 60;
+                                                    $duration_str = $mins_rem > 0 ? "{$hrs}h {$mins_rem}m" : "{$hrs}h";
+                                                } else {
+                                                    $duration_str = "{$total_mins}m";
+                                                }
+                                            } else {
+                                                $duration_str = "N/A";
+                                            }
+
+                                            $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
+                                        ?>
+                                        <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
+                                            <td>
+                                                <div class="table-entity-title"><?= htmlspecialchars($inc['incident_type']) ?></div>
+                                                <div class="table-entity-time"><i class='bx bx-time-five'></i> <?= $inc['date_str'] ?></div>
+                                                <div class="user-log-box">"<?= htmlspecialchars($inc['initial_log'] ?? 'No user details provided.') ?>"</div>
+                                            </td>
+                                            <td>
+                                                <span class="location-label"><?= htmlspecialchars($inc['barangay']) ?></span>
+                                                <span class="badge <?= $badge_class ?>"><?= strtoupper($inc['severity']) ?></span>
+                                            </td>
+                                            <td>
+                                                <div class="timeline-text">
+                                                    <div class="timeline-row"><strong>Reported:</strong> <span><?= date('h:i A', $created) ?></span></div>
+                                                    <div class="timeline-row"><strong class="text-arrival">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Pending' ?></span></div>
+                                                    <div class="timeline-row"><strong class="text-resolution">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Pending' ?></span></div>
+                                                    <div class="duration-text">
+                                                        <span>Response Duration:</span> <span><?= $duration_str ?></span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center; vertical-align: middle;" class="exclude-export">
+                                                <div class="btn-action-group">
+                                                    <?php if (!empty($vaultImg)): ?>
+                                                        <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                                    <?php endif; ?>
+                                                    <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Timeline"><i class='bx bx-list-ul'></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
                 <!-- REPORT BIN & REJECTION SUMMARY AUDIT -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'reportBinBody', 'btnToggleBin')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge danger-icon-badge">
                                 <i class='bx bxs-trash-alt'></i>
@@ -551,79 +566,87 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Audited breakdown of filtered false alarms, pranks, and incomplete citizen submissions</p>
                             </div>
                         </div>
-                        <span class="badge badge-dark"><?= $total_rejected ?> Rejections Filtered</span>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <span class="badge badge-dark"><?= $total_rejected ?> Rejections Filtered</span>
+                            <button type="button" id="btnToggleBin" class="collapse-toggle-btn" onclick="toggleTableCollapse('reportBinBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
 
-                    <!-- SUMMARY STATS TILES -->
-                    <div class="stats-metric-grid">
-                        <?php foreach ($reject_categories_count as $cat_name => $count): 
-                            $accent_border = match($cat_name) {
-                                'False Alarm'            => 'border-red',
-                                'Prank / Spam'           => 'border-purple',
-                                'Incomplete Information' => 'border-cyan',
-                                default                  => 'border-gray'
-                            };
-                        ?>
-                            <div class="metric-card <?= $accent_border ?>">
-                                <div class="metric-label"><?= $cat_name ?></div>
-                                <div class="metric-val"><?= number_format($count) ?></div>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
+                    <!-- COLLAPSIBLE CONTENT -->
+                    <div id="reportBinBody" class="collapsible-body">
+                        <!-- SUMMARY STATS TILES -->
+                        <div class="stats-metric-grid">
+                            <?php foreach ($reject_categories_count as $cat_name => $count): 
+                                $accent_border = match($cat_name) {
+                                    'False Alarm'            => 'border-red',
+                                    'Prank / Spam'           => 'border-purple',
+                                    'Incomplete Information' => 'border-cyan',
+                                    default                  => 'border-gray'
+                                };
+                            ?>
+                                <div class="metric-card <?= $accent_border ?>">
+                                    <div class="metric-label"><?= $cat_name ?></div>
+                                    <div class="metric-val"><?= number_format($count) ?></div>
+                                </div>
+                            <?php endforeach; ?>
+                        </div>
 
-                    <!-- DETAILED REJECTION TABLE -->
-                    <div class="table-scroll-wrapper">
-                        <table class="data-table" id="binTable">
-                            <thead>
-                                <tr>
-                                    <th style="width: 28%;">Incident & Citizen Input</th>
-                                    <th style="width: 20%;">Jurisdiction</th>
-                                    <th style="width: 38%;">Rejection Audit & Reason</th>
-                                    <th style="width: 14%; text-align: center;" class="exclude-export">Audit</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($bin_incidents)): ?>
-                                    <tr><td colspan="4" class="table-empty-row">Report bin clean. No recorded rejections.</td></tr>
-                                <?php else: ?>
-                                    <?php foreach ($bin_incidents as $bin): 
-                                        $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
-                                        $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
-                                    ?>
-                                    <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
-                                        <td>
-                                            <div class="table-entity-title text-muted-dark"><?= htmlspecialchars($bin['incident_type']) ?></div>
-                                            <div class="table-entity-time"><?= $bin['date_str'] ?></div>
-                                            <div class="user-log-box">
-                                                <strong>Citizen Log:</strong> "<?= htmlspecialchars($bin['initial_log'] ?? 'No log entered.') ?>"
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <span class="location-label"><?= htmlspecialchars($bin['barangay']) ?></span>
-                                            <span class="badge badge-dark">REJECTED</span>
-                                        </td>
-                                        <td>
-                                            <div class="rejection-meta">
-                                                <span class="badge badge-tag"><?= strtoupper($bin['parsed_category']) ?></span>
-                                                <small><i class='bx bx-user-check'></i> <?= htmlspecialchars($bin['parsed_officer']) ?></small>
-                                            </div>
-                                            <div class="user-log-box log-danger">
-                                                <strong>Officer Note:</strong> <?= htmlspecialchars($bin['parsed_notes']) ?>
-                                            </div>
-                                        </td>
-                                        <td style="text-align: center; vertical-align: middle;" class="exclude-export">
-                                            <div class="btn-action-group">
-                                                <?php if (!empty($binImg)): ?>
-                                                    <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
-                                                <?php endif; ?>
-                                                <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($bin['incident_type']) ?>')" title="Audit Trail"><i class='bx bx-list-ul'></i></button>
-                                            </div>
-                                        </td>
+                        <!-- DETAILED REJECTION TABLE -->
+                        <div class="table-scroll-wrapper">
+                            <table class="data-table" id="binTable">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 28%;">Incident & Citizen Input</th>
+                                        <th style="width: 20%;">Jurisdiction</th>
+                                        <th style="width: 38%;">Rejection Audit & Reason</th>
+                                        <th style="width: 14%; text-align: center;" class="exclude-export">Audit</th>
                                     </tr>
-                                    <?php endforeach; ?>
-                                <?php endif; ?>
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($bin_incidents)): ?>
+                                        <tr><td colspan="4" class="table-empty-row">Report bin clean. No recorded rejections.</td></tr>
+                                    <?php else: ?>
+                                        <?php foreach ($bin_incidents as $bin): 
+                                            $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
+                                            $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
+                                        ?>
+                                        <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
+                                            <td>
+                                                <div class="table-entity-title text-muted-dark"><?= htmlspecialchars($bin['incident_type']) ?></div>
+                                                <div class="table-entity-time"><?= $bin['date_str'] ?></div>
+                                                <div class="user-log-box">
+                                                    <strong>Citizen Log:</strong> "<?= htmlspecialchars($bin['initial_log'] ?? 'No log entered.') ?>"
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <span class="location-label"><?= htmlspecialchars($bin['barangay']) ?></span>
+                                                <span class="badge badge-dark">REJECTED</span>
+                                            </td>
+                                            <td>
+                                                <div class="rejection-meta">
+                                                    <span class="badge badge-tag"><?= strtoupper($bin['parsed_category']) ?></span>
+                                                    <small><i class='bx bx-user-check'></i> <?= htmlspecialchars($bin['parsed_officer']) ?></small>
+                                                </div>
+                                                <div class="user-log-box log-danger">
+                                                    <strong>Officer Note:</strong> <?= htmlspecialchars($bin['parsed_notes']) ?>
+                                                </div>
+                                            </td>
+                                            <td style="text-align: center; vertical-align: middle;" class="exclude-export">
+                                                <div class="btn-action-group">
+                                                    <?php if (!empty($binImg)): ?>
+                                                        <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                                    <?php endif; ?>
+                                                    <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($bin['incident_type']) ?>')" title="Audit Trail"><i class='bx bx-list-ul'></i></button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                        <?php endforeach; ?>
+                                    <?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
 
@@ -750,7 +773,7 @@ foreach ($archived_incidents as $inc) {
 
                 <!-- BROADCAST HISTORY -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'broadcastHistoryBody', 'btnToggleBroadcast')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge">
                                 <i class='bx bx-broadcast'></i>
@@ -760,40 +783,49 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Official emergency bulletins</p>
                             </div>
                         </div>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <button type="button" id="btnToggleBroadcast" class="collapse-toggle-btn" onclick="toggleTableCollapse('broadcastHistoryBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="table-scroll-wrapper" style="max-height: 280px;">
-                        <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Title & Date</th>
-                                    <th>Severity</th>
-                                    <th style="text-align: center;">Control</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($broadcast_history)): ?>
-                                    <tr><td colspan="3" class="table-empty-row">No broadcast history logged.</td></tr>
-                                <?php endif; ?>
-                                <?php foreach ($broadcast_history as $b): ?>
-                                <tr class="clickable-row" onclick="openMobileModal(this, 'broadcast')">
-                                    <td>
-                                        <b class="broadcast-title"><?= htmlspecialchars($b['title']) ?></b>
-                                        <small class="table-entity-time"><?= $b['date_str'] ?></small>
-                                    </td>
-                                    <td><span class="badge <?= $b['severity'] ?>"><?= strtoupper($b['severity']) ?></span></td>
-                                    <td style="text-align: center;">
-                                        <?php if ($b['is_active']): ?>
-                                            <button class="btn-action btn-stop" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
-                                                <i class='bx bx-stop-circle'></i> STOP
-                                            </button>
-                                        <?php else: ?>
-                                            <span class="badge badge-gray">ENDED</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
+
+                    <!-- COLLAPSIBLE CONTENT -->
+                    <div id="broadcastHistoryBody" class="collapsible-body">
+                        <div class="table-scroll-wrapper" style="max-height: 280px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Title & Date</th>
+                                        <th>Severity</th>
+                                        <th style="text-align: center;">Control</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php if (empty($broadcast_history)): ?>
+                                        <tr><td colspan="3" class="table-empty-row">No broadcast history logged.</td></tr>
+                                    <?php endif; ?>
+                                    <?php foreach ($broadcast_history as $b): ?>
+                                    <tr class="clickable-row" onclick="openMobileModal(this, 'broadcast')">
+                                        <td>
+                                            <b class="broadcast-title"><?= htmlspecialchars($b['title']) ?></b>
+                                            <small class="table-entity-time"><?= $b['date_str'] ?></small>
+                                        </td>
+                                        <td><span class="badge <?= $b['severity'] ?>"><?= strtoupper($b['severity']) ?></span></td>
+                                        <td style="text-align: center;">
+                                            <?php if ($b['is_active']): ?>
+                                                <button class="btn-action btn-stop" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
+                                                    <i class='bx bx-stop-circle'></i> STOP
+                                                </button>
+                                            <?php else: ?>
+                                                <span class="badge badge-gray">ENDED</span>
+                                            <?php endif; ?>
+                                        </td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
