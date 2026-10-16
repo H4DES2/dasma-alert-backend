@@ -1,166 +1,15 @@
 const allIncidents = window.allIncidents || [];
 const binIncidents = window.binIncidents || [];
 const allSeasonDates = window.allSeasonDates || [];
+
 let lineChartInstance = null;
+let typeChartInstance = null;
+let sentimentChartInstance = null;
+let evacChartInstance = null;
+let heatmapMapInstance = null;
 
 // -----------------------------------------------------
-// 1. INITIALIZE CHARTS
-// -----------------------------------------------------
-document.addEventListener("DOMContentLoaded", function() {
-    if (typeof ChartDataLabels !== 'undefined') {
-        Chart.register(ChartDataLabels);
-    }
-    
-    const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
-    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
-    const textColor = isDarkMode ? '#94a3b8' : '#64748b';
-
-    // 1. Fixed Incident Breakdown - Horizontal Ranked Distribution (NO PERCENTAGES, ALL DATA VISIBLE)
-    const typeCanvas = document.getElementById('typePieChart');
-    if (typeCanvas && (window.typeData || []).length > 0) {
-        const labels = window.typeLabels || [];
-        const dataValues = window.typeData || [];
-        const bgColors = window.typeColors || [];
-
-        // Adjust scrollable container height based on total items so every row breathes
-        const scrollContainer = typeCanvas.parentElement;
-        if (scrollContainer) {
-            const calculatedHeight = Math.max(280, labels.length * 30 + 40);
-            scrollContainer.style.height = `${calculatedHeight}px`;
-        }
-
-        new Chart(typeCanvas.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Total Incidents',
-                    data: dataValues,
-                    backgroundColor: bgColors,
-                    borderRadius: 4,
-                    borderSkipped: false,
-                    barThickness: 16
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    datalabels: {
-                        anchor: 'end',
-                        align: 'end',
-                        color: textColor,
-                        font: { weight: 'bold', size: 11 },
-                        formatter: (value) => value // Exact numerical count only, NO percentages
-                    },
-                    tooltip: {
-                        callbacks: {
-                            label: (ctx) => ` ${ctx.raw} incident${ctx.raw === 1 ? '' : 's'}`
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        grid: { color: gridColor },
-                        ticks: { color: textColor, precision: 0 }
-                    },
-                    y: {
-                        grid: { display: false },
-                        ticks: {
-                            color: textColor,
-                            font: { size: 10, weight: '600' }
-                        }
-                    }
-                }
-            }
-        });
-    }
-
-    // 2. Citizen Sentiment Pie Chart
-    const sentimentCanvas = document.getElementById('sentimentPieChart');
-    const sentimentValues = window.sentimentData || [];
-    const totalSentiment = sentimentValues.reduce((a, b) => a + parseInt(b, 10), 0);
-
-    if (sentimentCanvas && totalSentiment > 0) {
-        new Chart(sentimentCanvas.getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: window.sentimentLabels || [],
-                datasets: [{
-                    data: sentimentValues,
-                    backgroundColor: ['#dc2626', '#ea580c', '#0284c7', '#16a34a'],
-                    borderWidth: 2,
-                    borderColor: isDarkMode ? '#1e293b' : '#ffffff',
-                    hoverOffset: 6
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '68%',
-                plugins: {
-                    legend: { 
-                        position: 'bottom', 
-                        labels: { padding: 10, font: { weight: '600', size: 11 }, color: textColor } 
-                    },
-                    datalabels: {
-                        color: '#ffffff',
-                        font: { weight: 'bold', size: 11 },
-                        formatter: (val) => val > 0 ? val : ''
-                    }
-                }
-            }
-        });
-    }
-
-    // 3. Disaster Seasonality Line Chart
-    renderSeasonality();
-
-    // 4. Evac Center Capacity Bar Chart
-    const evacCanvas = document.getElementById('evacOverflowChart');
-    if (evacCanvas && (window.evacLabels || []).length > 0) {
-        new Chart(evacCanvas.getContext('2d'), {
-            type: 'bar',
-            data: {
-                labels: window.evacLabels || [],
-                datasets: [
-                    { label: 'Current Occupants', data: window.evacOccupants || [], backgroundColor: '#ea580c', borderRadius: 4 },
-                    { label: 'Total Capacity', data: window.evacCapacity || [], backgroundColor: '#0284c7', borderRadius: 4 }
-                ]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { datalabels: { display: false }, legend: { labels: { color: textColor, font: { weight: '600' } } } },
-                scales: {
-                    y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, precision: 0 } },
-                    x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } }
-                }
-            }
-        });
-    }
-
-    // 5. Leaflet Spatial Hotspots Heatmap
-    const heatmapEl = document.getElementById('heatmap');
-    if (heatmapEl && typeof L !== 'undefined') {
-        let dasmaBounds = L.latLngBounds([14.2400, 120.9000], [14.3800, 121.0200]);
-        const map = L.map('heatmap', { center: [14.3294, 120.9368], zoom: 13, minZoom: 12, maxBounds: dasmaBounds });
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        
-        const heatData = window.heatData || [];
-        if (heatData.length > 0 && typeof L.heatLayer === 'function') {
-            L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 15 }).addTo(map);
-        }
-    }
-
-    // Automatically generate AI risk forecast for the current cycle
-    loadAiForecast();
-});
-// -----------------------------------------------------
-// 1. COLLAPSIBLE ACCORDION CONTROLS
+// 1. COLLAPSIBLE ACCORDION CONTROLS (AUTO-RESIZE MAPS & CHARTS)
 // -----------------------------------------------------
 function toggleTableCollapse(contentId, btnEl) {
     const content = document.getElementById(contentId);
@@ -178,6 +27,26 @@ function toggleTableCollapse(contentId, btnEl) {
             if (textSpan) textSpan.textContent = 'Click to hide data';
             if (icon) icon.className = 'bx bx-chevron-up';
         }
+
+        // Auto-initialize or resize charts/maps when uncollapsed
+        setTimeout(() => {
+            if (contentId === 'spatialHotspotsBody') {
+                if (!heatmapMapInstance) initHeatmap();
+                else heatmapMapInstance.invalidateSize();
+            } else if (contentId === 'seasonalityBody') {
+                if (!lineChartInstance) renderSeasonality();
+                else lineChartInstance.resize();
+            } else if (contentId === 'incidentDistributionBody') {
+                if (!typeChartInstance) initTypeChart();
+                else typeChartInstance.resize();
+            } else if (contentId === 'sentimentAuditBody') {
+                if (!sentimentChartInstance) initSentimentChart();
+                else sentimentChartInstance.resize();
+            } else if (contentId === 'evacCapacityBody') {
+                if (!evacChartInstance) initEvacChart();
+                else evacChartInstance.resize();
+            }
+        }, 80);
     } else {
         content.style.display = 'none';
         content.classList.remove('show');
@@ -192,7 +61,6 @@ function toggleTableCollapse(contentId, btnEl) {
 }
 
 function handleHeaderToggle(event, contentId, btnId) {
-    // Prevent collapsing when clicking interactive controls (selects, buttons, links)
     if (event.target.closest('select, input, button, a')) {
         return;
     }
@@ -201,17 +69,202 @@ function handleHeaderToggle(event, contentId, btnId) {
 }
 
 // -----------------------------------------------------
-// 2. AI PREDICTION WITH LOCALSTORAGE CACHING
+// 2. CHART INITIALIZERS
+// -----------------------------------------------------
+function initTypeChart() {
+    const typeCanvas = document.getElementById('typePieChart');
+    if (!typeCanvas || !(window.typeData || []).length) return;
+    if (typeChartInstance) {
+        typeChartInstance.resize();
+        return;
+    }
+
+    const labels = window.typeLabels || [];
+    const dataValues = window.typeData || [];
+    const bgColors = window.typeColors || [];
+
+    const scrollContainer = typeCanvas.parentElement;
+    if (scrollContainer) {
+        const calculatedHeight = Math.max(280, labels.length * 30 + 40);
+        scrollContainer.style.height = `${calculatedHeight}px`;
+    }
+
+    const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
+    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const textColor = isDarkMode ? '#94a3b8' : '#64748b';
+
+    typeChartInstance = new Chart(typeCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Total Incidents',
+                data: dataValues,
+                backgroundColor: bgColors,
+                borderRadius: 4,
+                borderSkipped: false,
+                barThickness: 16
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                datalabels: {
+                    anchor: 'end',
+                    align: 'end',
+                    color: textColor,
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (value) => value
+                },
+                tooltip: {
+                    callbacks: {
+                        label: (ctx) => ` ${ctx.raw} incident${ctx.raw === 1 ? '' : 's'}`
+                    }
+                }
+            },
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    grid: { color: gridColor },
+                    ticks: { color: textColor, precision: 0 }
+                },
+                y: {
+                    grid: { display: false },
+                    ticks: { color: textColor, font: { size: 10, weight: '600' } }
+                }
+            }
+        }
+    });
+}
+
+function initSentimentChart() {
+    const sentimentCanvas = document.getElementById('sentimentPieChart');
+    const sentimentValues = window.sentimentData || [];
+    const totalSentiment = sentimentValues.reduce((a, b) => a + parseInt(b, 10), 0);
+    if (!sentimentCanvas || totalSentiment <= 0) return;
+    if (sentimentChartInstance) {
+        sentimentChartInstance.resize();
+        return;
+    }
+
+    const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
+    const textColor = isDarkMode ? '#94a3b8' : '#64748b';
+
+    sentimentChartInstance = new Chart(sentimentCanvas.getContext('2d'), {
+        type: 'doughnut',
+        data: {
+            labels: window.sentimentLabels || [],
+            datasets: [{
+                data: sentimentValues,
+                backgroundColor: ['#dc2626', '#ea580c', '#0284c7', '#16a34a'],
+                borderWidth: 2,
+                borderColor: isDarkMode ? '#1e293b' : '#ffffff',
+                hoverOffset: 6
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            cutout: '68%',
+            plugins: {
+                legend: { 
+                    position: 'bottom', 
+                    labels: { padding: 10, font: { weight: '600', size: 11 }, color: textColor } 
+                },
+                datalabels: {
+                    color: '#ffffff',
+                    font: { weight: 'bold', size: 11 },
+                    formatter: (val) => val > 0 ? val : ''
+                }
+            }
+        }
+    });
+}
+
+function initEvacChart() {
+    const evacCanvas = document.getElementById('evacOverflowChart');
+    if (!evacCanvas || !(window.evacLabels || []).length) return;
+    if (evacChartInstance) {
+        evacChartInstance.resize();
+        return;
+    }
+
+    const isDarkMode = document.documentElement.classList.contains('global-dark-mode');
+    const gridColor = isDarkMode ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
+    const textColor = isDarkMode ? '#94a3b8' : '#64748b';
+
+    evacChartInstance = new Chart(evacCanvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+            labels: window.evacLabels || [],
+            datasets: [
+                { label: 'Current Occupants', data: window.evacOccupants || [], backgroundColor: '#ea580c', borderRadius: 4 },
+                { label: 'Total Capacity', data: window.evacCapacity || [], backgroundColor: '#0284c7', borderRadius: 4 }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { datalabels: { display: false }, legend: { labels: { color: textColor, font: { weight: '600' } } } },
+            scales: {
+                y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor, precision: 0 } },
+                x: { grid: { display: false }, ticks: { color: textColor, font: { size: 10 } } }
+            }
+        }
+    });
+}
+
+function initHeatmap() {
+    const heatmapEl = document.getElementById('heatmap');
+    if (!heatmapEl || typeof L === 'undefined') return;
+    if (heatmapMapInstance) {
+        heatmapMapInstance.invalidateSize();
+        return;
+    }
+
+    const dasmaBounds = L.latLngBounds([14.2400, 120.9000], [14.3800, 121.0200]);
+    heatmapMapInstance = L.map('heatmap', { center: [14.3294, 120.9368], zoom: 13, minZoom: 12, maxBounds: dasmaBounds });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(heatmapMapInstance);
+    
+    const heatData = window.heatData || [];
+    if (heatData.length > 0 && typeof L.heatLayer === 'function') {
+        L.heatLayer(heatData, { radius: 25, blur: 15, maxZoom: 15 }).addTo(heatmapMapInstance);
+    }
+}
+
+// -----------------------------------------------------
+// 3. LIFECYCLE ATTACHMENT
+// -----------------------------------------------------
+document.addEventListener("DOMContentLoaded", function() {
+    if (typeof ChartDataLabels !== 'undefined') {
+        Chart.register(ChartDataLabels);
+    }
+
+    // Initialize charts/maps (will size when their accordion is clicked)
+    initTypeChart();
+    initSentimentChart();
+    renderSeasonality();
+    initEvacChart();
+    initHeatmap();
+
+    // Load AI predictions
+    loadAiForecast();
+});
+
+// -----------------------------------------------------
+// 4. AI PREDICTION WITH LOCALSTORAGE CACHING
 // -----------------------------------------------------
 const AI_CACHE_KEY = 'dasma_gemini_predictive_cache';
-const AI_CACHE_TTL = 6 * 60 * 60 * 1000; // 6-Hour Cache Lifespan
+const AI_CACHE_TTL = 6 * 60 * 60 * 1000;
 
 async function loadAiForecast(forceRefresh = false) {
     const tableBody = document.getElementById('aiForecastTableBody');
     const summaryBanner = document.getElementById('aiSummaryBanner');
     if (!tableBody) return;
 
-    // 1. Check client-side cached forecast if not explicitly requested to refresh
     if (!forceRefresh) {
         try {
             const rawCache = localStorage.getItem(AI_CACHE_KEY);
@@ -220,7 +273,7 @@ async function loadAiForecast(forceRefresh = false) {
                 const isFresh = (Date.now() - cached.timestamp) < AI_CACHE_TTL;
                 if (isFresh && cached.data && cached.data.success && cached.data.prediction) {
                     renderAiForecastUI(cached.data);
-                    return; // Instant render with zero network delay
+                    return;
                 }
             }
         } catch (e) {
@@ -228,7 +281,6 @@ async function loadAiForecast(forceRefresh = false) {
         }
     }
 
-    // 2. Display loading state while fetching fresh Gemini synthesis
     tableBody.innerHTML = `
         <tr>
             <td colspan="5" class="table-empty-row text-primary font-weight-bold">
@@ -240,15 +292,11 @@ async function loadAiForecast(forceRefresh = false) {
 
     try {
         const response = await fetch(`../php/ai_predictor.php`);
-        
         if (!response.ok) {
-            const errText = await response.text();
-            console.error('AI Predictor Server Error:', response.status, errText);
             throw new Error(`Server returned HTTP ${response.status}`);
         }
 
         const result = await response.json();
-
         if (!result.success || !result.prediction || !result.prediction.forecasts) {
             tableBody.innerHTML = `
                 <tr>
@@ -261,7 +309,6 @@ async function loadAiForecast(forceRefresh = false) {
             return;
         }
 
-        // 3. Store valid prediction in localStorage cache
         try {
             localStorage.setItem(AI_CACHE_KEY, JSON.stringify({
                 timestamp: Date.now(),
@@ -271,7 +318,6 @@ async function loadAiForecast(forceRefresh = false) {
             console.warn('AI Cache write failed:', e);
         }
 
-        // 4. Render UI
         renderAiForecastUI(result);
 
     } catch (err) {
@@ -279,13 +325,14 @@ async function loadAiForecast(forceRefresh = false) {
         tableBody.innerHTML = `
             <tr>
                 <td colspan="5" class="table-empty-row text-danger font-weight-bold">
-                    Connection to AI Predictor failed: ${err.message}. Check network connection.
+                    Connection to AI Predictor failed: ${err.message}.
                 </td>
             </tr>
         `;
         if (summaryBanner) summaryBanner.style.display = 'none';
     }
 }
+
 function renderAiForecastUI(result) {
     const tableBody = document.getElementById('aiForecastTableBody');
     const summaryBanner = document.getElementById('aiSummaryBanner');
@@ -339,11 +386,6 @@ function renderAiForecastUI(result) {
         `;
     }).join('');
 }
-
-// Window bindings
-window.toggleTableCollapse = toggleTableCollapse;
-window.handleHeaderToggle = handleHeaderToggle;
-window.loadAiForecast = loadAiForecast;
 
 function openAiDetailModal(index) {
     const forecasts = window.currentAiForecasts || [];
@@ -415,7 +457,7 @@ function openAiDetailModal(index) {
 }
 
 // -----------------------------------------------------
-// 3. SEASONALITY RENDERING
+// 5. SEASONALITY RENDERING
 // -----------------------------------------------------
 function renderSeasonality() {
     const canvasElement = document.getElementById('seasonalityLineChart');
@@ -499,7 +541,7 @@ function renderSeasonality() {
 }
 
 // -----------------------------------------------------
-// 4. REPORT BUILDER CONTROLS & EXPORTS
+// 6. REPORT BUILDER CONTROLS & EXPORTS
 // -----------------------------------------------------
 function getTodayBounds() {
     const now = new Date();
@@ -906,7 +948,7 @@ function backupAllReports() {
 }
 
 // -----------------------------------------------------
-// 5. CONTROLS, MODALS & TIMELINES
+// 7. CONTROLS, MODALS & TIMELINES
 // -----------------------------------------------------
 function applyFilters() { 
     let typeVal = document.getElementById('typeFilter')?.value || 'all';
@@ -997,7 +1039,7 @@ function stopBroadcast(id) {
 }
 
 // -----------------------------------------------------
-// 6. MOBILE MODAL LOGIC
+// 8. MOBILE MODAL LOGIC
 // -----------------------------------------------------
 function openMobileModal(row, type) {
     if (window.innerWidth > 768) return; 
@@ -1046,8 +1088,9 @@ function openMobileModal(row, type) {
     document.getElementById('mobileAnalyticsModal').style.display = 'flex';
 }
 
-
 // Window bindings
+window.toggleTableCollapse = toggleTableCollapse;
+window.handleHeaderToggle = handleHeaderToggle;
 window.openAiDetailModal = openAiDetailModal;
 window.openReportModal = openReportModal;
 window.handlePeriodChange = handlePeriodChange;

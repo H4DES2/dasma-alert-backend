@@ -652,7 +652,7 @@ foreach ($archived_incidents as $inc) {
 
                 <!-- DISASTER SEASONALITY -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'seasonalityBody', 'btnToggleSeasonality')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge">
                                 <i class='bx bx-line-chart'></i>
@@ -662,26 +662,33 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Temporal frequency analysis across reporting periods</p>
                             </div>
                         </div>
-                        <select id="seasonalityFilter" class="filter-select" onchange="renderSeasonality()">
-                            <option value="all">All Time</option>
-                            <option value="day">Single Day</option>
-                            <option value="weekly">Weekly Range (Up to 7 Days)</option>
-                            <option value="monthly">Monthly</option>
-                            <option value="quarterly">Quarterly</option>
-                            <option value="yearly">Yearly</option>
-                        </select>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <select id="seasonalityFilter" class="filter-select" onchange="renderSeasonality()">
+                                <option value="all">All Time</option>
+                                <option value="day">Single Day</option>
+                                <option value="weekly">Weekly Range (Up to 7 Days)</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                            <button type="button" id="btnToggleSeasonality" class="collapse-toggle-btn" onclick="toggleTableCollapse('seasonalityBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="chart-wrapper">
-                        <?php if (empty($seasonality_dates)): ?>
-                            <div class="empty-overlay" id="seasonalityOverlay">No seasonal data recorded.</div>
-                        <?php endif; ?>
-                        <canvas id="seasonalityLineChart"></canvas>
+                    <div id="seasonalityBody" class="collapsible-body">
+                        <div class="chart-wrapper">
+                            <?php if (empty($seasonality_dates)): ?>
+                                <div class="empty-overlay" id="seasonalityOverlay">No seasonal data recorded.</div>
+                            <?php endif; ?>
+                            <canvas id="seasonalityLineChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
                 <!-- EVAC CENTER CAPACITY -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'evacCapacityBody', 'btnToggleEvacCapacity')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge">
                                 <i class='bx bxs-home-heart'></i>
@@ -691,12 +698,19 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Real-time capacity tracking across city shelter assets</p>
                             </div>
                         </div>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <button type="button" id="btnToggleEvacCapacity" class="collapse-toggle-btn" onclick="toggleTableCollapse('evacCapacityBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="chart-wrapper">
-                        <?php if (empty($evac_labels)): ?>
-                            <div class="empty-overlay">No evacuation centers currently active.</div>
-                        <?php endif; ?>
-                        <canvas id="evacOverflowChart"></canvas>
+                    <div id="evacCapacityBody" class="collapsible-body">
+                        <div class="chart-wrapper">
+                            <?php if (empty($evac_labels)): ?>
+                                <div class="empty-overlay">No evacuation centers currently active.</div>
+                            <?php endif; ?>
+                            <canvas id="evacOverflowChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -705,7 +719,7 @@ foreach ($archived_incidents as $inc) {
             <div class="side-col">
                 <!-- SPATIAL HOTSPOTS HEATMAP -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'spatialHotspotsBody', 'btnToggleHotspots')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge danger-icon-badge">
                                 <i class='bx bxs-hot'></i>
@@ -715,13 +729,20 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Kernel density geospatial map</p>
                             </div>
                         </div>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <button type="button" id="btnToggleHotspots" class="collapse-toggle-btn" onclick="toggleTableCollapse('spatialHotspotsBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
-                    <div id="heatmap"></div>
+                    <div id="spatialHotspotsBody" class="collapsible-body">
+                        <div id="heatmap"></div>
+                    </div>
                 </div>
 
                 <!-- INCIDENT BREAKDOWN -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'incidentDistributionBody', 'btnToggleIncidentDist')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge">
                                 <i class='bx bx-bar-chart-alt-2'></i>
@@ -731,28 +752,35 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Full rank of all historical non-rejected emergencies</p>
                             </div>
                         </div>
-                        <select id="timeFilter" class="filter-select" onchange="applyFilters()">
-                            <option value="today" <?= ($time_filter === 'today') ? 'selected' : '' ?>>Today</option>
-                            <option value="week" <?= ($time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
-                            <option value="month" <?= ($time_filter === 'month') ? 'selected' : '' ?>>1 Month</option>
-                            <option value="year" <?= ($time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
-                            <option value="all" <?= ($time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
-                        </select>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <select id="timeFilter" class="filter-select" onchange="applyFilters()">
+                                <option value="today" <?= ($time_filter === 'today') ? 'selected' : '' ?>>Today</option>
+                                <option value="week" <?= ($time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
+                                <option value="month" <?= ($time_filter === 'month') ? 'selected' : '' ?>>1 Month</option>
+                                <option value="year" <?= ($time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
+                                <option value="all" <?= ($time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
+                            </select>
+                            <button type="button" id="btnToggleIncidentDist" class="collapse-toggle-btn" onclick="toggleTableCollapse('incidentDistributionBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="breakdown-container">
-                        <?php if (empty($type_data)): ?>
-                            <div class="empty-overlay">No incident data available.</div>
-                        <?php else: ?>
-                            <div class="breakdown-chart-scroll">
-                                <canvas id="typePieChart"></canvas>
-                            </div>
-                        <?php endif; ?>
+                    <div id="incidentDistributionBody" class="collapsible-body">
+                        <div class="breakdown-container">
+                            <?php if (empty($type_data)): ?>
+                                <div class="empty-overlay">No incident data available.</div>
+                            <?php else: ?>
+                                <div class="breakdown-chart-scroll">
+                                    <canvas id="typePieChart"></canvas>
+                                </div>
+                            <?php endif; ?>
+                        </div>
                     </div>
                 </div>
 
                 <!-- CITIZEN SENTIMENT ANALYSIS -->
                 <div class="command-panel">
-                    <div class="panel-header">
+                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'sentimentAuditBody', 'btnToggleSentiment')">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge purple-icon-badge">
                                 <i class='bx bx-pulse'></i>
@@ -762,12 +790,19 @@ foreach ($archived_incidents as $inc) {
                                 <p class="panel-subtitle">Emotional distress & urgency detected in citizen submissions</p>
                             </div>
                         </div>
+                        <div class="panel-controls" onclick="event.stopPropagation()">
+                            <button type="button" id="btnToggleSentiment" class="collapse-toggle-btn" onclick="toggleTableCollapse('sentimentAuditBody', this)">
+                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
+                            </button>
+                        </div>
                     </div>
-                    <div class="chart-wrapper sentiment-chart-wrapper">
-                        <?php if (!$has_sentiment_data): ?>
-                            <div class="empty-overlay">No citizen descriptions recorded.</div>
-                        <?php endif; ?>
-                        <canvas id="sentimentPieChart"></canvas>
+                    <div id="sentimentAuditBody" class="collapsible-body">
+                        <div class="chart-wrapper sentiment-chart-wrapper">
+                            <?php if (!$has_sentiment_data): ?>
+                                <div class="empty-overlay">No citizen descriptions recorded.</div>
+                            <?php endif; ?>
+                            <canvas id="sentimentPieChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
