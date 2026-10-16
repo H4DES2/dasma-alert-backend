@@ -434,7 +434,7 @@ foreach ($archived_incidents as $inc) {
                             <tr>
                                 <td colspan="5" class="table-empty-row text-primary font-weight-bold">
                                     <i class='bx bx-loader-alt bx-spin' style="font-size: 1.6rem; display: block; margin-bottom: 8px;"></i>
-                                    Synthesizing historical patterns & spatial clusters with Gemini AI...
+                                    Synthesizing historical patterns & spatial clusters
                                 </td>
                             </tr>
                         </tbody>
