@@ -47,16 +47,16 @@
 .triage-table {
     width: 100%;
     border-collapse: collapse;
-    table-layout: auto;
+    table-layout: fixed;
 }
 
 .triage-table th {
     background: #f8fafc;
     color: #64748b;
-    font-size: 0.75rem;
+    font-size: 0.72rem;
     font-weight: 800;
     text-transform: uppercase;
-    padding: 12px 14px;
+    padding: 10px 8px;
     border-bottom: 1px solid #edf2f7;
     text-align: left;
     white-space: nowrap;
@@ -64,7 +64,7 @@
 
 .triage-table td {
     border-bottom: 1px solid #edf2f7;
-    padding: 14px 14px;
+    padding: 10px 8px;
     vertical-align: middle;
 }
 

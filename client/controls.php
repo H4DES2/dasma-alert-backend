@@ -11,15 +11,16 @@ if (empty($_SESSION['user_id']) || !in_array($_SESSION['role'] ?? '', ['admin', 
 $s_user_id  = (int)($_SESSION['user_id'] ?? 0);
 $s_barangay = $_SESSION['barangay'] ?? 'Barangay';
 if (strcasecmp($s_barangay, 'Burol Main') === 0) { $s_barangay = 'Burol'; }
+$alt_barangay = (strcasecmp($s_barangay, 'Burol') === 0) ? 'Burol Main' : $s_barangay;
 
-// Announcements
-$ann_stmt = $conn->prepare("SELECT * FROM announcements WHERE author_id = ? OR author_id IS NULL ORDER BY created_at DESC");
+// Announcements authored by this barangay admin
+$ann_stmt = $conn->prepare("SELECT * FROM announcements WHERE author_id = ? ORDER BY created_at DESC");
 $ann_stmt->bind_param("i", $s_user_id);
 $ann_stmt->execute();
 $announcements = $ann_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $ann_stmt->close();
 
-// Geofenced Broadcast History for this Barangay Admin
+// Strict Geofenced Broadcast History: Only alerts targeted to this specific barangay
 $chk_t = $conn->query("SHOW COLUMNS FROM broadcasts LIKE 'target_barangay'");
 if ($chk_t && $chk_t->num_rows === 0) {
     $conn->query("ALTER TABLE broadcasts ADD COLUMN target_barangay VARCHAR(100) NULL DEFAULT NULL");
@@ -28,13 +29,12 @@ if ($chk_t && $chk_t->num_rows === 0) {
 $b_stmt = $conn->prepare("
     SELECT *, DATE_FORMAT(created_at, '%b %d, %Y - %h:%i %p') as date_str 
     FROM broadcasts 
-    WHERE target_barangay IS NULL 
+    WHERE LOWER(TRIM(target_barangay)) = LOWER(?) 
        OR LOWER(TRIM(target_barangay)) = LOWER(?)
-       OR LOWER(TRIM(target_barangay)) = 'all'
     ORDER BY created_at DESC 
     LIMIT 30
 ");
-$b_stmt->bind_param("s", $s_barangay);
+$b_stmt->bind_param("ss", $s_barangay, $alt_barangay);
 $b_stmt->execute();
 $broadcast_history = $b_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $b_stmt->close();
@@ -64,7 +64,7 @@ $current_page = 'controls.php';
         <div class="dashboard-split-layout" style="display: flex; gap: 24px; flex-wrap: wrap;">
             
             <!-- LEFT COLUMN: Broadcast Transmission & Broadcast History -->
-            <div style="flex: 1; min-width: 340px; display: flex; flex-direction: column; gap: 24px;">
+            <div style="flex: 1; min-width: 360px; display: flex; flex-direction: column; gap: 24px;">
                 
                 <!-- Broadcast Form -->
                 <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
@@ -94,22 +94,22 @@ $current_page = 'controls.php';
                 <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
                     <div class="panel-header" style="margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
                         <h2 style="font-weight:800; font-size:1.15rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
-                            <i class='bx bx-history' style="color:#0284c7;"></i> Broadcast History
+                            <i class='bx bx-history' style="color:#0284c7;"></i> Local Broadcast History
                         </h2>
                     </div>
-                    <div class="table-scroll-wrapper" style="max-height: 380px; overflow-y:auto; border: 1px solid #edf2f7; border-radius: 12px;">
+                    <div class="table-scroll-wrapper" style="max-height: 380px; overflow-y:auto; overflow-x:hidden; border: 1px solid #edf2f7; border-radius: 12px;">
                         <table class="triage-table">
                             <thead>
                                 <tr>
-                                    <th>Title & Date</th>
-                                    <th>Scope</th>
-                                    <th>Severity</th>
-                                    <th style="text-align: center;">Control</th>
+                                    <th style="width: 44%;">Title & Date</th>
+                                    <th style="width: 20%;">Scope</th>
+                                    <th style="width: 18%;">Severity</th>
+                                    <th style="width: 18%; text-align: center;">Control</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <?php if (empty($broadcast_history)): ?>
-                                    <tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 28px; font-weight:600;">No broadcast history found.</td></tr>
+                                    <tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 28px; font-weight:600;">No local broadcasts transmitted yet.</td></tr>
                                 <?php endif; ?>
                                 <?php foreach ($broadcast_history as $b): 
                                     $sev = strtolower(trim($b['severity']));
@@ -121,24 +121,24 @@ $current_page = 'controls.php';
                                 ?>
                                 <tr>
                                     <td>
-                                        <div style="color:#1e293b; font-weight:800; font-size:0.92rem;"><?= htmlspecialchars($b['title']) ?></div>
-                                        <small style="color:#94a3b8; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:2px;">
+                                        <div style="color:#1e293b; font-weight:800; font-size:0.9rem; word-break: break-word;"><?= htmlspecialchars($b['title']) ?></div>
+                                        <small style="color:#94a3b8; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:2px; font-size: 0.75rem;">
                                             <i class='bx bx-time'></i> <?= $b['date_str'] ?>
                                         </small>
                                     </td>
                                     <td>
-                                        <span style="font-weight:700; font-size:0.8rem; color: <?= empty($b['target_barangay']) || strcasecmp($b['target_barangay'], 'all') === 0 ? '#0284c7' : '#d97706' ?>;">
-                                            <?= empty($b['target_barangay']) || strcasecmp($b['target_barangay'], 'all') === 0 ? 'City-Wide' : htmlspecialchars($b['target_barangay']) ?>
+                                        <span style="font-weight:700; font-size:0.8rem; color: #d97706;">
+                                            <?= htmlspecialchars($b['target_barangay']) ?>
                                         </span>
                                     </td>
                                     <td>
-                                        <span style="font-size:0.72rem; padding: 4px 10px; border-radius: 6px; font-weight:800; text-transform:uppercase; <?= $sev_color ?>">
+                                        <span style="font-size:0.7rem; padding: 3px 8px; border-radius: 6px; font-weight:800; text-transform:uppercase; display:inline-block; <?= $sev_color ?>">
                                             <?= strtoupper($b['severity']) ?>
                                         </span>
                                     </td>
                                     <td style="text-align: center;">
                                         <?php if ($b['is_active']): ?>
-                                            <button class="pill-btn bg-red" style="padding: 6px 12px; font-size: 0.75rem;" onclick="stopBroadcast(<?= $b['id'] ?>)">
+                                            <button class="pill-btn bg-red" style="padding: 5px 10px; font-size: 0.72rem;" onclick="stopBroadcast(<?= $b['id'] ?>)">
                                                 <i class='bx bx-stop-circle'></i> STOP
                                             </button>
                                         <?php else: ?>
@@ -189,12 +189,8 @@ $current_page = 'controls.php';
                                         </small>
                                     </td>
                                     <td style="text-align: center; white-space: nowrap;">
-                                        <?php if ($ann['author_id'] == $s_user_id || empty($ann['author_id'])): ?>
                                         <button class="action-circle bg-green" onclick="openAnnouncementModal(<?= $ann['id'] ?>, '<?= addslashes($ann['title']) ?>', '<?= addslashes(str_replace(["\r","\n"], ['\r','\n'], $ann['message'])) ?>')"><i class='bx bx-edit'></i></button>
                                         <button class="action-circle bg-red" onclick="deleteAnnouncement(<?= $ann['id'] ?>)"><i class='bx bx-trash'></i></button>
-                                        <?php else: ?>
-                                        <span style="color:#94a3b8; font-size:0.75rem; font-weight:700;">City-Wide</span>
-                                        <?php endif; ?>
                                     </td>
                                 </tr>
                                 <?php endforeach; ?>
@@ -206,7 +202,7 @@ $current_page = 'controls.php';
 
         </div>
 
-        <!-- Announcement Create/Edit Modal -->
+        <!-- Announcement Modal -->
         <div id="announcementModal" class="modal">
             <div class="modal-content" style="max-width: 500px;">
                 <div class="close-modal" onclick="closeModal('announcementModal')"><i class='bx bx-x'></i></div>
