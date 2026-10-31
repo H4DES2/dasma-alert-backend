@@ -18,8 +18,8 @@
 }
 
 .action-circle {
-    width: 32px;
-    height: 32px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     border: none;
     color: #ffffff;
@@ -28,11 +28,12 @@
     justify-content: center;
     cursor: pointer;
     font-size: 0.95rem;
-    transition: opacity 0.2s ease;
+    transition: opacity 0.2s ease, transform 0.15s ease;
 }
 
 .action-circle:hover {
-    opacity: 0.85;
+    opacity: 0.9;
+    transform: scale(1.05);
 }
 
 .bg-green {
@@ -46,21 +47,36 @@
 .triage-table {
     width: 100%;
     border-collapse: collapse;
+    table-layout: auto;
 }
 
 .triage-table th {
-    background: transparent;
-    color: #888888;
+    background: #f8fafc;
+    color: #64748b;
     font-size: 0.75rem;
+    font-weight: 800;
     text-transform: uppercase;
-    padding-bottom: 10px;
+    padding: 12px 14px;
     border-bottom: 1px solid #edf2f7;
     text-align: left;
+    white-space: nowrap;
 }
 
 .triage-table td {
     border-bottom: 1px solid #edf2f7;
-    padding: 14px 10px;
+    padding: 14px 14px;
+    vertical-align: middle;
+}
+
+.triage-table tbody tr:hover {
+    background-color: #f8fafc;
+}
+
+.table-scroll-wrapper {
+    overflow-x: hidden;
+    overflow-y: auto;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .modal {
@@ -92,7 +108,7 @@
     color: #64748b;
 }
 
-/* Global Dark Mode Support */
+/* Dark mode adjustments */
 html.global-dark-mode .sitting-panel,
 html.global-dark-mode .modal-content {
     background: #161b22;
@@ -100,9 +116,19 @@ html.global-dark-mode .modal-content {
     color: #c9d1d9;
 }
 
-html.global-dark-mode .triage-table th,
+html.global-dark-mode .triage-table th {
+    background: #0d1117;
+    border-color: #30363d;
+    color: #8b949e;
+}
+
 html.global-dark-mode .triage-table td {
     border-color: #30363d;
+    color: #c9d1d9;
+}
+
+html.global-dark-mode .triage-table tbody tr:hover {
+    background-color: #21262d;
 }
 
 html.global-dark-mode .close-modal {
