@@ -62,17 +62,47 @@ function requireRole(array $allowedRoles, $role) {
         exit();
     }
 }
-function broadcastToAllDevices(mysqli $conn, string $title, string $body, array $extraData = []): void {
+function broadcastToAllDevices(mysqli $conn, string $title, string $body, array $extraData = [], ?string $target_brgy = null): void {
     if (!function_exists('sendPushNotification') || !function_exists('getFirebaseAccessToken')) {
-    error_log('[Broadcast] send_push_notification.php was not loaded (path issue)');
-    return;
-}
-    $res = $conn->query("SELECT DISTINCT device_token FROM user_device_tokens WHERE device_token IS NOT NULL AND device_token != ''");
-    if (!$res || $res->num_rows === 0) return;
+        error_log('[Broadcast] send_push_notification.php was not loaded');
+        return;
+    }
+
+    $params = [];
+    $types = '';
+    
+    // Geofenced device query: target specific barangay citizens or all
+    if (!empty($target_brgy) && strcasecmp($target_brgy, 'all') !== 0) {
+        $sql = "
+            SELECT DISTINCT udt.device_token 
+            FROM user_device_tokens udt
+            JOIN users u ON udt.user_id = u.id
+            WHERE udt.device_token IS NOT NULL AND udt.device_token != ''
+              AND (LOWER(TRIM(u.barangay)) = LOWER(?) OR LOWER(TRIM(u.barangay)) = LOWER(?))
+        ";
+        $alt_b = (strcasecmp($target_brgy, 'Burol') === 0) ? 'Burol Main' : $target_brgy;
+        $params = [$target_brgy, $alt_b];
+        $types = "ss";
+    } else {
+        $sql = "SELECT DISTINCT device_token FROM user_device_tokens WHERE device_token IS NOT NULL AND device_token != ''";
+    }
+
+    $stmt = $conn->prepare($sql);
+    if (!empty($params)) {
+        $stmt->bind_param($types, ...$params);
+    }
+    $stmt->execute();
+    $res = $stmt->get_result();
+
+    if (!$res || $res->num_rows === 0) {
+        $stmt->close();
+        return;
+    }
 
     $access_token = getFirebaseAccessToken();
     if ($access_token === '') {
-        error_log('[Broadcast] No FCM access token - check FIREBASE_CREDENTIALS env var');
+        error_log('[Broadcast] No FCM access token');
+        $stmt->close();
         return;
     }
 
@@ -81,7 +111,8 @@ function broadcastToAllDevices(mysqli $conn, string $title, string $body, array 
         sendPushNotification($access_token, 'dasma-alert', $row['device_token'], $title, $body, $extraData)
             ? $sent++ : $failed++;
     }
-    error_log("[Broadcast] sent=$sent failed=$failed");
+    $stmt->close();
+    error_log("[Broadcast Geofenced] target=$target_brgy sent=$sent failed=$failed");
 }
 
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
@@ -1595,36 +1626,54 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
 
-    if ($action === 'send_broadcast') {
-        requireRole(['superadmin'], $role);
-        $title = trim($_POST['title'] ?? '');
-        $message = trim($_POST['message'] ?? '');
-        $severity = trim($_POST['severity'] ?? 'info');
+    if (isset($_POST['action']) && $_POST['action'] === 'send_broadcast') {
+    requireRole($ADMIN_TIER_ROLES, $role);
+    while (ob_get_level() > 0) { ob_end_clean(); }
 
-        if (!empty($title) && !empty($message)) {
-            $stmt = $conn->prepare("INSERT INTO broadcasts (title, message, severity, is_active) VALUES (?, ?, ?, 1)");
-            $stmt->bind_param("sss", $title, $message, $severity);
-            if ($stmt->execute()) {
-                // 🔔 DISPATCH HIGH-PRIORITY PUSH TO ALL DEVICES
-                $broadcast_title = "🚨 [" . strtoupper($severity) . "] " . $title;
-                broadcastToAllDevices($conn, $broadcast_title, $message, [
-                    'type' => 'broadcast',
-                    'severity' => $severity
-                ]);
+    $title    = trim($_POST['title'] ?? '');
+    $message  = trim($_POST['message'] ?? '');
+    $severity = trim($_POST['severity'] ?? 'info');
 
-                ob_end_clean();
-                echo json_encode(['success' => true]);
-            } else {
-                ob_end_clean();
-                echo json_encode(['success' => false, 'message' => $stmt->error]);
-            }
-            $stmt->close();
-        } else {
-            ob_end_clean();
-            echo json_encode(['success' => false, 'message' => 'Missing fields']);
+    // Superadmin can broadcast city-wide or choose a barangay; Barangay Admin is strictly locked to their sector
+    if ($role === 'superadmin') {
+        $target_brgy = trim($_POST['target_barangay'] ?? 'all');
+        if (empty($target_brgy) || strcasecmp($target_brgy, 'all') === 0) {
+            $target_brgy = null; // City-wide
         }
-        exit();
+    } else {
+        $target_brgy = !empty($admin_brgy) ? $admin_brgy : ($_SESSION['barangay'] ?? null);
     }
+
+    if (!empty($title) && !empty($message)) {
+        // Auto-add target_barangay column if not present
+        $chk_t = $conn->query("SHOW COLUMNS FROM broadcasts LIKE 'target_barangay'");
+        if ($chk_t && $chk_t->num_rows === 0) {
+            $conn->query("ALTER TABLE broadcasts ADD COLUMN target_barangay VARCHAR(100) NULL DEFAULT NULL");
+        }
+
+        $stmt = $conn->prepare("INSERT INTO broadcasts (title, message, severity, target_barangay, is_active) VALUES (?, ?, ?, ?, 1)");
+        $stmt->bind_param("ssss", $title, $message, $severity, $target_brgy);
+        
+        if ($stmt->execute()) {
+            $brgy_label = $target_brgy ? " [Brgy. {$target_brgy}]" : " [City-Wide]";
+            $broadcast_title = "🚨 [" . strtoupper($severity) . "]{$brgy_label} " . $title;
+            
+            broadcastToAllDevices($conn, $broadcast_title, $message, [
+                'type' => 'broadcast',
+                'severity' => $severity,
+                'target_barangay' => $target_brgy ?? 'all'
+            ], $target_brgy);
+
+            echo json_encode(['success' => true]);
+        } else {
+            echo json_encode(['success' => false, 'message' => $stmt->error]);
+        }
+        $stmt->close();
+    } else {
+        echo json_encode(['success' => false, 'message' => 'Missing title or message']);
+    }
+    exit();
+}
 
     if ($action === 'verify_incident_single') {
         requireRole($ADMIN_TIER_ROLES, $role);
@@ -2133,17 +2182,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         exit();
     }
     
-    if ($action === 'end_broadcast') {
-        requireRole(['superadmin'], $role);
-        $id = (int)$_POST['id'];
+    if (isset($_POST['action']) && $_POST['action'] === 'end_broadcast') {
+    requireRole($ADMIN_TIER_ROLES, $role);
+    while (ob_get_level() > 0) { ob_end_clean(); }
+    $id = (int)$_POST['id'];
+
+    if ($role === 'superadmin') {
         $stmt = $conn->prepare("UPDATE broadcasts SET is_active = 0 WHERE id = ?");
-        if ($stmt) {
-            $stmt->bind_param("i", $id);
-            if ($stmt->execute()) { ob_end_clean(); echo "success"; }
-            $stmt->close();
-        }
-        exit();
+        $stmt->bind_param("i", $id);
+    } else {
+        $stmt = $conn->prepare("UPDATE broadcasts SET is_active = 0 WHERE id = ? AND (LOWER(TRIM(target_barangay)) = LOWER(?) OR target_barangay IS NULL)");
+        $stmt->bind_param("is", $id, $admin_brgy);
     }
+
+    if ($stmt && $stmt->execute()) {
+        echo "success";
+        $stmt->close();
+    } else {
+        echo "error";
+    }
+    exit();
+}
 
     if ($action === 'delete_archived') {
         requireRole($ADMIN_TIER_ROLES, $role);

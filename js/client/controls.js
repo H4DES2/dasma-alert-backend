@@ -23,8 +23,33 @@ function submitGlobalBroadcast() {
     fd.append('severity', severity);
 
     fetch(API_PATH, { method: 'POST', body: fd })
-        .then(res => res.text())
-        .then(() => location.reload())
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || 'Failed to send broadcast.');
+            }
+        })
+        .catch(err => console.error(err));
+}
+
+function stopBroadcast(id) {
+    if (!confirm("Terminate this active broadcast warning?")) return;[cite: 25]
+
+    let fd = new FormData();[cite: 25]
+    fd.append('action', 'end_broadcast');[cite: 25]
+    fd.append('id', id);[cite: 25]
+
+    fetch(API_PATH, { method: 'POST', body: fd })[cite: 25]
+        .then(res => res.text())[cite: 25]
+        .then(data => {
+            if (data.trim() === 'success') {[cite: 25]
+                location.reload();[cite: 25]
+            } else {
+                alert("Failed to stop broadcast.");[cite: 25]
+            }
+        })
         .catch(err => console.error(err));
 }
 
