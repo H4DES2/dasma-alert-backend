@@ -83,16 +83,15 @@ $current_page = basename($_SERVER['PHP_SELF']);
             <li class="<?= ($current_page == 'analytics.php') ? 'active' : '' ?>">
                 <a href="analytics.php"><i class='bx bxs-report'></i> <span>Analytics</span></a>
             </li>
+            <?php if ($is_admin): ?>
+            <li class="<?= ($current_page == 'controls.php') ? 'active' : '' ?>">
+                <a href="controls.php"><i class='bx bx-slider-alt'></i> <span>Controls</span></a>
+            </li>
+            <?php endif; ?>
         </ul>
     </div>
 
     <div class="navbar-actions">
-        <?php if ($is_admin): ?>
-        <a href="controls.php" class="controls-btn <?= ($current_page == 'controls.php') ? 'active' : '' ?>" title="Controls Panel">
-            <i class='bx bxs-slider-alt'></i>
-        </a>
-        <?php endif; ?>
-
         <div class="profile-dropdown" id="profileDropdown">
             <div class="profile-toggle" onclick="toggleDropdown(event)">
                 <img src="<?= $profile_photo ?>" alt="Profile" onerror="this.onerror=null; this.src='<?= $default_avatar ?>';">
