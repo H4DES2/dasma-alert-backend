@@ -35,19 +35,19 @@ function submitGlobalBroadcast() {
 }
 
 function stopBroadcast(id) {
-    if (!confirm("Terminate this active broadcast warning?")) return;[cite: 25]
+    if (!confirm("Terminate this active broadcast warning?")) return; 
 
-    let fd = new FormData();[cite: 25]
-    fd.append('action', 'end_broadcast');[cite: 25]
-    fd.append('id', id);[cite: 25]
+    let fd = new FormData(); 
+    fd.append('action', 'end_broadcast'); 
+    fd.append('id', id); 
 
-    fetch(API_PATH, { method: 'POST', body: fd })[cite: 25]
-        .then(res => res.text())[cite: 25]
+    fetch(API_PATH, { method: 'POST', body: fd }) 
+        .then(res => res.text()) 
         .then(data => {
-            if (data.trim() === 'success') {[cite: 25]
-                location.reload();[cite: 25]
+            if (data.trim() === 'success') { 
+                location.reload(); 
             } else {
-                alert("Failed to stop broadcast.");[cite: 25]
+                alert("Failed to stop broadcast."); 
             }
         })
         .catch(err => console.error(err));
