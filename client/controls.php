@@ -56,147 +56,140 @@ $current_page = 'controls.php';
 <body>
     <?php include 'navbar.php'; ?>
 
-    <main class="main-content" style="padding-top: 105px; max-width: 1400px; margin: 0 auto; padding-left: 20px; padding-right: 20px;">
+    <main class="main-content" style="padding-top: 105px; max-width: 1550px; margin: 0 auto; padding-left: 20px; padding-right: 20px;">
         <h1 style="margin-bottom: 25px; font-weight: 800; display:flex; align-items:center; gap:10px; color: #1e293b;">
             <i class='bx bx-slider-alt' style="color:#d32f2f;"></i> Barangay Controls &mdash; <?= htmlspecialchars($s_barangay) ?>
         </h1>
         
-        <div class="dashboard-split-layout" style="display: flex; gap: 24px; flex-wrap: wrap;">
+        <div class="controls-grid">
             
-            <!-- LEFT COLUMN: Broadcast Transmission & Broadcast History -->
-            <div style="flex: 1; min-width: 360px; display: flex; flex-direction: column; gap: 24px;">
-                
-                <!-- Broadcast Form -->
-                <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
-                    <div class="panel-header" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
-                        <h2 style="font-weight:800; font-size:1.15rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
-                            <i class='bx bx-broadcast' style="color:#d32f2f;"></i> Geofenced Emergency Broadcast
-                        </h2>
-                        <span style="background: rgba(211,47,47,0.1); color: #d32f2f; font-weight: 800; font-size: 0.75rem; padding: 4px 10px; border-radius: 6px;">
-                            Target: <?= htmlspecialchars($s_barangay) ?>
-                        </span>
-                    </div>
-                    <div style="display:flex; flex-direction:column; gap:12px;">
-                        <input type="text" id="globalBroadcastTitle" placeholder="ALERT TITLE" class="nav-input-field" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; box-sizing: border-box; font-family: inherit;">
-                        <textarea id="globalBroadcastMessage" rows="3" placeholder="Emergency message for <?= htmlspecialchars($s_barangay) ?> residents..." class="nav-input-field" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; resize:none; box-sizing: border-box; font-family: inherit;"></textarea>
-                        <select id="globalBroadcastSeverity" class="nav-input-field" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; box-sizing: border-box; font-family: inherit;">
-                            <option value="info">INFO ALERT</option>
-                            <option value="warning">WARNING ADVISORY</option>
-                            <option value="critical">CRITICAL EMERGENCY</option>
-                        </select>
-                        <button onclick="submitGlobalBroadcast()" style="background:#d32f2f; color:white; width:100%; padding:14px; border:none; border-radius:8px; font-weight:800; cursor:pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                            <i class='bx bx-send'></i> TRANSMIT TO <?= strtoupper(htmlspecialchars($s_barangay)) ?>
-                        </button>
-                    </div>
+            <!-- COLUMN 1: Broadcast Form -->
+            <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
+                <div class="panel-header" style="margin-bottom: 16px; display: flex; justify-content: space-between; align-items: center;">
+                    <h2 style="font-weight:800; font-size:1.1rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
+                        <i class='bx bx-broadcast' style="color:#d32f2f;"></i> Broadcast
+                    </h2>
+                    <span style="background: rgba(211,47,47,0.1); color: #d32f2f; font-weight: 800; font-size: 0.72rem; padding: 4px 8px; border-radius: 6px;">
+                        <?= htmlspecialchars($s_barangay) ?>
+                    </span>
                 </div>
-
-                <!-- Broadcast History -->
-                <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
-                    <div class="panel-header" style="margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
-                        <h2 style="font-weight:800; font-size:1.15rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
-                            <i class='bx bx-history' style="color:#0284c7;"></i> Local Broadcast History
-                        </h2>
-                    </div>
-                    <div class="table-scroll-wrapper" style="max-height: 380px; overflow-y:auto; overflow-x:hidden; border: 1px solid #edf2f7; border-radius: 12px;">
-                        <table class="triage-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 44%;">Title & Date</th>
-                                    <th style="width: 20%;">Scope</th>
-                                    <th style="width: 18%;">Severity</th>
-                                    <th style="width: 18%; text-align: center;">Control</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if (empty($broadcast_history)): ?>
-                                    <tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 28px; font-weight:600;">No local broadcasts transmitted yet.</td></tr>
-                                <?php endif; ?>
-                                <?php foreach ($broadcast_history as $b): 
-                                    $sev = strtolower(trim($b['severity']));
-                                    $sev_color = match($sev) {
-                                        'critical' => 'background: #fee2e2; color: #dc2626; border: 1px solid #fecaca;',
-                                        'warning'  => 'background: #fef3c7; color: #d97706; border: 1px solid #fde68a;',
-                                        default    => 'background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;'
-                                    };
-                                ?>
-                                <tr>
-                                    <td>
-                                        <div style="color:#1e293b; font-weight:800; font-size:0.9rem; word-break: break-word;"><?= htmlspecialchars($b['title']) ?></div>
-                                        <small style="color:#94a3b8; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:2px; font-size: 0.75rem;">
-                                            <i class='bx bx-time'></i> <?= $b['date_str'] ?>
-                                        </small>
-                                    </td>
-                                    <td>
-                                        <span style="font-weight:700; font-size:0.8rem; color: #d97706;">
-                                            <?= htmlspecialchars($b['target_barangay']) ?>
-                                        </span>
-                                    </td>
-                                    <td>
-                                        <span style="font-size:0.7rem; padding: 3px 8px; border-radius: 6px; font-weight:800; text-transform:uppercase; display:inline-block; <?= $sev_color ?>">
-                                            <?= strtoupper($b['severity']) ?>
-                                        </span>
-                                    </td>
-                                    <td style="text-align: center;">
-                                        <?php if ($b['is_active']): ?>
-                                            <button class="pill-btn bg-red" style="padding: 5px 10px; font-size: 0.72rem;" onclick="stopBroadcast(<?= $b['id'] ?>)">
-                                                <i class='bx bx-stop-circle'></i> STOP
-                                            </button>
-                                        <?php else: ?>
-                                            <span style="color:#94a3b8; font-weight:800; font-size:0.75rem;">ENDED</span>
-                                        <?php endif; ?>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <input type="text" id="globalBroadcastTitle" placeholder="ALERT TITLE" class="nav-input-field" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; box-sizing: border-box; font-family: inherit;">
+                    <textarea id="globalBroadcastMessage" rows="4" placeholder="Emergency message for <?= htmlspecialchars($s_barangay) ?> residents..." class="nav-input-field" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; resize:none; box-sizing: border-box; font-family: inherit;"></textarea>
+                    <select id="globalBroadcastSeverity" class="nav-input-field" style="width: 100%; padding: 12px; border: 1px solid #e2e8f0; background: #f8fafc; border-radius: 8px; box-sizing: border-box; font-family: inherit;">
+                        <option value="info">INFO ALERT</option>
+                        <option value="warning">WARNING ADVISORY</option>
+                        <option value="critical">CRITICAL EMERGENCY</option>
+                    </select>
+                    <button onclick="submitGlobalBroadcast()" style="background:#d32f2f; color:white; width:100%; padding:14px; border:none; border-radius:8px; font-weight:800; cursor:pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <i class='bx bx-send'></i> TRANSMIT TO <?= strtoupper(htmlspecialchars($s_barangay)) ?>
+                    </button>
                 </div>
-
             </div>
 
-            <!-- RIGHT COLUMN: Announcements -->
-            <div style="flex: 1.2; min-width: 360px;">
-                <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
-                    <div class="panel-header" style="margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
-                        <h2 style="font-weight:800; font-size:1.15rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
-                            <i class='bx bxs-bell-ring' style="color:#f59e0b;"></i> Barangay Announcements
-                        </h2>
-                        <button class="pill-btn" onclick="openAnnouncementModal()"><i class='bx bx-plus'></i> New Post</button>
-                    </div>
-                    <div class="table-scroll-wrapper" style="max-height: 560px; overflow-y:auto; border: 1px solid #edf2f7; border-radius: 12px;">
-                        <table class="triage-table">
-                            <thead>
-                                <tr>
-                                    <th>Details</th>
-                                    <th style="text-align: center; width: 110px;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <?php if(empty($announcements)): ?>
-                                <tr>
-                                    <td colspan="2" style="text-align:center; color:#94a3b8; padding: 28px; font-weight:600;">No announcements published yet.</td>
-                                </tr>
-                                <?php endif; ?>
-                                <?php foreach($announcements as $ann): ?>
-                                <tr>
-                                    <td>
-                                        <strong style="color:#3b82f6; font-size:0.95rem; font-weight:800;"><?= htmlspecialchars($ann['title']) ?></strong>
-                                        <p style="margin: 4px 0 6px 0; color: #475569; font-size: 0.85rem; line-height: 1.4;">
-                                            <?= nl2br(htmlspecialchars(substr($ann['message'], 0, 120))) ?><?= strlen($ann['message']) > 120 ? '...' : '' ?>
-                                        </p>
-                                        <small style="color:#94a3b8; font-weight:600; display:flex; align-items:center; gap:4px;">
-                                            <i class='bx bx-calendar'></i> <?= date('M d, Y', strtotime($ann['created_at'])) ?>
-                                        </small>
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap;">
-                                        <button class="action-circle bg-green" onclick="openAnnouncementModal(<?= $ann['id'] ?>, '<?= addslashes($ann['title']) ?>', '<?= addslashes(str_replace(["\r","\n"], ['\r','\n'], $ann['message'])) ?>')"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="deleteAnnouncement(<?= $ann['id'] ?>)"><i class='bx bx-trash'></i></button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
+            <!-- COLUMN 2: Local Broadcast History -->
+            <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
+                <div class="panel-header" style="margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="font-weight:800; font-size:1.1rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
+                        <i class='bx bx-history' style="color:#0284c7;"></i> Local Broadcast History
+                    </h2>
+                </div>
+                <div class="table-scroll-wrapper" style="max-height: 480px; overflow-y:auto; overflow-x:hidden; border: 1px solid #edf2f7; border-radius: 12px;">
+                    <table class="triage-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 44%;">Title & Date</th>
+                                <th style="width: 20%;">Scope</th>
+                                <th style="width: 18%;">Severity</th>
+                                <th style="width: 18%; text-align: center;">Control</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($broadcast_history)): ?>
+                                <tr><td colspan="4" style="text-align:center; color:#94a3b8; padding: 28px; font-weight:600;">No local broadcasts transmitted yet.</td></tr>
+                            <?php endif; ?>
+                            <?php foreach ($broadcast_history as $b): 
+                                $sev = strtolower(trim($b['severity']));
+                                $sev_color = match($sev) {
+                                    'critical' => 'background: #fee2e2; color: #dc2626; border: 1px solid #fecaca;',
+                                    'warning'  => 'background: #fef3c7; color: #d97706; border: 1px solid #fde68a;',
+                                    default    => 'background: #e0f2fe; color: #0284c7; border: 1px solid #bae6fd;'
+                                };
+                            ?>
+                            <tr>
+                                <td>
+                                    <div style="color:#1e293b; font-weight:800; font-size:0.88rem; word-break: break-word;"><?= htmlspecialchars($b['title']) ?></div>
+                                    <small style="color:#94a3b8; font-weight:600; display:flex; align-items:center; gap:4px; margin-top:2px; font-size: 0.72rem;">
+                                        <i class='bx bx-time'></i> <?= $b['date_str'] ?>
+                                    </small>
+                                </td>
+                                <td>
+                                    <span style="font-weight:700; font-size:0.78rem; color: #d97706;">
+                                        <?= htmlspecialchars($b['target_barangay']) ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <span style="font-size:0.68rem; padding: 3px 7px; border-radius: 6px; font-weight:800; text-transform:uppercase; display:inline-block; <?= $sev_color ?>">
+                                        <?= strtoupper($b['severity']) ?>
+                                    </span>
+                                </td>
+                                <td style="text-align: center;">
+                                    <?php if ($b['is_active']): ?>
+                                        <button class="pill-btn bg-red" style="padding: 5px 9px; font-size: 0.72rem;" onclick="stopBroadcast(<?= $b['id'] ?>)">
+                                            <i class='bx bx-stop-circle'></i> STOP
+                                        </button>
+                                    <?php else: ?>
+                                        <span style="color:#94a3b8; font-weight:800; font-size:0.72rem;">ENDED</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- COLUMN 3: Barangay Announcements -->
+            <div class="sitting-panel" style="background: #fff; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.04); border: 1px solid #edf2f7;">
+                <div class="panel-header" style="margin-bottom: 16px; display:flex; justify-content:space-between; align-items:center;">
+                    <h2 style="font-weight:800; font-size:1.1rem; margin:0; display:flex; align-items:center; gap:8px; color: #1e293b;">
+                        <i class='bx bxs-bell-ring' style="color:#f59e0b;"></i> Barangay Announcements
+                    </h2>
+                    <button class="pill-btn" onclick="openAnnouncementModal()"><i class='bx bx-plus'></i> New Post</button>
+                </div>
+                <div class="table-scroll-wrapper" style="max-height: 480px; overflow-y:auto; border: 1px solid #edf2f7; border-radius: 12px;">
+                    <table class="triage-table">
+                        <thead>
+                            <tr>
+                                <th>Details</th>
+                                <th style="text-align: center; width: 100px;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if(empty($announcements)): ?>
+                            <tr>
+                                <td colspan="2" style="text-align:center; color:#94a3b8; padding: 28px; font-weight:600;">No announcements published yet.</td>
+                            </tr>
+                            <?php endif; ?>
+                            <?php foreach($announcements as $ann): ?>
+                            <tr>
+                                <td>
+                                    <strong style="color:#3b82f6; font-size:0.92rem; font-weight:800;"><?= htmlspecialchars($ann['title']) ?></strong>
+                                    <p style="margin: 4px 0 6px 0; color: #475569; font-size: 0.82rem; line-height: 1.4;">
+                                        <?= nl2br(htmlspecialchars(substr($ann['message'], 0, 110))) ?><?= strlen($ann['message']) > 110 ? '...' : '' ?>
+                                    </p>
+                                    <small style="color:#94a3b8; font-weight:600; display:flex; align-items:center; gap:4px; font-size: 0.72rem;">
+                                        <i class='bx bx-calendar'></i> <?= date('M d, Y', strtotime($ann['created_at'])) ?>
+                                    </small>
+                                </td>
+                                <td style="text-align: center; white-space: nowrap;">
+                                    <button class="action-circle bg-green" onclick="openAnnouncementModal(<?= $ann['id'] ?>, '<?= addslashes($ann['title']) ?>', '<?= addslashes(str_replace(["\r","\n"], ['\r','\n'], $ann['message'])) ?>')"><i class='bx bx-edit'></i></button>
+                                    <button class="action-circle bg-red" onclick="deleteAnnouncement(<?= $ann['id'] ?>)"><i class='bx bx-trash'></i></button>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
