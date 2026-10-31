@@ -5,12 +5,15 @@ require_once '../php/config.php';
 
 $s_user_id = (int)($_SESSION['user_id'] ?? 0);
 
-// Fetching UI preferences from user_profiles table
-$s_stmt = $conn->prepare("SELECT u.username, u.first_name, p.theme, p.font_size, p.profile_photo FROM users u LEFT JOIN user_profiles p ON u.id = p.user_id WHERE u.id = ?");
+// Fetch UI preferences and role
+$s_stmt = $conn->prepare("SELECT u.username, u.first_name, u.role, p.theme, p.font_size, p.profile_photo FROM users u LEFT JOIN user_profiles p ON u.id = p.user_id WHERE u.id = ?");
 $s_stmt->bind_param("i", $s_user_id);
 $s_stmt->execute();
 $s_prefs = $s_stmt->get_result()->fetch_assoc() ?? [];
 $s_stmt->close();
+
+$user_role = $s_prefs['role'] ?? ($_SESSION['role'] ?? 'user');
+$is_admin  = in_array($user_role, ['superadmin', 'admin']);
 
 $_allowed_themes = ['light','dark'];
 $_allowed_fonts  = ['14px','16px','18px','20px'];
@@ -84,6 +87,12 @@ $current_page = basename($_SERVER['PHP_SELF']);
     </div>
 
     <div class="navbar-actions">
+        <?php if ($is_admin): ?>
+        <a href="controls.php" class="controls-btn <?= ($current_page == 'controls.php') ? 'active' : '' ?>" title="Controls Panel">
+            <i class='bx bxs-slider-alt'></i>
+        </a>
+        <?php endif; ?>
+
         <div class="profile-dropdown" id="profileDropdown">
             <div class="profile-toggle" onclick="toggleDropdown(event)">
                 <img src="<?= $profile_photo ?>" alt="Profile" onerror="this.onerror=null; this.src='<?= $default_avatar ?>';">
