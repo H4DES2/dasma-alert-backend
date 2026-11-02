@@ -129,7 +129,7 @@ if ($teams_result && $teams_result->num_rows > 0) {
                     <div class="kpi-icon-wrapper"><i class='bx bxs-check-shield' style="color:#388e3c;"></i></div>
                     <div class="kpi-card-content">
                         <h3><?php echo $avail_teams; ?></h3>
-                        <p>Available</p>
+                        <p>Operational</p>
                     </div>
                 </div>
                 <div class="kpi-details-container">
@@ -211,10 +211,11 @@ if ($teams_result && $teams_result->num_rows > 0) {
                                 <td><i class='bx <?php echo $type_icon; ?>' style="font-size: 1.2rem; vertical-align: middle; margin-right: 8px; opacity: 0.7;"></i> <?php echo htmlspecialchars($team['team_type']); ?></td>
                                 <td><strong style="color:#1976d2; font-size:0.85rem;"><i class='bx bxs-map-pin'></i> <?php echo $assigned_to; ?></strong></td>
                                 <?php 
-                                    $st_clean = strtolower(trim($team['status']));
-                                    $badge_class = ($st_clean === 'operational' || $st_clean === 'available') ? 'available' : $st_clean;
-                                ?>
-                                <td><span class="badge <?php echo $badge_class; ?>"><?php echo strtoupper($team['status']); ?></span></td>
+                                $st_clean = strtolower(trim($team['status']));
+                                $display_st = ($st_clean === 'available' || $st_clean === 'operational') ? 'OPERATIONAL' : strtoupper($team['status']);
+                                $badge_class = ($st_clean === 'operational' || $st_clean === 'available') ? 'available' : $st_clean;
+                            ?>
+                            <td><span class="badge <?php echo $badge_class; ?>"><?php echo $display_st; ?></span></td>
                                 
                                 <?php if($role === 'superadmin'): ?>
                                 <td style="text-align: center;">

@@ -188,6 +188,9 @@ if ($check_backup_cols && $check_backup_cols->num_rows === 0) {
     $conn->query("ALTER TABLE incidents ADD COLUMN backup_target VARCHAR(50) DEFAULT 'none'");
     $conn->query("ALTER TABLE incidents ADD COLUMN backup_status VARCHAR(50) DEFAULT 'none'");
 }
+// In the AUTO-REPAIR SYSTEM block:
+$conn->query("ALTER TABLE response_teams MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'operational'");
+$conn->query("UPDATE response_teams SET status = 'operational' WHERE LOWER(TRIM(status)) = 'available'");
 
 $check_boundary = $conn->query("SHOW COLUMNS FROM barangays LIKE 'boundary'");
 if ($check_boundary && $check_boundary->num_rows === 0) {
@@ -1559,48 +1562,46 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     exit();
 }
 
-    if ($action === 'add_team') {
-        requireRole($ADMIN_TIER_ROLES, $role);
-        while (ob_get_level() > 0) { ob_end_clean(); }
+    // In the add_team block:
+if ($action === 'add_team') {
+    requireRole($ADMIN_TIER_ROLES, $role);
+    while (ob_get_level() > 0) { ob_end_clean(); }
 
-        $name     = trim($_POST['team_name'] ?? '');
-        $type     = trim($_POST['team_type'] ?? '');
-        $raw_brgy = trim($_POST['assigned_barangay'] ?? '');
+    $name     = trim($_POST['team_name'] ?? '');
+    $type     = trim($_POST['team_type'] ?? '');
+    $raw_brgy = trim($_POST['assigned_barangay'] ?? '');
 
-        // If local admin registers a unit, default to their jurisdiction
-        if (($role === 'admin' || $role === 'barangay_admin') && empty($raw_brgy)) {
-            $raw_brgy = trim($admin_brgy);
-        }
-
-        // Map alias
-        if (strcasecmp($raw_brgy, 'Burol Main') === 0) {
-            $raw_brgy = 'Burol';
-        }
-
-        // Convert unassigned/empty to SQL NULL so the foreign key constraint passes
-        $assigned_brgy = null;
-        if (!empty($raw_brgy) && strcasecmp($raw_brgy, 'city-wide') !== 0 && strcasecmp($raw_brgy, 'unassigned') !== 0) {
-            $b_chk = $conn->prepare("SELECT name FROM barangays WHERE name = ? LIMIT 1");
-            $b_chk->bind_param("s", $raw_brgy);
-            $b_chk->execute();
-            $b_res = $b_chk->get_result();
-            if ($b_row = $b_res->fetch_assoc()) {
-                $assigned_brgy = $b_row['name'];
-            }
-            $b_chk->close();
-        }
-
-        $stmt = $conn->prepare("INSERT INTO response_teams (team_name, team_type, assigned_barangay, status) VALUES (?, ?, ?, 'operational')");
-        $stmt->bind_param("sss", $name, $type, $assigned_brgy);
-
-        if ($stmt->execute()) {
-            echo "success";
-        } else {
-            echo "Database Error: " . $stmt->error;
-        }
-        $stmt->close();
-        exit();
+    if (($role === 'admin' || $role === 'barangay_admin') && empty($raw_brgy)) {
+        $raw_brgy = trim($admin_brgy);
     }
+    if (strcasecmp($raw_brgy, 'Burol Main') === 0) {
+        $raw_brgy = 'Burol';
+    }
+
+    $assigned_brgy = null;
+    if (!empty($raw_brgy) && strcasecmp($raw_brgy, 'city-wide') !== 0 && strcasecmp($raw_brgy, 'unassigned') !== 0) {
+        $b_chk = $conn->prepare("SELECT name FROM barangays WHERE name = ? LIMIT 1");
+        $b_chk->bind_param("s", $raw_brgy);
+        $b_chk->execute();
+        $b_res = $b_chk->get_result();
+        if ($b_row = $b_res->fetch_assoc()) {
+            $assigned_brgy = $b_row['name'];
+        }
+        $b_chk->close();
+    }
+
+    $unit_status = 'operational';
+    $stmt = $conn->prepare("INSERT INTO response_teams (team_name, team_type, assigned_barangay, status) VALUES (?, ?, ?, ?)");
+    $stmt->bind_param("ssss", $name, $type, $assigned_brgy, $unit_status);
+
+    if ($stmt->execute()) {
+        echo "success";
+    } else {
+        echo "Database Error: " . $stmt->error;
+    }
+    $stmt->close();
+    exit();
+}
 
     if ($action === 'dismiss_broadcast') {
         while (ob_get_level() > 0) { ob_end_clean(); }

@@ -97,7 +97,8 @@
             formData.append('team_name', name); 
             formData.append('team_type', type);
             formData.append('assigned_barangay', brgy); 
-            handleServerResponse(fetch('../admin/admin_actions.php', { method: 'POST', body: formData }));
+            formData.append('status', 'operational');
+            handleServerResponse(fetch('admin_actions.php', { method: 'POST', body: formData }));
         });
     }
 
