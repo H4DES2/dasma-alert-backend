@@ -63,56 +63,63 @@ function requireRole(array $allowedRoles, $role) {
     }
 }
 function broadcastToAllDevices(mysqli $conn, string $title, string $body, array $extraData = [], ?string $target_brgy = null): void {
-    if (!function_exists('sendPushNotification') || !function_exists('getFirebaseAccessToken')) {
-        error_log('[Broadcast] send_push_notification.php was not loaded');
-        return;
-    }
+    try {
+        if (!function_exists('sendPushNotification') || !function_exists('getFirebaseAccessToken')) {
+            error_log('[Broadcast] send_push_notification.php was not loaded');
+            return;
+        }
 
-    $params = [];
-    $types = '';
-    
-    // Geofenced device query: target specific barangay citizens or all
-    if (!empty($target_brgy) && strcasecmp($target_brgy, 'all') !== 0) {
-        $sql = "
-            SELECT DISTINCT udt.device_token 
-            FROM user_device_tokens udt
-            JOIN users u ON udt.user_id = u.id
-            WHERE udt.device_token IS NOT NULL AND udt.device_token != ''
-              AND (LOWER(TRIM(u.barangay)) = LOWER(?) OR LOWER(TRIM(u.barangay)) = LOWER(?))
-        ";
-        $alt_b = (strcasecmp($target_brgy, 'Burol') === 0) ? 'Burol Main' : $target_brgy;
-        $params = [$target_brgy, $alt_b];
-        $types = "ss";
-    } else {
-        $sql = "SELECT DISTINCT device_token FROM user_device_tokens WHERE device_token IS NOT NULL AND device_token != ''";
-    }
+        $params = [];
+        $types = '';
+        
+        // Geofenced device query: target specific barangay citizens or all
+        if (!empty($target_brgy) && strcasecmp($target_brgy, 'all') !== 0) {
+            $sql = "
+                SELECT DISTINCT udt.device_token 
+                FROM user_device_tokens udt
+                JOIN users u ON udt.user_id = u.id
+                WHERE udt.device_token IS NOT NULL AND udt.device_token != ''
+                  AND (LOWER(TRIM(u.barangay)) = LOWER(?) OR LOWER(TRIM(u.barangay)) = LOWER(?))
+            ";
+            $alt_b = (strcasecmp($target_brgy, 'Burol') === 0) ? 'Burol Main' : $target_brgy;
+            $params = [$target_brgy, $alt_b];
+            $types = "ss";
+        } else {
+            $sql = "SELECT DISTINCT device_token FROM user_device_tokens WHERE device_token IS NOT NULL AND device_token != ''";
+        }
 
-    $stmt = $conn->prepare($sql);
-    if (!empty($params)) {
-        $stmt->bind_param($types, ...$params);
-    }
-    $stmt->execute();
-    $res = $stmt->get_result();
+        $stmt = $conn->prepare($sql);
+        if (!$stmt) return;
+        if (!empty($params)) {
+            $stmt->bind_param($types, ...$params);
+        }
+        $stmt->execute();
+        $res = $stmt->get_result();
 
-    if (!$res || $res->num_rows === 0) {
+        if (!$res || $res->num_rows === 0) {
+            $stmt->close();
+            return;
+        }
+
+        $access_token = getFirebaseAccessToken();
+        if ($access_token === '') {
+            error_log('[Broadcast] No FCM access token');
+            $stmt->close();
+            return;
+        }
+
+        $sent = 0; $failed = 0;
+        while ($row = $res->fetch_assoc()) {
+            if (!empty($row['device_token'])) {
+                sendPushNotification($access_token, 'dasma-alert', $row['device_token'], $title, $body, $extraData)
+                    ? $sent++ : $failed++;
+            }
+        }
         $stmt->close();
-        return;
+        error_log("[Broadcast Geofenced] target=$target_brgy sent=$sent failed=$failed");
+    } catch (Throwable $e) {
+        error_log("[Broadcast Exception] " . $e->getMessage());
     }
-
-    $access_token = getFirebaseAccessToken();
-    if ($access_token === '') {
-        error_log('[Broadcast] No FCM access token');
-        $stmt->close();
-        return;
-    }
-
-    $sent = 0; $failed = 0;
-    while ($row = $res->fetch_assoc()) {
-        sendPushNotification($access_token, 'dasma-alert', $row['device_token'], $title, $body, $extraData)
-            ? $sent++ : $failed++;
-    }
-    $stmt->close();
-    error_log("[Broadcast Geofenced] target=$target_brgy sent=$sent failed=$failed");
 }
 
 function resolveBarangaySector(mysqli $conn, float $lat, float $lng, string $fallback = 'Unassigned Sector'): string {
@@ -331,12 +338,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
         if (!in_array('image_path', $cols)) {
             $conn->query("ALTER TABLE announcements ADD COLUMN image_path VARCHAR(500) DEFAULT NULL");
         }
+        if (!in_array('target_barangay', $cols)) {
+            $conn->query("ALTER TABLE announcements ADD COLUMN target_barangay VARCHAR(100) NULL DEFAULT NULL");
+        }
 
         $id        = isset($_POST['id']) && !empty($_POST['id']) ? (int)$_POST['id'] : null;
         $title     = trim($_POST['title'] ?? '');
         $message   = trim($_POST['message'] ?? '');
         $author_id = !empty($_SESSION['user_id']) ? (int)$_SESSION['user_id'] : 1;
         $image_path = null;
+
+        // Geofence resolution: Superadmin posts city-wide; Barangay Admin posts to their jurisdiction
+        $target_ann_brgy = ($role === 'superadmin') ? null : $admin_brgy;
+        if (!empty($target_ann_brgy) && strcasecmp($target_ann_brgy, 'Burol Main') === 0) {
+            $target_ann_brgy = 'Burol';
+        }
 
         if (isset($_FILES['image']) && $_FILES['image']['error'] === UPLOAD_ERR_OK) {
             $a_allowed_mime = ["image/jpeg", "image/pjpeg", "image/png", "image/gif", "image/webp"];
@@ -392,19 +408,21 @@ if (isset($_POST['action']) && $_POST['action'] === 'save_announcement') {
                 $stmt->bind_param("ssi", $title, $message, $id);
             }
         } else {
-            $stmt = $conn->prepare("INSERT INTO announcements (author_id, title, message, image_path) VALUES (?, ?, ?, ?)");
-            $stmt->bind_param("isss", $author_id, $title, $message, $image_path);
+            $stmt = $conn->prepare("INSERT INTO announcements (author_id, title, message, image_path, target_barangay) VALUES (?, ?, ?, ?, ?)");
+            $stmt->bind_param("issss", $author_id, $title, $message, $image_path, $target_ann_brgy);
         }
 
         if ($stmt->execute()) {
             $stmt->close();
 
-            // 🔔 SEND PUSH NOTIFICATION ON NEW ANNOUNCEMENT
+            // 🔔 GEOFENCED PUSH NOTIFICATION
             if (!$id) {
-                $ann_title = "📢 Advisory: " . $title;
+                $brgy_prefix = $target_ann_brgy ? "[Brgy. {$target_ann_brgy}] " : "";
+                $ann_title = "📢 Advisory: " . $brgy_prefix . $title;
                 broadcastToAllDevices($conn, $ann_title, $message, [
-                    'type' => 'announcement'
-                ]);
+                    'type' => 'announcement',
+                    'target_barangay' => $target_ann_brgy ?? 'all'
+                ], $target_ann_brgy);
             }
 
             echo "success";

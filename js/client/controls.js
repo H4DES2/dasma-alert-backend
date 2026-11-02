@@ -1,18 +1,22 @@
-const API_PATH = '../php/admin_actions.php';
+const API_PATH = '../admin/admin_actions.php';
 
 function closeModal(id) { 
     const el = document.getElementById(id);
     if (el) el.style.display = 'none'; 
 }
 
-// Broadcast
+// Transmit Geofenced Emergency Broadcast
 function submitGlobalBroadcast() {
-    const title = document.getElementById('globalBroadcastTitle').value.trim();
-    const message = document.getElementById('globalBroadcastMessage').value.trim();
-    const severity = document.getElementById('globalBroadcastSeverity').value;
+    const titleEl = document.getElementById('globalBroadcastTitle');
+    const msgEl   = document.getElementById('globalBroadcastMessage');
+    const sevEl   = document.getElementById('globalBroadcastSeverity');
+
+    const title    = titleEl ? titleEl.value.trim() : '';
+    const message  = msgEl ? msgEl.value.trim() : '';
+    const severity = sevEl ? sevEl.value : 'info';
 
     if (!title || !message) {
-        alert('Please provide both a title and message.');
+        alert('Please provide both an alert title and message.');
         return;
     }
 
@@ -23,15 +27,30 @@ function submitGlobalBroadcast() {
     fd.append('severity', severity);
 
     fetch(API_PATH, { method: 'POST', body: fd })
-        .then(res => res.json())
-        .then(data => {
+        .then(res => res.text())
+        .then(text => {
+            let data;
+            try {
+                data = JSON.parse(text);
+            } catch (e) {
+                if (text.trim() === 'success') {
+                    location.reload();
+                    return;
+                }
+                alert('Server response: ' + text);
+                return;
+            }
+
             if (data.success) {
                 location.reload();
             } else {
-                alert(data.message || 'Failed to send broadcast.');
+                alert(data.message || 'Failed to transmit broadcast.');
             }
         })
-        .catch(err => console.error(err));
+        .catch(err => {
+            console.error(err);
+            alert('Transmission error: ' + err.message);
+        });
 }
 
 function stopBroadcast(id) {
@@ -59,6 +78,8 @@ function openAnnouncementModal(id='', title='', msg='') {
     document.getElementById('ann_title').value = title;
     document.getElementById('ann_message').value = msg.replace(/\\n/g, '\n').replace(/\\r/g, '\r');
     document.getElementById('annModalTitle').innerText = id ? 'Edit Announcement' : 'New Announcement';
+    const imgInput = document.getElementById('ann_image');
+    if (imgInput) imgInput.value = '';
     document.getElementById('announcementModal').style.display = 'flex';
 }
 
@@ -82,8 +103,23 @@ function saveAnnouncement() {
 
     fetch(API_PATH, { method: 'POST', body: fd })
         .then(res => res.text())
-        .then(() => location.reload())
-        .catch(err => console.error(err));
+        .then(text => {
+            if (text.trim() === 'success') {
+                location.reload();
+            } else {
+                try {
+                    let d = JSON.parse(text);
+                    if (d.success) { location.reload(); return; }
+                    alert(d.message || text);
+                } catch (e) {
+                    alert('Server response: ' + text);
+                }
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            alert('Upload error: ' + err.message);
+        });
 }
 
 function deleteAnnouncement(id) {
@@ -94,6 +130,12 @@ function deleteAnnouncement(id) {
 
     fetch(API_PATH, { method: 'POST', body: fd })
         .then(res => res.text())
-        .then(() => location.reload())
+        .then(data => {
+            if (data.trim() === 'success') {
+                location.reload();
+            } else {
+                alert('Failed to delete announcement.');
+            }
+        })
         .catch(err => console.error(err));
 }

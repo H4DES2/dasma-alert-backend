@@ -14,8 +14,19 @@ if (strcasecmp($s_barangay, 'Burol Main') === 0) { $s_barangay = 'Burol'; }
 $alt_barangay = (strcasecmp($s_barangay, 'Burol') === 0) ? 'Burol Main' : $s_barangay;
 
 // Fetch Announcements
-$ann_stmt = $conn->prepare("SELECT * FROM announcements WHERE author_id = ? ORDER BY created_at DESC");
-$ann_stmt->bind_param("i", $s_user_id);
+$chk_ab = $conn->query("SHOW COLUMNS FROM announcements LIKE 'target_barangay'");
+if ($chk_ab && $chk_ab->num_rows === 0) {
+    $conn->query("ALTER TABLE announcements ADD COLUMN target_barangay VARCHAR(100) NULL DEFAULT NULL");
+}
+
+$ann_stmt = $conn->prepare("
+    SELECT * FROM announcements 
+    WHERE author_id = ? 
+       OR LOWER(TRIM(target_barangay)) = LOWER(?) 
+       OR LOWER(TRIM(target_barangay)) = LOWER(?)
+    ORDER BY created_at DESC
+");
+$ann_stmt->bind_param("iss", $s_user_id, $s_barangay, $alt_barangay);
 $ann_stmt->execute();
 $announcements = $ann_stmt->get_result()->fetch_all(MYSQLI_ASSOC);
 $ann_stmt->close();
