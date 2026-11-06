@@ -1454,7 +1454,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("INSERT INTO emergency_types (name, icon, incidents) VALUES (?, ?, ?)");
             $stmt->bind_param("sss", $name, $icon, $incidents);
         }
-        if ($stmt->execute()) { ob_end_clean(); echo "success"; }
+        if ($stmt->execute()) {
+        $typeId = $id > 0 ? $id : (int)$conn->insert_id;
+        try { syncEmergencyIncidents($conn, $typeId, $incidents); }
+        catch (Throwable $e) { error_log('[triage sync] ' . $e->getMessage()); }
+        ob_end_clean(); echo "success";
+        }
         $stmt->close(); exit();
     }
 
