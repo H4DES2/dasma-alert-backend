@@ -12,6 +12,7 @@ if (session_status() === PHP_SESSION_NONE) {
 ob_start();
 
 require_once '../php/auth.php';
+require_once __DIR__ . '/triage_helpers.php';
 
 $auth = new Auth($conn);
 
@@ -50,6 +51,12 @@ if (strcasecmp($admin_brgy, 'Burol Main') === 0) {
     $admin_brgy = 'Burol';
 }
 $_SESSION['barangay'] = $admin_brgy;
+
+session_write_close();
+
+if (handleTriageAdminAction($conn, $action, $role)) {
+    exit();
+}
 
 session_write_close();
 $ADMIN_TIER_ROLES = ['admin', 'barangay_admin', 'superadmin'];
@@ -1181,7 +1188,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     if ($action === 'master_sync') {
         requireRole($ADMIN_TIER_ROLES, $role);
-        session_write_close(); 
         while (ob_get_level() > 0) { ob_end_clean(); }
         header('Content-Type: application/json');
 
@@ -1194,7 +1200,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
 
     if ($action === 'sse_stream') {
         requireRole($ADMIN_TIER_ROLES, $role);
-        session_write_close(); 
         while (ob_get_level() > 0) { ob_end_clean(); }
 
         header('Content-Type: text/event-stream');
@@ -1442,11 +1447,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // --- EMERGENCY TYPES ---
     if ($action === 'save_emergency_type') {
         requireRole(['superadmin'], $role);
-        $id = (int)($_POST['id'] ?? 0);
-        $name = trim($_POST['name'] ?? '');
-        $icon = trim($_POST['icon'] ?? 'bx-error');
+        while (ob_get_level() > 0) { ob_end_clean(); }
+
+        $id        = (int)($_POST['id'] ?? 0);
+        $name      = trim($_POST['name'] ?? '');
+        $icon      = trim($_POST['icon'] ?? 'bx-error');
         $incidents = trim($_POST['incidents'] ?? '');
-        
+
         if ($id > 0) {
             $stmt = $conn->prepare("UPDATE emergency_types SET name=?, icon=?, incidents=? WHERE id=?");
             $stmt->bind_param("sssi", $name, $icon, $incidents, $id);
@@ -1454,13 +1461,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $conn->prepare("INSERT INTO emergency_types (name, icon, incidents) VALUES (?, ?, ?)");
             $stmt->bind_param("sss", $name, $icon, $incidents);
         }
+
         if ($stmt->execute()) {
-        $typeId = $id > 0 ? $id : (int)$conn->insert_id;
-        try { syncEmergencyIncidents($conn, $typeId, $incidents); }
-        catch (Throwable $e) { error_log('[triage sync] ' . $e->getMessage()); }
-        ob_end_clean(); echo "success";
+            $typeId = $id > 0 ? $id : (int)$conn->insert_id;
+            $stmt->close();
+            try {
+                triageEnsureSchema($conn);
+                syncEmergencyIncidents($conn, $typeId, $incidents);
+            } catch (Throwable $e) {
+                error_log('[triage sync] ' . $e->getMessage());
+            }
+            echo "success";
+        } else {
+            $err = $stmt->error;
+            $stmt->close();
+            echo "Database Error: " . $err;
         }
-        $stmt->close(); exit();
+        exit();
     }
 
     if ($action === 'delete_emergency_type') {
