@@ -37,6 +37,7 @@ class AnalyticsQueryBuilder {
         }
     }
 }
+
 function getAuthoritativeMonthName(mysqli $conn): string {
     $monthNames = [
         1 => 'January', 2 => 'February', 3 => 'March', 4 => 'April',
@@ -75,6 +76,7 @@ function getAuthoritativeMonthName(mysqli $conn): string {
 }
 
 $current_active_month = getAuthoritativeMonthName($conn);
+
 function getCloudinaryUrl(?string $path): string {
     if (empty($path) || $path === 'NULL' || $path === 'null') return '';
     $clean = trim($path);
@@ -352,6 +354,7 @@ foreach ($archived_incidents as $inc) {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>City Analytics & Early Warning | CDRRMO Command</title>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap" rel="stylesheet">
     <link href='https://unpkg.com/boxicons@2.1.4/css/boxicons.min.css' rel='stylesheet'>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -360,6 +363,7 @@ foreach ($archived_incidents as $inc) {
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.2.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <link rel="stylesheet" href="../css/admin/dashboard.css">
     <link rel="stylesheet" href="../css/admin/navbar.css?v=<?= filemtime('../css/admin/navbar.css') ?>">
     <link rel="stylesheet" href="../css/admin/analytics.css?v=<?= filemtime('../css/admin/analytics.css') ?>">
 </head>
@@ -367,13 +371,12 @@ foreach ($archived_incidents as $inc) {
     
     <?php include 'navbar.php'; ?>
 
-    <main class="main-content">
-        <!-- COMMAND HEADER -->
-        <header class="analytics-header">
+    <main class="main-content analytics-main">
+        <!-- TOP COMMAND BAR (MATCHING CONTROLS) -->
+        <div class="analytics-topbar">
             <div>
-                <div class="header-badge"><i class='bx bx-pulse'></i> Real-Time Telemetry & Reports</div>
-                <h1 class="header-title">City Global Analytics</h1>
-                <p class="header-subtitle">Dasmariñas City Disaster Risk Reduction & Management Command Dashboard</p>
+                <h1 class="analytics-title"><i class='bx bx-pulse'></i> City Global Analytics</h1>
+                <p class="analytics-subtitle">Dasmariñas City Disaster Risk Reduction & Management Command Dashboard</p>
             </div>
             <div class="header-actions">
                 <button type="button" onclick="openReportModal()" class="btn-action btn-danger-action">
@@ -383,43 +386,61 @@ foreach ($archived_incidents as $inc) {
                     <i class='bx bx-archive-in'></i> Cold Backup
                 </button>
             </div>
-        </header>
+        </div>
 
-        <!-- 1. AI PREDICTIVE RISK & EARLY WARNING -->
-        <section class="command-panel ai-predictive-deck">
-            <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'aiDeckBody', 'btnToggleAi')">
+        <!-- SEGMENTED WORKSPACE TABS -->
+        <div class="analytics-tabs" role="tablist">
+            <button type="button" class="ctrl-tab active" data-tab="ai" onclick="switchAnalyticsTab('ai', this)">
+                <i class='bx bx-brain'></i> AI Early Warning
+            </button>
+            <button type="button" class="ctrl-tab" data-tab="archive" onclick="switchAnalyticsTab('archive', this)">
+                <i class='bx bxs-archive'></i> Archive Vault
+                <span class="tab-badge"><?= count($archived_incidents) ?></span>
+            </button>
+            <button type="button" class="ctrl-tab" data-tab="bin" onclick="switchAnalyticsTab('bin', this)">
+                <i class='bx bxs-trash-alt'></i> Rejection Audit
+                <span class="tab-badge"><?= $total_rejected ?></span>
+            </button>
+            <button type="button" class="ctrl-tab" data-tab="hotspots" onclick="switchAnalyticsTab('hotspots', this)">
+                <i class='bx bxs-hot'></i> Spatial Hotspots
+            </button>
+            <button type="button" class="ctrl-tab" data-tab="charts" onclick="switchAnalyticsTab('charts', this)">
+                <i class='bx bx-bar-chart-alt-2'></i> Charts & Trends
+            </button>
+            <button type="button" class="ctrl-tab" data-tab="broadcasts" onclick="switchAnalyticsTab('broadcasts', this)">
+                <i class='bx bx-broadcast'></i> Broadcast History
+                <span class="tab-badge"><?= count($broadcast_history) ?></span>
+            </button>
+        </div>
+
+        <!-- TAB 1: AI PREDICTIVE RISK & EARLY WARNING -->
+        <section id="tab-ai" class="sitting-panel analytics-panel ai-predictive-deck tab-pane active">
+            <div class="panel-header analytics-panel-header">
                 <div class="panel-title-group">
                     <div class="panel-icon-badge ai-icon-badge">
                         <i class='bx bx-brain'></i>
                     </div>
                     <div>
                         <h2>AI Predictive Risk & Early Warning Deck</h2>
-                        <p class="panel-subtitle">Proactive monthly incident forecasting powered by Gemini analyzing historical clusters & seasonal recurrences</p>
+                        <small class="hdr-meta">Proactive monthly incident forecasting powered by Gemini analyzing historical clusters & seasonal recurrences</small>
                     </div>
                 </div>
-                <div class="panel-controls" onclick="event.stopPropagation()">
-                    <div style="display: inline-flex; align-items: center; gap: 8px; background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.25); padding: 6px 12px; border-radius: 8px;">
-                        <i class='bx bxs-shield-check' style="color: #10b981; font-size: 1.1rem;"></i>
-                        <span style="font-size: 0.8rem; font-weight: 700; color: #10b981; text-transform: uppercase; letter-spacing: 0.04em;">
-                            Cycle: <span style="color: var(--text-primary, #0f172a);"><?= htmlspecialchars($current_active_month) ?></span>
-                        </span>
-                        <span style="background: #10b981; color: #fff; font-size: 0.65rem; font-weight: 800; padding: 2px 6px; border-radius: 4px;">AUTO</span>
+                <div class="panel-controls">
+                    <div class="cycle-pill">
+                        <i class='bx bxs-shield-check'></i>
+                        <span>Cycle: <strong><?= htmlspecialchars($current_active_month) ?></strong></span>
+                        <span class="cycle-auto-tag">AUTO</span>
                     </div>
-                    <button type="button" class="btn-action btn-secondary-action" style="padding: 6px 10px; font-size: 0.75rem;" onclick="loadAiForecast(true)" title="Force regenerate AI prediction">
+                    <button type="button" class="pill-btn bg-slate" onclick="loadAiForecast(true)" title="Force regenerate AI prediction">
                         <i class='bx bx-refresh'></i> Re-Analyze
-                    </button>
-                    <button type="button" id="btnToggleAi" class="collapse-toggle-btn" onclick="toggleTableCollapse('aiDeckBody', this)">
-                        <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
                     </button>
                 </div>
             </div>
 
-            <!-- COLLAPSIBLE CONTENT -->
-            <div id="aiDeckBody" class="collapsible-body">
-                <!-- Executive Summary Alert Banner -->
+            <div id="aiDeckBody">
                 <div id="aiSummaryBanner" class="ai-summary-card" style="display: none;"></div>
 
-                <div class="table-scroll-wrapper ai-table-scroll">
+                <div class="table-scroll-wrapper analytics-table-box full-pane-scroll">
                     <table class="data-table ai-table" id="aiForecastTable">
                         <thead>
                             <tr>
@@ -443,316 +464,236 @@ foreach ($archived_incidents as $inc) {
             </div>
         </section>
 
-        <!-- 2. MAIN SPLIT ANALYTICS GRID -->
-        <div class="dashboard-grid">
-            <!-- LEFT COLUMN: Historical Operations & Audit -->
-            <div class="main-col">
-                <!-- INCIDENT ARCHIVE VAULT -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'archiveVaultBody', 'btnToggleArchive')">
-                        <div class="panel-title-group">
-                            <div class="panel-icon-badge">
-                                <i class='bx bxs-archive'></i>
-                            </div>
-                            <div>
-                                <h2>Incident Archive Vault</h2>
-                                <p class="panel-subtitle">Audited record of resolved city emergencies and response timelines</p>
-                            </div>
-                        </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <select id="vaultTimeFilter" class="filter-select" onchange="applyFilters()">
-                                <option value="all" <?= ($vault_time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
-                                <option value="today" <?= ($vault_time_filter === 'today') ? 'selected' : '' ?>>Today</option>
-                                <option value="week" <?= ($vault_time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
-                                <option value="month" <?= ($vault_time_filter === 'month') ? 'selected' : '' ?>>1 Month</option>
-                                <option value="year" <?= ($vault_time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
-                            </select>
-                            <select id="typeFilter" class="filter-select" onchange="applyFilters()">
-                                <option value="all">All Types</option>
-                                <?php foreach($unique_types as $type): ?>
-                                    <option value="<?= htmlspecialchars($type) ?>" <?= ($type_filter === $type) ? 'selected' : '' ?>><?= htmlspecialchars($type) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="button" id="btnToggleArchive" class="collapse-toggle-btn" onclick="toggleTableCollapse('archiveVaultBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
+        <!-- TAB 2: INCIDENT ARCHIVE VAULT -->
+        <section id="tab-archive" class="sitting-panel analytics-panel tab-pane">
+            <div class="panel-header analytics-panel-header">
+                <div class="panel-title-group">
+                    <div class="panel-icon-badge">
+                        <i class='bx bxs-archive'></i>
                     </div>
-
-                    <!-- COLLAPSIBLE CONTENT -->
-                    <div id="archiveVaultBody" class="collapsible-body">
-                        <div class="table-scroll-wrapper">
-                            <table class="data-table" id="archiveTable">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 35%;">Incident & Logs</th>
-                                        <th style="width: 25%;">Location & Severity</th>
-                                        <th style="width: 25%;">Response Timeline</th>
-                                        <th style="width: 15%; text-align: center;" class="exclude-export">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($archived_incidents)): ?>
-                                        <tr><td colspan="4" class="table-empty-row">No records found in the archive vault.</td></tr>
-                                    <?php else: ?>
-                                        <?php foreach ($archived_incidents as $inc): 
-                                            $badge_class = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'info' : 'major');
-                                            $logs_js = htmlspecialchars($inc['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
-                                            $created = strtotime($inc['created_at']);
-                                            $arrived = $inc['arrived_at'] ? strtotime($inc['arrived_at']) : null;
-                                            $resolved = $inc['resolved_at'] ? strtotime($inc['resolved_at']) : null;
-
-                                            if ($resolved && $created && $resolved >= $created) {
-                                                $total_mins = (int)floor(($resolved - $created) / 60);
-                                                if ($total_mins >= 60) {
-                                                    $hrs = (int)floor($total_mins / 60);
-                                                    $mins_rem = $total_mins % 60;
-                                                    $duration_str = $mins_rem > 0 ? "{$hrs}h {$mins_rem}m" : "{$hrs}h";
-                                                } else {
-                                                    $duration_str = "{$total_mins}m";
-                                                }
-                                            } else {
-                                                $duration_str = "N/A";
-                                            }
-
-                                            $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
-                                        ?>
-                                        <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
-                                            <td>
-                                                <div class="table-entity-title"><?= htmlspecialchars($inc['incident_type']) ?></div>
-                                                <div class="table-entity-time"><i class='bx bx-time-five'></i> <?= $inc['date_str'] ?></div>
-                                                <div class="user-log-box">"<?= htmlspecialchars($inc['initial_log'] ?? 'No user details provided.') ?>"</div>
-                                            </td>
-                                            <td>
-                                                <span class="location-label"><?= htmlspecialchars($inc['barangay']) ?></span>
-                                                <span class="badge <?= $badge_class ?>"><?= strtoupper($inc['severity']) ?></span>
-                                            </td>
-                                            <td>
-                                                <div class="timeline-text">
-                                                    <div class="timeline-row"><strong>Reported:</strong> <span><?= date('h:i A', $created) ?></span></div>
-                                                    <div class="timeline-row"><strong class="text-arrival">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Pending' ?></span></div>
-                                                    <div class="timeline-row"><strong class="text-resolution">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Pending' ?></span></div>
-                                                    <div class="duration-text">
-                                                        <span>Response Duration:</span> <span><?= $duration_str ?></span>
-                                                    </div>
-                                                </div>
-                                            </td>
-                                            <td style="text-align: center; vertical-align: middle;" class="exclude-export">
-                                                <div class="btn-action-group">
-                                                    <?php if (!empty($vaultImg)): ?>
-                                                        <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
-                                                    <?php endif; ?>
-                                                    <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Timeline"><i class='bx bx-list-ul'></i></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                    <div>
+                        <h2>Incident Archive Vault</h2>
+                        <small class="hdr-meta">Audited record of resolved city emergencies and response timelines</small>
                     </div>
                 </div>
-
-                <!-- REPORT BIN & REJECTION SUMMARY AUDIT -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'reportBinBody', 'btnToggleBin')">
-                        <div class="panel-title-group">
-                            <div class="panel-icon-badge danger-icon-badge">
-                                <i class='bx bxs-trash-alt'></i>
-                            </div>
-                            <div>
-                                <h2>Report Bin & Rejection Audit</h2>
-                                <p class="panel-subtitle">Audited breakdown of filtered false alarms, pranks, and incomplete citizen submissions</p>
-                            </div>
-                        </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <span class="badge badge-dark"><?= $total_rejected ?> Rejections Filtered</span>
-                            <button type="button" id="btnToggleBin" class="collapse-toggle-btn" onclick="toggleTableCollapse('reportBinBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- COLLAPSIBLE CONTENT -->
-                    <div id="reportBinBody" class="collapsible-body">
-                        <!-- SUMMARY STATS TILES -->
-                        <div class="stats-metric-grid">
-                            <?php foreach ($reject_categories_count as $cat_name => $count): 
-                                $accent_border = match($cat_name) {
-                                    'False Alarm'            => 'border-red',
-                                    'Prank / Spam'           => 'border-purple',
-                                    'Incomplete Information' => 'border-cyan',
-                                    default                  => 'border-gray'
-                                };
-                            ?>
-                                <div class="metric-card <?= $accent_border ?>">
-                                    <div class="metric-label"><?= $cat_name ?></div>
-                                    <div class="metric-val"><?= number_format($count) ?></div>
-                                </div>
-                            <?php endforeach; ?>
-                        </div>
-
-                        <!-- DETAILED REJECTION TABLE -->
-                        <div class="table-scroll-wrapper">
-                            <table class="data-table" id="binTable">
-                                <thead>
-                                    <tr>
-                                        <th style="width: 28%;">Incident & Citizen Input</th>
-                                        <th style="width: 20%;">Jurisdiction</th>
-                                        <th style="width: 38%;">Rejection Audit & Reason</th>
-                                        <th style="width: 14%; text-align: center;" class="exclude-export">Audit</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($bin_incidents)): ?>
-                                        <tr><td colspan="4" class="table-empty-row">Report bin clean. No recorded rejections.</td></tr>
-                                    <?php else: ?>
-                                        <?php foreach ($bin_incidents as $bin): 
-                                            $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
-                                            $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
-                                        ?>
-                                        <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
-                                            <td>
-                                                <div class="table-entity-title text-muted-dark"><?= htmlspecialchars($bin['incident_type']) ?></div>
-                                                <div class="table-entity-time"><?= $bin['date_str'] ?></div>
-                                                <div class="user-log-box">
-                                                    <strong>Citizen Log:</strong> "<?= htmlspecialchars($bin['initial_log'] ?? 'No log entered.') ?>"
-                                                </div>
-                                            </td>
-                                            <td>
-                                                <span class="location-label"><?= htmlspecialchars($bin['barangay']) ?></span>
-                                                <span class="badge badge-dark">REJECTED</span>
-                                            </td>
-                                            <td>
-                                                <div class="rejection-meta">
-                                                    <span class="badge badge-tag"><?= strtoupper($bin['parsed_category']) ?></span>
-                                                    <small><i class='bx bx-user-check'></i> <?= htmlspecialchars($bin['parsed_officer']) ?></small>
-                                                </div>
-                                                <div class="user-log-box log-danger">
-                                                    <strong>Officer Note:</strong> <?= htmlspecialchars($bin['parsed_notes']) ?>
-                                                </div>
-                                            </td>
-                                            <td style="text-align: center; vertical-align: middle;" class="exclude-export">
-                                                <div class="btn-action-group">
-                                                    <?php if (!empty($binImg)): ?>
-                                                        <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
-                                                    <?php endif; ?>
-                                                    <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($bin['incident_type']) ?>')" title="Audit Trail"><i class='bx bx-list-ul'></i></button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                        <?php endforeach; ?>
-                                    <?php endif; ?>
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- DISASTER SEASONALITY -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'seasonalityBody', 'btnToggleSeasonality')">
-                        <div class="panel-title-group">
-                            <div class="panel-icon-badge">
-                                <i class='bx bx-line-chart'></i>
-                            </div>
-                            <div>
-                                <h2>Disaster Seasonality & Recurrence Timeline</h2>
-                                <p class="panel-subtitle">Temporal frequency analysis across reporting periods</p>
-                            </div>
-                        </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <select id="seasonalityFilter" class="filter-select" onchange="renderSeasonality()">
-                                <option value="all">All Time</option>
-                                <option value="day">Single Day</option>
-                                <option value="weekly">Weekly Range (Up to 7 Days)</option>
-                                <option value="monthly">Monthly</option>
-                                <option value="quarterly">Quarterly</option>
-                                <option value="yearly">Yearly</option>
-                            </select>
-                            <button type="button" id="btnToggleSeasonality" class="collapse-toggle-btn" onclick="toggleTableCollapse('seasonalityBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="seasonalityBody" class="collapsible-body">
-                        <div class="chart-wrapper">
-                            <?php if (empty($seasonality_dates)): ?>
-                                <div class="empty-overlay" id="seasonalityOverlay">No seasonal data recorded.</div>
-                            <?php endif; ?>
-                            <canvas id="seasonalityLineChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- EVAC CENTER CAPACITY -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'evacCapacityBody', 'btnToggleEvacCapacity')">
-                        <div class="panel-title-group">
-                            <div class="panel-icon-badge">
-                                <i class='bx bxs-home-heart'></i>
-                            </div>
-                            <div>
-                                <h2>Evacuation Center Occupancy & Headroom</h2>
-                                <p class="panel-subtitle">Real-time capacity tracking across city shelter assets</p>
-                            </div>
-                        </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <button type="button" id="btnToggleEvacCapacity" class="collapse-toggle-btn" onclick="toggleTableCollapse('evacCapacityBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="evacCapacityBody" class="collapsible-body">
-                        <div class="chart-wrapper">
-                            <?php if (empty($evac_labels)): ?>
-                                <div class="empty-overlay">No evacuation centers currently active.</div>
-                            <?php endif; ?>
-                            <canvas id="evacOverflowChart"></canvas>
-                        </div>
-                    </div>
+                <div class="panel-controls">
+                    <select id="vaultTimeFilter" class="filter-select" onchange="applyFilters()">
+                        <option value="all" <?= ($vault_time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
+                        <option value="today" <?= ($vault_time_filter === 'today') ? 'selected' : '' ?>>Today</option>
+                        <option value="week" <?= ($vault_time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
+                        <option value="month" <?= ($vault_time_filter === 'month') ? 'selected' : '' ?>>1 Month</option>
+                        <option value="year" <?= ($vault_time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
+                    </select>
+                    <select id="typeFilter" class="filter-select" onchange="applyFilters()">
+                        <option value="all">All Types</option>
+                        <?php foreach($unique_types as $type): ?>
+                            <option value="<?= htmlspecialchars($type) ?>" <?= ($type_filter === $type) ? 'selected' : '' ?>><?= htmlspecialchars($type) ?></option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
             </div>
 
-            <!-- RIGHT COLUMN: Spatial Hotspots, Breakdown, Sentiment & Broadcasts -->
-            <div class="side-col">
-                <!-- SPATIAL HOTSPOTS HEATMAP -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'spatialHotspotsBody', 'btnToggleHotspots')">
-                        <div class="panel-title-group">
-                            <div class="panel-icon-badge danger-icon-badge">
-                                <i class='bx bxs-hot'></i>
-                            </div>
-                            <div>
-                                <h2>Spatial Hotspots</h2>
-                                <p class="panel-subtitle">Kernel density geospatial map</p>
-                            </div>
-                        </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <button type="button" id="btnToggleHotspots" class="collapse-toggle-btn" onclick="toggleTableCollapse('spatialHotspotsBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
+            <div id="archiveVaultBody">
+                <div class="table-scroll-wrapper analytics-table-box full-pane-scroll">
+                    <table class="data-table" id="archiveTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 36%;">Incident & Logs</th>
+                                <th style="width: 24%;">Location & Severity</th>
+                                <th style="width: 26%;">Response Timeline</th>
+                                <th style="width: 14%; text-align: center;" class="exclude-export">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($archived_incidents)): ?>
+                                <tr><td colspan="4" class="table-empty-row">No records found in the archive vault.</td></tr>
+                            <?php else: ?>
+                                <?php foreach ($archived_incidents as $inc): 
+                                    $badge_class = strtolower($inc['severity']) === 'critical' ? 'critical' : (strtolower($inc['severity']) === 'minor' ? 'info' : 'major');
+                                    $logs_js = htmlspecialchars($inc['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
+                                    $created = strtotime($inc['created_at']);
+                                    $arrived = $inc['arrived_at'] ? strtotime($inc['arrived_at']) : null;
+                                    $resolved = $inc['resolved_at'] ? strtotime($inc['resolved_at']) : null;
+
+                                    if ($resolved && $created && $resolved >= $created) {
+                                        $total_mins = (int)floor(($resolved - $created) / 60);
+                                        if ($total_mins >= 60) {
+                                            $hrs = (int)floor($total_mins / 60);
+                                            $mins_rem = $total_mins % 60;
+                                            $duration_str = $mins_rem > 0 ? "{$hrs}h {$mins_rem}m" : "{$hrs}h";
+                                        } else {
+                                            $duration_str = "{$total_mins}m";
+                                        }
+                                    } else {
+                                        $duration_str = "N/A";
+                                    }
+
+                                    $vaultImg = getCloudinaryUrl($inc['image_path'] ?? '');
+                                ?>
+                                <tr class="clickable-row" onclick="openMobileModal(this, 'archive')">
+                                    <td>
+                                        <div class="table-entity-title"><?= htmlspecialchars($inc['incident_type']) ?></div>
+                                        <div class="table-entity-time"><i class='bx bx-time-five'></i> <?= $inc['date_str'] ?></div>
+                                        <div class="user-log-box">"<?= htmlspecialchars($inc['initial_log'] ?? 'No user details provided.') ?>"</div>
+                                    </td>
+                                    <td>
+                                        <span class="location-label"><?= htmlspecialchars($inc['barangay']) ?></span>
+                                        <span class="badge <?= $badge_class ?>"><?= strtoupper($inc['severity']) ?></span>
+                                    </td>
+                                    <td>
+                                        <div class="timeline-text">
+                                            <div class="timeline-row"><strong>Reported:</strong> <span><?= date('h:i A', $created) ?></span></div>
+                                            <div class="timeline-row"><strong class="text-arrival">Arrived:</strong> <span><?= $arrived ? date('h:i A', $arrived) : 'Pending' ?></span></div>
+                                            <div class="timeline-row"><strong class="text-resolution">Resolved:</strong> <span><?= $resolved ? date('h:i A', $resolved) : 'Pending' ?></span></div>
+                                            <div class="duration-text">
+                                                <span>Response Duration:</span> <span><?= $duration_str ?></span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td style="text-align: center; vertical-align: middle;" class="exclude-export">
+                                        <div class="btn-action-group">
+                                            <?php if (!empty($vaultImg)): ?>
+                                                <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($vaultImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                            <?php endif; ?>
+                                            <button class="btn-table-icon bg-blue" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($inc['incident_type']) ?>')" title="View Timeline"><i class='bx bx-list-ul'></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 3: REPORT BIN & REJECTION SUMMARY AUDIT -->
+        <section id="tab-bin" class="sitting-panel analytics-panel tab-pane">
+            <div class="panel-header analytics-panel-header">
+                <div class="panel-title-group">
+                    <div class="panel-icon-badge danger-icon-badge">
+                        <i class='bx bxs-trash-alt'></i>
                     </div>
-                    <div id="spatialHotspotsBody" class="collapsible-body">
-                        <div id="heatmap"></div>
+                    <div>
+                        <h2>Report Bin & Rejection Audit</h2>
+                        <small class="hdr-meta">Audited breakdown of filtered false alarms, pranks, and incomplete citizen submissions</small>
                     </div>
                 </div>
+                <div class="panel-controls">
+                    <span class="badge badge-dark"><?= $total_rejected ?> Rejections Filtered</span>
+                </div>
+            </div>
 
+            <div id="reportBinBody">
+                <div class="stats-metric-grid">
+                    <?php foreach ($reject_categories_count as $cat_name => $count): 
+                        $accent_border = match($cat_name) {
+                            'False Alarm'            => 'border-red',
+                            'Prank / Spam'           => 'border-purple',
+                            'Incomplete Information' => 'border-cyan',
+                            default                  => 'border-gray'
+                        };
+                    ?>
+                        <div class="metric-card <?= $accent_border ?>">
+                            <div class="metric-label"><?= $cat_name ?></div>
+                            <div class="metric-val"><?= number_format($count) ?></div>
+                        </div>
+                    <?php endforeach; ?>
+                </div>
+
+                <div class="table-scroll-wrapper analytics-table-box full-pane-scroll-sm">
+                    <table class="data-table" id="binTable">
+                        <thead>
+                            <tr>
+                                <th style="width: 30%;">Incident & Citizen Input</th>
+                                <th style="width: 18%;">Jurisdiction</th>
+                                <th style="width: 40%;">Rejection Audit & Reason</th>
+                                <th style="width: 12%; text-align: center;" class="exclude-export">Audit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($bin_incidents)): ?>
+                                <tr><td colspan="4" class="table-empty-row">Report bin clean. No recorded rejections.</td></tr>
+                            <?php else: ?>
+                                <?php foreach ($bin_incidents as $bin): 
+                                    $logs_js = htmlspecialchars($bin['all_logs'] ?? 'No logs recorded.', ENT_QUOTES, 'UTF-8');
+                                    $binImg = getCloudinaryUrl($bin['image_path'] ?? '');
+                                ?>
+                                <tr class="clickable-row" onclick="openMobileModal(this, 'bin')">
+                                    <td>
+                                        <div class="table-entity-title text-muted-dark"><?= htmlspecialchars($bin['incident_type']) ?></div>
+                                        <div class="table-entity-time"><?= $bin['date_str'] ?></div>
+                                        <div class="user-log-box">
+                                            <strong>Citizen Log:</strong> "<?= htmlspecialchars($bin['initial_log'] ?? 'No log entered.') ?>"
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="location-label"><?= htmlspecialchars($bin['barangay']) ?></span>
+                                        <span class="badge badge-dark">REJECTED</span>
+                                    </td>
+                                    <td>
+                                        <div class="rejection-meta">
+                                            <span class="badge badge-tag"><?= strtoupper($bin['parsed_category']) ?></span>
+                                            <small><i class='bx bx-user-check'></i> <?= htmlspecialchars($bin['parsed_officer']) ?></small>
+                                        </div>
+                                        <div class="user-log-box log-danger">
+                                            <strong>Officer Note:</strong> <?= htmlspecialchars($bin['parsed_notes']) ?>
+                                        </div>
+                                    </td>
+                                    <td style="text-align: center; vertical-align: middle;" class="exclude-export">
+                                        <div class="btn-action-group">
+                                            <?php if (!empty($binImg)): ?>
+                                                <button class="btn-table-icon bg-green" onclick="event.stopPropagation(); viewPhoto('<?= htmlspecialchars($binImg, ENT_QUOTES, 'UTF-8') ?>')" title="View Evidence"><i class='bx bx-image'></i></button>
+                                            <?php endif; ?>
+                                            <button class="btn-table-icon bg-dark" onclick="event.stopPropagation(); viewLogs('<?= $logs_js ?>', '<?= addslashes($bin['incident_type']) ?>')" title="Audit Trail"><i class='bx bx-list-ul'></i></button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- TAB 4: SPATIAL HOTSPOTS HEATMAP -->
+        <section id="tab-hotspots" class="sitting-panel analytics-panel tab-pane">
+            <div class="panel-header analytics-panel-header">
+                <div class="panel-title-group">
+                    <div class="panel-icon-badge danger-icon-badge">
+                        <i class='bx bxs-hot'></i>
+                    </div>
+                    <div>
+                        <h2>Spatial Hotspots</h2>
+                        <small class="hdr-meta">Kernel density geospatial heatmap across Dasmariñas City barangays</small>
+                    </div>
+                </div>
+                <div class="panel-controls">
+                    <span class="badge badge-tag"><?= count($heat_coords) ?> Plotted Coordinates</span>
+                </div>
+            </div>
+            <div id="spatialHotspotsBody">
+                <div id="heatmap"></div>
+            </div>
+        </section>
+
+        <!-- TAB 5: CHARTS & TELEMETRY TRENDS -->
+        <section id="tab-charts" class="tab-pane">
+            <div class="charts-grid-2">
                 <!-- INCIDENT BREAKDOWN -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'incidentDistributionBody', 'btnToggleIncidentDist')">
+                <div class="sitting-panel analytics-panel">
+                    <div class="panel-header analytics-panel-header">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge">
                                 <i class='bx bx-bar-chart-alt-2'></i>
                             </div>
                             <div>
                                 <h2>Incident Type Distribution</h2>
-                                <p class="panel-subtitle">Full rank of all historical non-rejected emergencies</p>
+                                <small class="hdr-meta">Full rank of all historical non-rejected emergencies</small>
                             </div>
                         </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
+                        <div class="panel-controls">
                             <select id="timeFilter" class="filter-select" onchange="applyFilters()">
                                 <option value="today" <?= ($time_filter === 'today') ? 'selected' : '' ?>>Today</option>
                                 <option value="week" <?= ($time_filter === 'week') ? 'selected' : '' ?>>1 Week</option>
@@ -760,12 +701,9 @@ foreach ($archived_incidents as $inc) {
                                 <option value="year" <?= ($time_filter === 'year') ? 'selected' : '' ?>>1 Year</option>
                                 <option value="all" <?= ($time_filter === 'all') ? 'selected' : '' ?>>All Time</option>
                             </select>
-                            <button type="button" id="btnToggleIncidentDist" class="collapse-toggle-btn" onclick="toggleTableCollapse('incidentDistributionBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
                         </div>
                     </div>
-                    <div id="incidentDistributionBody" class="collapsible-body">
+                    <div id="incidentDistributionBody">
                         <div class="breakdown-container">
                             <?php if (empty($type_data)): ?>
                                 <div class="empty-overlay">No incident data available.</div>
@@ -778,25 +716,76 @@ foreach ($archived_incidents as $inc) {
                     </div>
                 </div>
 
+                <!-- DISASTER SEASONALITY -->
+                <div class="sitting-panel analytics-panel">
+                    <div class="panel-header analytics-panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bx-line-chart'></i>
+                            </div>
+                            <div>
+                                <h2>Disaster Seasonality & Recurrence</h2>
+                                <small class="hdr-meta">Temporal frequency analysis across reporting periods</small>
+                            </div>
+                        </div>
+                        <div class="panel-controls">
+                            <select id="seasonalityFilter" class="filter-select" onchange="renderSeasonality()">
+                                <option value="all">All Time</option>
+                                <option value="day">Single Day</option>
+                                <option value="weekly">Weekly Range (Up to 7 Days)</option>
+                                <option value="monthly">Monthly</option>
+                                <option value="quarterly">Quarterly</option>
+                                <option value="yearly">Yearly</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="seasonalityBody">
+                        <div class="chart-wrapper">
+                            <?php if (empty($seasonality_dates)): ?>
+                                <div class="empty-overlay" id="seasonalityOverlay">No seasonal data recorded.</div>
+                            <?php endif; ?>
+                            <canvas id="seasonalityLineChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- EVAC CENTER CAPACITY -->
+                <div class="sitting-panel analytics-panel">
+                    <div class="panel-header analytics-panel-header">
+                        <div class="panel-title-group">
+                            <div class="panel-icon-badge">
+                                <i class='bx bxs-home-heart'></i>
+                            </div>
+                            <div>
+                                <h2>Evacuation Center Occupancy</h2>
+                                <small class="hdr-meta">Real-time capacity tracking across city shelter assets</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="evacCapacityBody">
+                        <div class="chart-wrapper">
+                            <?php if (empty($evac_labels)): ?>
+                                <div class="empty-overlay">No evacuation centers currently active.</div>
+                            <?php endif; ?>
+                            <canvas id="evacOverflowChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- CITIZEN SENTIMENT ANALYSIS -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'sentimentAuditBody', 'btnToggleSentiment')">
+                <div class="sitting-panel analytics-panel">
+                    <div class="panel-header analytics-panel-header">
                         <div class="panel-title-group">
                             <div class="panel-icon-badge purple-icon-badge">
                                 <i class='bx bx-pulse'></i>
                             </div>
                             <div>
                                 <h2>Citizen Sentiment Audit</h2>
-                                <p class="panel-subtitle">Emotional distress & urgency detected in citizen submissions</p>
+                                <small class="hdr-meta">Emotional distress & urgency detected in citizen submissions</small>
                             </div>
                         </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <button type="button" id="btnToggleSentiment" class="collapse-toggle-btn" onclick="toggleTableCollapse('sentimentAuditBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
                     </div>
-                    <div id="sentimentAuditBody" class="collapsible-body">
+                    <div id="sentimentAuditBody">
                         <div class="chart-wrapper sentiment-chart-wrapper">
                             <?php if (!$has_sentiment_data): ?>
                                 <div class="empty-overlay">No citizen descriptions recorded.</div>
@@ -805,68 +794,62 @@ foreach ($archived_incidents as $inc) {
                         </div>
                     </div>
                 </div>
+            </div>
+        </section>
 
-                <!-- BROADCAST HISTORY -->
-                <div class="command-panel">
-                    <div class="panel-header clickable-header" onclick="handleHeaderToggle(event, 'broadcastHistoryBody', 'btnToggleBroadcast')">
-                        <div class="panel-title-group">
-                            <div class="panel-icon-badge">
-                                <i class='bx bx-broadcast'></i>
-                            </div>
-                            <div>
-                                <h2>Broadcast History</h2>
-                                <p class="panel-subtitle">Official emergency bulletins</p>
-                            </div>
-                        </div>
-                        <div class="panel-controls" onclick="event.stopPropagation()">
-                            <button type="button" id="btnToggleBroadcast" class="collapse-toggle-btn" onclick="toggleTableCollapse('broadcastHistoryBody', this)">
-                                <i class='bx bx-chevron-down'></i> <span class="toggle-text">Click to show data</span>
-                            </button>
-                        </div>
+        <!-- TAB 6: BROADCAST HISTORY -->
+        <section id="tab-broadcasts" class="sitting-panel analytics-panel tab-pane">
+            <div class="panel-header analytics-panel-header">
+                <div class="panel-title-group">
+                    <div class="panel-icon-badge">
+                        <i class='bx bx-broadcast'></i>
                     </div>
-
-                    <!-- COLLAPSIBLE CONTENT -->
-                    <div id="broadcastHistoryBody" class="collapsible-body">
-                        <div class="table-scroll-wrapper" style="max-height: 280px;">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Title & Date</th>
-                                        <th>Severity</th>
-                                        <th style="text-align: center;">Control</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <?php if (empty($broadcast_history)): ?>
-                                        <tr><td colspan="3" class="table-empty-row">No broadcast history logged.</td></tr>
-                                    <?php endif; ?>
-                                    <?php foreach ($broadcast_history as $b): ?>
-                                    <tr class="clickable-row" onclick="openMobileModal(this, 'broadcast')">
-                                        <td>
-                                            <b class="broadcast-title"><?= htmlspecialchars($b['title']) ?></b>
-                                            <small class="table-entity-time"><?= $b['date_str'] ?></small>
-                                        </td>
-                                        <td><span class="badge <?= $b['severity'] ?>"><?= strtoupper($b['severity']) ?></span></td>
-                                        <td style="text-align: center;">
-                                            <?php if ($b['is_active']): ?>
-                                                <button class="btn-action btn-stop" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
-                                                    <i class='bx bx-stop-circle'></i> STOP
-                                                </button>
-                                            <?php else: ?>
-                                                <span class="badge badge-gray">ENDED</span>
-                                            <?php endif; ?>
-                                        </td>
-                                    </tr>
-                                    <?php endforeach; ?>
-                                </tbody>
-                            </table>
-                        </div>
+                    <div>
+                        <h2>Broadcast History</h2>
+                        <small class="hdr-meta">Official emergency bulletins transmitted to citizens</small>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- RESTORED: CUSTOM REPORT BUILDER MODAL -->
+            <div id="broadcastHistoryBody">
+                <div class="table-scroll-wrapper analytics-table-box full-pane-scroll">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 60%;">Title & Date</th>
+                                <th style="width: 20%;">Severity</th>
+                                <th style="width: 20%; text-align: center;">Control</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php if (empty($broadcast_history)): ?>
+                                <tr><td colspan="3" class="table-empty-row">No broadcast history logged.</td></tr>
+                            <?php endif; ?>
+                            <?php foreach ($broadcast_history as $b): ?>
+                            <tr class="clickable-row" onclick="openMobileModal(this, 'broadcast')">
+                                <td>
+                                    <b class="broadcast-title"><?= htmlspecialchars($b['title']) ?></b>
+                                    <small class="table-entity-time" style="display:block; margin-top:2px;"><?= $b['date_str'] ?></small>
+                                </td>
+                                <td><span class="badge <?= $b['severity'] ?>"><?= strtoupper($b['severity']) ?></span></td>
+                                <td style="text-align: center;">
+                                    <?php if ($b['is_active']): ?>
+                                        <button class="btn-action btn-stop" onclick="event.stopPropagation(); stopBroadcast(<?= $b['id'] ?>)">
+                                            <i class='bx bx-stop-circle'></i> STOP
+                                        </button>
+                                    <?php else: ?>
+                                        <span class="badge badge-gray">ENDED</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- CUSTOM REPORT BUILDER MODAL -->
         <div id="customReportModal" class="modal" style="z-index: 10007;">
             <div class="modal-content modal-report-generator">
                 <div class="modal-header-top">
@@ -972,26 +955,27 @@ foreach ($archived_incidents as $inc) {
                 </div>
             </div>
         </div>
+
         <!-- AI PREDICTIVE RISK DETAIL MODAL -->
-    <div id="aiDetailModal" class="modal" style="z-index: 10008;">
-        <div class="modal-content modal-ai-detail">
-            <div class="modal-inline-header">
-                <div>
-                    <h3 id="aiModalTitle" style="color: #0284c7; font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
-                        <i class='bx bx-brain'></i> <span id="aiModalBarangay">Forecast Details</span>
-                    </h3>
-                    <p id="aiModalSubtitle" style="font-size: 0.8rem; color: #64748b; margin-top: 3px;">Predictive Hazard Risk Modeling & Recommended Protocols</p>
+        <div id="aiDetailModal" class="modal" style="z-index: 10008;">
+            <div class="modal-content modal-ai-detail">
+                <div class="modal-inline-header">
+                    <div>
+                        <h3 id="aiModalTitle" style="color: #0284c7; font-size: 1.25rem; font-weight: 800; display: flex; align-items: center; gap: 8px;">
+                            <i class='bx bx-brain'></i> <span id="aiModalBarangay">Forecast Details</span>
+                        </h3>
+                        <p id="aiModalSubtitle" style="font-size: 0.8rem; color: #64748b; margin-top: 3px;">Predictive Hazard Risk Modeling & Recommended Protocols</p>
+                    </div>
+                    <button type="button" class="modal-close-btn" onclick="closeModal('aiDetailModal')" aria-label="Close details">
+                        <i class='bx bx-x'></i>
+                    </button>
                 </div>
-                <button type="button" class="modal-close-btn" onclick="closeModal('aiDetailModal')" aria-label="Close details">
-                    <i class='bx bx-x'></i>
-                </button>
+                <div class="ai-modal-body" id="aiModalBody"></div>
             </div>
-            <div class="ai-modal-body" id="aiModalBody"></div>
         </div>
-    </div>
     </main>
 
-    <!-- FIXED: TIMELINE LOG MODAL -->
+    <!-- TIMELINE LOG MODAL -->
     <div id="viewLogsModal" class="modal" style="z-index: 10006;">
         <div class="modal-content modal-timeline-modal">
             <div class="modal-inline-header">
@@ -1004,7 +988,7 @@ foreach ($archived_incidents as $inc) {
         </div>
     </div>
 
-    <!-- FIXED: EVIDENCE PHOTO MODAL -->
+    <!-- EVIDENCE PHOTO MODAL -->
     <div id="viewPhotoModal" class="modal modal-photo-viewer" style="z-index: 10006;">
         <button type="button" class="photo-close-btn" onclick="closeModal('viewPhotoModal')" aria-label="Close evidence photo">
             <i class='bx bx-x'></i>
@@ -1024,18 +1008,46 @@ foreach ($archived_incidents as $inc) {
     </div>
 
 <script nonce="<?= CSP_NONCE ?>">
+    function switchAnalyticsTab(tabKey, btn) {
+        document.querySelectorAll('.ctrl-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        const targetPane = document.getElementById('tab-' + tabKey);
+        if (targetPane) targetPane.classList.add('active');
+        sessionStorage.setItem('dasma_analytics_tab', tabKey);
+
+        requestAnimationFrame(() => {
+            window.dispatchEvent(new Event('resize'));
+            if (tabKey === 'hotspots') {
+                Object.values(window).forEach(val => {
+                    if (val && typeof val.invalidateSize === 'function') {
+                        val.invalidateSize();
+                    }
+                });
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const saved = sessionStorage.getItem('dasma_analytics_tab');
+        if (saved) {
+            const btn = document.querySelector(`.ctrl-tab[data-tab="${saved}"]`);
+            if (btn) switchAnalyticsTab(saved, btn);
+        }
+    });
+
     window.sentimentData    = <?= json_encode(array_values($sentiment_counts)) ?>;
     window.sentimentLabels  = <?= json_encode(array_keys($sentiment_counts)) ?>;
-    window.allIncidents      = <?= $js_incidents ?? '[]' ?>;
-    window.binIncidents      = <?= $js_bin_incidents ?? '[]' ?>;
-    window.allSeasonDates    = <?= json_encode($seasonality_dates ?? []) ?>;
-    window.typeLabels        = <?= json_encode($type_labels ?? []) ?>;
-    window.typeData          = <?= json_encode($type_data ?? []) ?>;
-    window.typeColors        = <?= json_encode($type_colors ?? []) ?>;
-    window.evacLabels        = <?= json_encode($evac_labels ?? []) ?>;
-    window.evacOccupants     = <?= json_encode($evac_occupants ?? []) ?>;
-    window.evacCapacity      = <?= json_encode($evac_capacity ?? []) ?>;
-    window.heatData          = <?= json_encode($heat_coords) ?>;
+    window.allIncidents     = <?= $js_incidents ?? '[]' ?>;
+    window.binIncidents     = <?= $js_bin_incidents ?? '[]' ?>;
+    window.allSeasonDates   = <?= json_encode($seasonality_dates ?? []) ?>;
+    window.typeLabels       = <?= json_encode($type_labels ?? []) ?>;
+    window.typeData         = <?= json_encode($type_data ?? []) ?>;
+    window.typeColors       = <?= json_encode($type_colors ?? []) ?>;
+    window.evacLabels       = <?= json_encode($evac_labels ?? []) ?>;
+    window.evacOccupants    = <?= json_encode($evac_occupants ?? []) ?>;
+    window.evacCapacity     = <?= json_encode($evac_capacity ?? []) ?>;
+    window.heatData         = <?= json_encode($heat_coords) ?>;
 </script>
 <script src="../js/admin/analytics.js?v=<?= filemtime('../js/admin/analytics.js') ?>" defer></script>
 </body>
