@@ -1,6 +1,5 @@
 <?php
 require_once __DIR__ . '/config.php';
-require_once __DIR__ . '/triage_helpers.php';
 global $conn;
 
 class Auth {
