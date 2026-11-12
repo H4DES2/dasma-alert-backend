@@ -34,128 +34,42 @@ $current_page = 'controls.php';
     <?php include 'navbar.php'; ?>
 
     <main class="main-content controls-main">
-        <h1 class="controls-title"><i class='bx bx-slider-alt'></i> System Controls</h1>
-        
-        <div class="dashboard-split-layout">
-            <!-- Left Column -->
-            <div class="controls-col">
-                
-                <!-- BROADCAST -->
-                <div class="sitting-panel controls-panel">
-                    <div class="panel-header controls-panel-header broadcast-hdr">
-                        <h2><i class='bx bx-broadcast' style="color:#d32f2f;"></i> Global Broadcast</h2>
-                    </div>
-                    <div class="broadcast-stack">
-                        <input type="text" id="globalBroadcastTitle" placeholder="ALERT TITLE" class="nav-input-field ctrl-field">
-                        <textarea id="globalBroadcastMessage" rows="3" placeholder="MESSAGE..." class="nav-input-field ctrl-field ctrl-textarea"></textarea>
-                        <select id="globalBroadcastSeverity" class="nav-input-field ctrl-field">
-                            <option value="info">INFO</option>
-                            <option value="warning">WARNING</option>
-                            <option value="critical">CRITICAL</option>
-                        </select>
-                        <button onclick="submitGlobalBroadcast()" class="btn-transmit">TRANSMIT ALERT</button>
-                    </div>
-                </div>
-
-                <!-- EMERGENCY TYPES -->
-                <div class="sitting-panel controls-panel">
-                    <div class="panel-header controls-panel-header">
-                        <h2><i class='bx bxs-error-circle' style="color:#ef4444;"></i> Emergency Types</h2>
-                        <div class="controls-header-actions">
-                            <button class="pill-btn bg-green" onclick="openIncidentModal()"><i class='bx bx-list-ul'></i> Hazards</button>
-                            <button class="pill-btn" onclick="openTypeModal()"><i class='bx bx-plus'></i> Add Type</button>
-                        </div>
-                    </div>
-                    <div class="table-scroll-wrapper controls-table-box" style="max-height: 400px;">
-                        <table class="triage-table">
-                            <thead><tr><th>Icon & Name</th><th style="text-align: center;">Actions</th></tr></thead>
-                            <tbody>
-                                <?php foreach($emergency_types as $et): ?>
-                                <tr class="clickable-type-row" onclick="showTypeDetails(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')">
-                                    <td>
-                                        <i class='bx <?php echo $et['icon']; ?>' style="font-size:1.1rem; color:#ef4444; vertical-align:middle; margin-right:8px;"></i> 
-                                        <b style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($et['name']); ?></b>
-                                        <small style="display:block; color:#94a3b8; font-size:0.75rem; margin-top:2px;">Click to view hazards & base severities</small>
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap;">
-                                        <button class="action-circle bg-orange" onclick="event.stopPropagation(); openIncidentModalFor(<?php echo $et['id']; ?>)" title="Manage Hazards & Base Severities"><i class='bx bx-list-ul'></i></button>
-                                        <button class="action-circle bg-green" onclick="event.stopPropagation(); openTypeModal(<?php echo $et['id']; ?>, '<?php echo addslashes($et['name']); ?>', '<?php echo $et['icon']; ?>', '<?php echo addslashes($et['incidents'] ?? ''); ?>')" title="Edit Name/Icon"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="event.stopPropagation(); deleteType(<?php echo $et['id']; ?>)" title="Delete Type"><i class='bx bx-trash'></i></button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
+        <!-- Top Command Bar -->
+        <div class="controls-topbar">
+            <div>
+                <h1 class="controls-title"><i class='bx bx-slider-alt'></i> System Controls</h1>
+                <p class="controls-subtitle">Manage emergency taxonomy, triage rules, public guidelines, and broadcasts.</p>
             </div>
-
-            <!-- Right Column -->
-            <div class="controls-col">
-                
-                <!-- ANNOUNCEMENTS -->
-                <div class="sitting-panel controls-panel">
-                    <div class="panel-header controls-panel-header">
-                        <h2><i class='bx bxs-bell-ring' style="color:#f59e0b;"></i> App Announcements</h2>
-                        <button class="pill-btn" onclick="openAnnouncementModal()"><i class='bx bx-plus'></i> Create</button>
-                    </div>
-                    <div class="table-scroll-wrapper controls-table-box" style="max-height: 300px;">
-                        <table class="triage-table">
-                            <thead><tr><th>Details</th><th style="text-align: center;">Actions</th></tr></thead>
-                            <tbody>
-                                <?php foreach($announcements as $ann): ?>
-                                <tr>
-                                    <td><strong style="color:#3b82f6; font-size:0.95rem;"><?php echo htmlspecialchars($ann['title']); ?></strong><br><small style="color:#94a3b8; font-weight:600;"><?php echo date('M d, Y', strtotime($ann['created_at'])); ?></small></td>
-                                    <td style="text-align: center;">
-                                        <button class="action-circle bg-green" onclick="openAnnouncementModal(<?php echo $ann['id']; ?>, '<?php echo addslashes($ann['title']); ?>', '<?php echo addslashes(str_replace(["\r","\n"], ['\r','\n'], $ann['message'])); ?>')"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="deleteAnnouncement(<?php echo $ann['id']; ?>)"><i class='bx bx-trash'></i></button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-                <!-- GUIDELINES -->
-                <div class="sitting-panel controls-panel">
-                    <div class="panel-header controls-panel-header">
-                        <h2><i class='bx bx-book-bookmark' style="color:#10b981;"></i> Disaster Guidelines</h2>
-                        <button class="pill-btn" onclick="openGuidelineModal()"><i class='bx bx-plus'></i> Add Guide</button>
-                    </div>
-                    <div class="table-scroll-wrapper controls-table-box" style="max-height: 300px;">
-                        <table class="triage-table">
-                            <thead><tr><th>Title</th><th style="text-align: center;">Actions</th></tr></thead>
-                            <tbody>
-                                <?php foreach($guidelines as $g): ?>
-                                <tr class="clickable-type-row" onclick="showGuidelineDetails(<?php echo $g['id']; ?>, '<?php echo addslashes($g['title']); ?>', '<?php echo addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])); ?>')">
-                                    <td>
-                                        <strong style="color:#334155; font-size:0.95rem;"><?php echo htmlspecialchars($g['title']); ?></strong>
-                                        <small style="display:block; color:#94a3b8; font-size:0.75rem; margin-top:2px;">Click to view full instructions</small>
-                                    </td>
-                                    <td style="text-align: center; white-space: nowrap;">
-                                        <button class="action-circle bg-green" onclick="event.stopPropagation(); openGuidelineModal(<?php echo $g['id']; ?>, '<?php echo addslashes($g['title']); ?>', '<?php echo addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])); ?>')" title="Edit Guideline"><i class='bx bx-edit'></i></button>
-                                        <button class="action-circle bg-red" onclick="event.stopPropagation(); deleteGuideline(<?php echo $g['id']; ?>)" title="Delete Guideline"><i class='bx bx-trash'></i></button>
-                                    </td>
-                                </tr>
-                                <?php endforeach; ?>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-
-            </div>
+            <button class="btn-broadcast-trigger" onclick="openBroadcastModal()">
+                <i class='bx bx-broadcast'></i> Global Broadcast
+            </button>
         </div>
 
-        <!-- FULL-WIDTH SECTION: QUICK-TRIAGE QUESTION MANAGER -->
-        <div class="sitting-panel controls-panel-triage">
+        <!-- Workspace Tabs -->
+        <div class="controls-tabs" role="tablist">
+            <button class="ctrl-tab active" data-tab="triage" onclick="switchControlTab('triage', this)">
+                <i class='bx bx-help-circle'></i> Quick-Triage Rules
+            </button>
+            <button class="ctrl-tab" data-tab="types" onclick="switchControlTab('types', this)">
+                <i class='bx bxs-error-circle'></i> Emergency Types
+                <span class="tab-badge"><?= count($emergency_types) ?></span>
+            </button>
+            <button class="ctrl-tab" data-tab="guidelines" onclick="switchControlTab('guidelines', this)">
+                <i class='bx bx-book-bookmark'></i> Disaster Guidelines
+                <span class="tab-badge"><?= count($guidelines) ?></span>
+            </button>
+            <button class="ctrl-tab" data-tab="announcements" onclick="switchControlTab('announcements', this)">
+                <i class='bx bxs-bell-ring'></i> App Announcements
+                <span class="tab-badge"><?= count($announcements) ?></span>
+            </button>
+        </div>
+
+        <!-- TAB 1: QUICK-TRIAGE QUESTION MANAGER -->
+        <section id="tab-triage" class="sitting-panel controls-panel tab-pane active">
             <div class="panel-header controls-panel-header triage-hdr">
                 <div>
                     <h2><i class='bx bx-help-circle' style="color:#8b5cf6;"></i> Quick-Triage Questions & Severity Rules</h2>
-                    <small id="triageCoverageSummary" style="color:#64748b; font-weight:700; display:block; margin-top:3px;">
-                        Loading question library and hazard coverage...
-                    </small>
+                    <small id="triageCoverageSummary" class="hdr-meta">Loading question library and hazard coverage...</small>
                 </div>
                 <button class="pill-btn pill-btn-lg bg-purple" onclick="openTriageQuestionModal()">
                     <i class='bx bx-plus'></i> Add Triage Question
@@ -163,11 +77,14 @@ $current_page = 'controls.php';
             </div>
 
             <div class="triage-toolbar">
-                <input type="text" id="triageSearchInput" placeholder="Search question text, option label, or hazard..." oninput="renderTriageQuestionTable()">
+                <div class="search-input-wrap">
+                    <i class='bx bx-search'></i>
+                    <input type="text" id="triageSearchInput" placeholder="Search question text, option label, or hazard..." oninput="renderTriageQuestionTable()">
+                </div>
                 <select id="triageCategoryFilter" onchange="renderTriageQuestionTable()">
                     <option value="all">All Categories & Hazards</option>
                     <?php foreach($emergency_types as $et): ?>
-                        <option value="<?php echo $et['id']; ?>"><?php echo htmlspecialchars($et['name']); ?></option>
+                        <option value="<?= $et['id'] ?>"><?= htmlspecialchars($et['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
                 <select id="triageStatusFilter" onchange="renderTriageQuestionTable()">
@@ -177,28 +94,172 @@ $current_page = 'controls.php';
                 </select>
             </div>
 
-            <div class="table-scroll-wrapper controls-table-box" style="max-height: 520px;">
+            <div class="table-scroll-wrapper controls-table-box full-pane-scroll">
                 <table class="triage-table">
                     <thead>
                         <tr>
                             <th style="width: 38%;">Question & Answer Options</th>
-                            <th style="width: 34%;">Applies To (Categories & Hazards)</th>
-                            <th style="width: 14%; text-align: center;">Status</th>
-                            <th style="width: 14%; text-align: center;">Actions</th>
+                            <th style="width: 36%;">Applies To (Categories & Hazards)</th>
+                            <th style="width: 13%; text-align: center;">Status</th>
+                            <th style="width: 13%; text-align: center;">Actions</th>
                         </tr>
                     </thead>
                     <tbody id="triageQuestionsTableBody">
                         <tr>
-                            <td colspan="4" style="text-align:center; padding: 30px; color:#94a3b8; font-weight:600;">
+                            <td colspan="4" class="empty-table-cell">
                                 <i class='bx bx-loader-alt bx-spin'></i> Loading triage questions...
                             </td>
                         </tr>
                     </tbody>
                 </table>
             </div>
+        </section>
+
+        <!-- TAB 2: EMERGENCY TYPES -->
+        <section id="tab-types" class="sitting-panel controls-panel tab-pane">
+            <div class="panel-header controls-panel-header">
+                <div>
+                    <h2><i class='bx bxs-error-circle' style="color:#ef4444;"></i> Emergency Types & Sub-Hazards</h2>
+                    <small class="hdr-meta">Click any category to inspect linked hazards and base severity floors.</small>
+                </div>
+                <div class="controls-header-actions">
+                    <button class="pill-btn pill-btn-lg bg-green" onclick="openIncidentModal()"><i class='bx bx-list-ul'></i> Manage Hazards</button>
+                    <button class="pill-btn pill-btn-lg" onclick="openTypeModal()"><i class='bx bx-plus'></i> Add Type</button>
+                </div>
+            </div>
+            <div class="table-scroll-wrapper controls-table-box full-pane-scroll">
+                <table class="triage-table">
+                    <thead>
+                        <tr>
+                            <th>Category</th>
+                            <th>Preview</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach($emergency_types as $et): ?>
+                        <tr class="clickable-type-row" onclick="showTypeDetails(<?= $et['id'] ?>, '<?= addslashes($et['name']) ?>', '<?= $et['icon'] ?>', '<?= addslashes($et['incidents'] ?? '') ?>')">
+                            <td>
+                                <div class="entity-cell">
+                                    <span class="entity-icon danger"><i class='bx <?= $et['icon'] ?>'></i></span>
+                                    <strong><?= htmlspecialchars($et['name']) ?></strong>
+                                </div>
+                            </td>
+                            <td><span class="muted-hint">Click row to view hazards & base severities</span></td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <button class="action-circle bg-orange" onclick="event.stopPropagation(); openIncidentModalFor(<?= $et['id'] ?>)" title="Manage Hazards & Base Severities"><i class='bx bx-list-ul'></i></button>
+                                <button class="action-circle bg-green" onclick="event.stopPropagation(); openTypeModal(<?= $et['id'] ?>, '<?= addslashes($et['name']) ?>', '<?= $et['icon'] ?>', '<?= addslashes($et['incidents'] ?? '') ?>')" title="Edit Name/Icon"><i class='bx bx-edit'></i></button>
+                                <button class="action-circle bg-red" onclick="event.stopPropagation(); deleteType(<?= $et['id'] ?>)" title="Delete Type"><i class='bx bx-trash'></i></button>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 3: DISASTER GUIDELINES -->
+        <section id="tab-guidelines" class="sitting-panel controls-panel tab-pane">
+            <div class="panel-header controls-panel-header">
+                <div>
+                    <h2><i class='bx bx-book-bookmark' style="color:#10b981;"></i> Disaster Guidelines</h2>
+                    <small class="hdr-meta">Preparedness instructions displayed in the citizen mobile app.</small>
+                </div>
+                <button class="pill-btn pill-btn-lg bg-green" onclick="openGuidelineModal()"><i class='bx bx-plus'></i> Add Guide</button>
+            </div>
+            <div class="table-scroll-wrapper controls-table-box full-pane-scroll">
+                <table class="triage-table">
+                    <thead>
+                        <tr>
+                            <th>Guideline Title</th>
+                            <th>Instructions</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($guidelines)): ?>
+                            <tr><td colspan="3" class="empty-table-cell">No disaster guidelines added yet.</td></tr>
+                        <?php else: foreach($guidelines as $g): ?>
+                        <tr class="clickable-type-row" onclick="showGuidelineDetails(<?= $g['id'] ?>, '<?= addslashes($g['title']) ?>', '<?= addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])) ?>')">
+                            <td>
+                                <div class="entity-cell">
+                                    <span class="entity-icon success"><i class='bx bx-book-open'></i></span>
+                                    <strong><?= htmlspecialchars($g['title']) ?></strong>
+                                </div>
+                            </td>
+                            <td><span class="muted-hint">Click to read full safety instructions</span></td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <button class="action-circle bg-green" onclick="event.stopPropagation(); openGuidelineModal(<?= $g['id'] ?>, '<?= addslashes($g['title']) ?>', '<?= addslashes(str_replace(["\r","\n"], ['\r','\n'], $g['content'])) ?>')" title="Edit Guideline"><i class='bx bx-edit'></i></button>
+                                <button class="action-circle bg-red" onclick="event.stopPropagation(); deleteGuideline(<?= $g['id'] ?>)" title="Delete Guideline"><i class='bx bx-trash'></i></button>
+                            </td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- TAB 4: APP ANNOUNCEMENTS -->
+        <section id="tab-announcements" class="sitting-panel controls-panel tab-pane">
+            <div class="panel-header controls-panel-header">
+                <div>
+                    <h2><i class='bx bxs-bell-ring' style="color:#f59e0b;"></i> App Announcements</h2>
+                    <small class="hdr-meta">Persistent feed notices visible to all Dasma Alert users.</small>
+                </div>
+                <button class="pill-btn pill-btn-lg" onclick="openAnnouncementModal()"><i class='bx bx-plus'></i> Create Announcement</button>
+            </div>
+            <div class="table-scroll-wrapper controls-table-box full-pane-scroll">
+                <table class="triage-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Published</th>
+                            <th style="text-align: right;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php if (empty($announcements)): ?>
+                            <tr><td colspan="3" class="empty-table-cell">No active app announcements. Click "Create Announcement" to publish one.</td></tr>
+                        <?php else: foreach($announcements as $ann): ?>
+                        <tr>
+                            <td><strong style="color:#3b82f6; font-size:0.95rem;"><?= htmlspecialchars($ann['title']) ?></strong></td>
+                            <td><span class="muted-hint"><?= date('M d, Y', strtotime($ann['created_at'])) ?></span></td>
+                            <td style="text-align: right; white-space: nowrap;">
+                                <button class="action-circle bg-green" onclick="openAnnouncementModal(<?= $ann['id'] ?>, '<?= addslashes($ann['title']) ?>', '<?= addslashes(str_replace(["\r","\n"], ['\r','\n'], $ann['message'])) ?>')"><i class='bx bx-edit'></i></button>
+                                <button class="action-circle bg-red" onclick="deleteAnnouncement(<?= $ann['id'] ?>)"><i class='bx bx-trash'></i></button>
+                            </td>
+                        </tr>
+                        <?php endforeach; endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Global Broadcast Modal -->
+        <div id="broadcastModal" class="modal">
+            <div class="modal-content ctrl-modal-card" style="max-width: 500px;">
+                <div class="close-modal" onclick="closeModal('broadcastModal')"><i class='bx bx-x'></i></div>
+                <div class="preview-header">
+                    <div class="preview-icon-box danger"><i class='bx bx-broadcast' style="font-size:1.5rem; color:#d32f2f;"></i></div>
+                    <div>
+                        <h3 style="margin:0; font-weight:800;">Global Broadcast</h3>
+                        <small style="color:#64748b; font-weight:600;">Push immediate alert banner to all connected devices</small>
+                    </div>
+                </div>
+                <div class="broadcast-stack">
+                    <input type="text" id="globalBroadcastTitle" placeholder="ALERT TITLE" class="nav-input-field ctrl-field">
+                    <textarea id="globalBroadcastMessage" rows="4" placeholder="MESSAGE..." class="nav-input-field ctrl-field ctrl-textarea"></textarea>
+                    <select id="globalBroadcastSeverity" class="nav-input-field ctrl-field">
+                        <option value="info">INFO</option>
+                        <option value="warning">WARNING</option>
+                        <option value="critical">CRITICAL</option>
+                    </select>
+                    <button onclick="submitGlobalBroadcast()" class="btn-transmit">TRANSMIT ALERT</button>
+                </div>
+            </div>
         </div>
 
-        <!-- Modals -->
+        <!-- Announcement Modal -->
         <div id="announcementModal" class="modal">
             <div class="modal-content ctrl-modal-card" style="max-width: 500px;">
                 <div class="close-modal" onclick="closeModal('announcementModal')"><i class='bx bx-x'></i></div>
@@ -211,6 +272,7 @@ $current_page = 'controls.php';
             </div>
         </div>
 
+        <!-- Guideline Modal -->
         <div id="guidelineModal" class="modal">
             <div class="modal-content ctrl-modal-card" style="max-width: 500px;">
                 <div class="close-modal" onclick="closeModal('guidelineModal')"><i class='bx bx-x'></i></div>
@@ -229,10 +291,8 @@ $current_page = 'controls.php';
                 <h3 id="typeModalTitle" style="margin-bottom:15px; font-weight:800;">Emergency Type</h3>
                 <input type="hidden" id="type_id">
                 <input type="hidden" id="type_hidden_incidents">
-                
                 <label class="ctrl-label">Type Name</label>
                 <input type="text" id="type_name" class="nav-input-field ctrl-field" style="margin-bottom:15px;" placeholder="e.g. Fire, Flood">
-                
                 <label class="ctrl-label">Icon / Logo</label>
                 <select id="type_icon" class="nav-input-field ctrl-field" style="margin-bottom:20px;">
                     <option value="bx-error">⚠️ General Hazard (bx-error)</option>
@@ -245,12 +305,11 @@ $current_page = 'controls.php';
                     <option value="bx-water">🌊 Flood / Environmental (bx-water)</option>
                     <option value="bx-wind">🌪️ Weather / Typhoon (bx-wind)</option>
                 </select>
-                
                 <button class="pill-btn pill-btn-full" onclick="saveType()">Save Type</button>
             </div>
         </div>
 
-        <!-- Rebuilt Manage Specific Hazards & Base Severities Modal -->
+        <!-- Manage Hazards & Base Severities Modal -->
         <div id="incidentModal" class="modal">
             <div class="modal-content ctrl-modal-card" style="max-width: 580px;">
                 <div class="close-modal" onclick="closeModal('incidentModal')"><i class='bx bx-x'></i></div>
@@ -258,26 +317,22 @@ $current_page = 'controls.php';
                 <p style="font-size:0.8rem; color:#64748b; margin-top:0; margin-bottom:14px;">
                     Renaming a hazard keeps its linked triage questions intact. Base severity sets the minimum floor if questions are skipped.
                 </p>
-                
                 <label class="ctrl-label">Select Parent Emergency Type</label>
                 <select id="inc_parent_id" class="nav-input-field ctrl-field-sm" style="margin-bottom:14px;" onchange="loadIncidentsForParent(this.value)">
                     <option value="">-- Select Emergency Type --</option>
                     <?php foreach($emergency_types as $et): ?>
-                        <option value="<?php echo $et['id']; ?>"><?php echo htmlspecialchars($et['name']); ?></option>
+                        <option value="<?= $et['id'] ?>"><?= htmlspecialchars($et['name']) ?></option>
                     <?php endforeach; ?>
                 </select>
-
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                     <label class="ctrl-label" style="margin:0;">Hazards & Base Severity Floor</label>
                     <button type="button" class="pill-btn pill-btn-xs bg-sky" onclick="addHazardEditorRow()">
                         <i class='bx bx-plus'></i> Add Hazard
                     </button>
                 </div>
-
                 <div id="hazardRowsContainer" style="max-height: 300px; overflow-y: auto; padding-right: 4px; margin-bottom: 18px;">
                     <div style="text-align:center; padding: 20px; color:#94a3b8; font-size:0.85rem;">Select an Emergency Type above to edit its hazards.</div>
                 </div>
-                
                 <button class="pill-btn pill-btn-full bg-green" onclick="saveIncidents()">Save Hazards & Severities</button>
             </div>
         </div>
@@ -288,12 +343,10 @@ $current_page = 'controls.php';
                 <div class="close-modal" onclick="closeModal('triageQuestionModal')"><i class='bx bx-x'></i></div>
                 <h3 id="tqModalTitle" style="margin-top:0; margin-bottom:14px; font-weight:800;">Add Triage Question</h3>
                 <input type="hidden" id="tq_id">
-
                 <div style="margin-bottom: 14px;">
                     <label class="ctrl-label">Question Text (Shown to citizen)</label>
                     <input type="text" id="tq_text" class="nav-input-field ctrl-field-sm" placeholder="e.g. Is anyone unconscious or not breathing?">
                 </div>
-
                 <div class="ctrl-grid-2">
                     <div>
                         <label class="ctrl-label">"Not Sure" / Skipped Fallback Level</label>
@@ -312,8 +365,6 @@ $current_page = 'controls.php';
                         </select>
                     </div>
                 </div>
-
-                <!-- Answer Options Editor -->
                 <div style="margin-bottom: 16px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
                         <label class="ctrl-label" style="margin:0;">Answer Options & Triggered Severity</label>
@@ -323,16 +374,11 @@ $current_page = 'controls.php';
                     </div>
                     <div id="tqOptionsContainer"></div>
                 </div>
-
-                <!-- Applies To Checklist -->
                 <div style="margin-bottom: 18px;">
                     <label class="ctrl-label">Applies To (Check an entire category or specific sub-hazards)</label>
                     <div id="tqAppliesToContainer" class="applies-container"></div>
                 </div>
-
-                <button class="pill-btn pill-btn-full bg-purple" onclick="saveTriageQuestion()">
-                    Save Triage Question
-                </button>
+                <button class="pill-btn pill-btn-full bg-purple" onclick="saveTriageQuestion()">Save Triage Question</button>
             </div>
         </div>
 
@@ -349,16 +395,13 @@ $current_page = 'controls.php';
                         <small style="color: #94a3b8; font-weight: 700;">Sub-Hazards, Base Severities & Question Count</small>
                     </div>
                 </div>
-
-                <div id="viewTypeIncidentsList" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;">
-                </div>
-
+                <div id="viewTypeIncidentsList" style="max-height: 300px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px;"></div>
                 <div style="display: flex; gap: 10px;">
                     <button class="pill-btn bg-orange" id="viewTypeEditHazardsBtn" style="flex: 1; justify-content: center; padding: 12px; font-size: 0.9rem;"><i class='bx bx-edit'></i> Edit Hazards</button>
                     <button class="pill-btn" style="background: #e2e8f0; color: #475569; padding: 12px 20px;" onclick="closeModal('viewTypeDetailsModal')">Close</button>
                 </div>
             </div>
-        </div>    
+        </div>
 
         <!-- Guideline Preview Modal -->
         <div id="viewGuidelineModal" class="modal">
@@ -373,18 +416,34 @@ $current_page = 'controls.php';
                         <small style="color: #94a3b8; font-weight: 700;">Disaster Safety Instructions</small>
                     </div>
                 </div>
-
-                <div id="viewGuideContent" class="guide-content-box">
-                </div>
-
+                <div id="viewGuideContent" class="guide-content-box"></div>
                 <div style="display: flex; gap: 10px;">
                     <button class="pill-btn bg-green" id="viewGuideEditBtn" style="flex: 1; justify-content: center; padding: 12px; font-size: 0.9rem;"><i class='bx bx-edit'></i> Edit Guide</button>
                     <button class="pill-btn" style="background: #e2e8f0; color: #475569; padding: 12px 20px;" onclick="closeModal('viewGuidelineModal')">Close</button>
                 </div>
             </div>
-        </div>           
+        </div>
     </main>
 
+    <script>
+        function switchControlTab(tabKey, btn) {
+            document.querySelectorAll('.ctrl-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById('tab-' + tabKey).classList.add('active');
+            sessionStorage.setItem('dasma_ctrl_tab', tabKey);
+        }
+        function openBroadcastModal() {
+            document.getElementById('broadcastModal').style.display = 'flex';
+        }
+        document.addEventListener('DOMContentLoaded', () => {
+            const saved = sessionStorage.getItem('dasma_ctrl_tab');
+            if (saved) {
+                const btn = document.querySelector(`.ctrl-tab[data-tab="${saved}"]`);
+                if (btn) switchControlTab(saved, btn);
+            }
+        });
+    </script>
     <script src="../js/admin/controls.js?v=<?= file_exists('../js/admin/controls.js') ? filemtime('../js/admin/controls.js') : time() ?>"></script>
 </body>
 </html>
